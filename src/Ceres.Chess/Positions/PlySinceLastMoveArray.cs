@@ -185,16 +185,15 @@ public record struct PlySinceLastMoveArray
   public static void ApplyMove(ReadOnlySpan<byte> current, Span<byte> target, in MGMove move)
   {
     // Increment all squares by 1 (one more ply has passed).
-    // The XOR 56 converts between square index conventions.
     for (int s = 0; s < 64; s++)
     {
-      target[s ^ 56] = (byte)Math.Min(255, current[s] + 1);
+      target[s] = (byte)Math.Min(255, current[s] + 1);
     }
 
     // Set to 1 (not 0) because the move just happened this ply.
     // A value of 0 would incorrectly indicate "never moved" per the encoding scheme.
-    target[move.FromSquare.SquareIndexStartA1 ^ 56] = 1;
-    target[move.ToSquare.SquareIndexStartA1 ^ 56] = 1;
+    target[move.FromSquare.SquareIndexStartA1] = 1;
+    target[move.ToSquare.SquareIndexStartA1] = 1;
   }
 
 
