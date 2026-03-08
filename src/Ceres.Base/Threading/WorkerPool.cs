@@ -76,7 +76,7 @@ public sealed class WorkerPool<T> : IDisposable
     ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(growthIncrement, 0);
 
     this.growthIncrement = growthIncrement;
-    maxThreads = maximumThreads.HasValue ? Math.Max(initialThreads, maximumThreads.Value) : int.MaxValue;
+    maxThreads = maximumThreads.HasValue ? System.Math.Max(initialThreads, maximumThreads.Value) : int.MaxValue;
     this.threadNamePrefix = threadNamePrefix ?? "WorkerPool";
 
     // BlockingCollection provides a blocking Take() over a concurrent queue.
@@ -210,7 +210,7 @@ public sealed class WorkerPool<T> : IDisposable
         return;
       }
 
-      int target = Math.Min(created + growthIncrement, maxThreads);
+      int target = System.Math.Min(created + growthIncrement, maxThreads);
       int toCreate = target - created;
       if (toCreate > 0)
       {
