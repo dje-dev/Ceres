@@ -205,9 +205,14 @@ namespace Ceres.Chess.Positions
       Position[] thisPositions = this.Positions;
       Position[] matchPositions = possibleContinuation.Positions;
 
+      if (matchPositions.Length < thisPositions.Length)
+      {
+        return false;
+      }
+
       for (int i = 0; i < thisPositions.Length; i++)
       {
-        if (thisPositions[i] != possibleContinuation.Positions[i])
+        if (thisPositions[i] != matchPositions[i])
         {
           return false;
         }
