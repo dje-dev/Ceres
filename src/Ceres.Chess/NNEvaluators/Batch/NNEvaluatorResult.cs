@@ -467,7 +467,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
       if (!float.IsNaN(M))
       {
-        extras += $" MLH={M,6:F2}";
+        extras += $" MLH={Math.Round(M),3:F0}";
       }
 
       if (!float.IsNaN(UncertaintyV))

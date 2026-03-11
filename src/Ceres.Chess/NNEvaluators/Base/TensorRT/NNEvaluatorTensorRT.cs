@@ -101,6 +101,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
   private int pieceCaptureTensorIndex = -1;
   private int punimSelfTensorIndex = -1;
   private int punimOpponentTensorIndex = -1;
+  private int qDevLowerTensorIndex = -1;
+  private int qDevUpperTensorIndex = -1;
 
   // Per-position sizes for ply-bin tensors
   private int pieceMoveSizePerPos;
@@ -111,6 +113,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
   private int punimSelfSizePerPos;
   private int punimOpponentSizePerPos;
   private bool hasPunimOutputs;
+
+  // Per-position sizes for Q deviation tensors
+  private int qDevLowerSize;
+  private int qDevUpperSize;
+  private bool hasQDeviation;
 
   private readonly int inputElementsPerPosition;
   private readonly int outputElementsPerPosition;
@@ -148,6 +155,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
   private FP16[] mBuffer;
   private FP16[] uncVBuffer;
   private FP16[] uncPBuffer;
+  private FP16[] extraStat0Buffer;
+  private FP16[] extraStat1Buffer;
   private CompressedPolicyVector[] policiesBuffer;
   private ParallelOptions cachedParallelOptions;
 
@@ -406,6 +415,15 @@ public class NNEvaluatorTensorRT : NNEvaluator
           punimOpponentTensorIndex = tensorIndex;
           punimOpponentSizePerPos = sizePerPos;
           break;
+        case "q_deviation_lower":
+        case "q_deviation_loser":
+          qDevLowerTensorIndex = tensorIndex;
+          qDevLowerSize = sizePerPos;
+          break;
+        case "q_deviation_upper":
+          qDevUpperTensorIndex = tensorIndex;
+          qDevUpperSize = sizePerPos;
+          break;
       }
       tensorIndex++;
     }
@@ -417,6 +435,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     hasValueSecondary = value2Size > 0 || (SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND && value3Size > 0);
     hasPlyBinOutputs = pieceMoveSizePerPos == 512 && pieceCaptureSizePerPos == 512;
     hasPunimOutputs = punimSelfSizePerPos == 8 && punimOpponentSizePerPos == 8;
+    hasQDeviation = qDevLowerSize > 0 && qDevUpperSize > 0;
 
     if (netType == ONNXNetExecutor.NetTypeEnum.TPG)
     {
@@ -445,6 +464,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     mBuffer = hasM ? new FP16[maxBatchSize] : Array.Empty<FP16>();
     uncVBuffer = hasUncertaintyV ? new FP16[maxBatchSize] : Array.Empty<FP16>();
     uncPBuffer = hasUncertaintyP ? new FP16[maxBatchSize] : Array.Empty<FP16>();
+    extraStat0Buffer = hasQDeviation ? new FP16[maxBatchSize] : Array.Empty<FP16>();
+    extraStat1Buffer = hasQDeviation ? new FP16[maxBatchSize] : Array.Empty<FP16>();
     policiesBuffer = new CompressedPolicyVector[maxBatchSize];
     plyBinMoveBuffer = hasPlyBinOutputs ? new Half[maxBatchSize * 512] : Array.Empty<Half>();
     plyBinCaptureBuffer = hasPlyBinOutputs ? new Half[maxBatchSize * 512] : Array.Empty<Half>();
@@ -637,6 +658,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     FP16[] m = mBuffer;
     FP16[] uncV = uncVBuffer;
     FP16[] uncP = uncPBuffer;
+    FP16[] extraStat0 = extraStat0Buffer;
+    FP16[] extraStat1 = extraStat1Buffer;
     CompressedPolicyVector[] policies = policiesBuffer;
     CompressedActionVector[] actions = Array.Empty<CompressedActionVector>();
     Half[] plyBinMove = plyBinMoveBuffer;
@@ -667,6 +690,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
       ExtractSubBatchResultsNative(globalStartPosition, positionCount, engineBatchSize,
                                    threadLocalOutputFloatBuffer, w, l, w2, l2, m, uncV, uncP, policies,
                                    plyBinMove, plyBinCapture, punimSelf, punimOpponent,
+                                   extraStat0, extraStat1,
                                    valueHead1Temperature, valueHead2Temperature,
                                    valueHead1TemperatureScaling, valueHead2TemperatureScaling,
                                    NetType == ONNXNetExecutor.NetTypeEnum.TPG,
@@ -730,7 +754,9 @@ public class NNEvaluatorTensorRT : NNEvaluator
       plyBinMoveProbs: hasPlyBinOutputs ? plyBinMove : default,
       plyBinCaptureProbs: hasPlyBinOutputs ? plyBinCapture : default,
       punimSelfProbs: hasPunimOutputs ? punimSelf : default,
-      punimOpponentProbs: hasPunimOutputs ? punimOpponent : default);
+      punimOpponentProbs: hasPunimOutputs ? punimOpponent : default,
+      extraStat0: hasQDeviation ? extraStat0 : default,
+      extraStat1: hasQDeviation ? extraStat1 : default);
   }
 
 
@@ -749,9 +775,12 @@ public class NNEvaluatorTensorRT : NNEvaluator
     public readonly int PieceCapture;
     public readonly int PunimSelf;
     public readonly int PunimOpponent;
+    public readonly int QDevLower;
+    public readonly int QDevUpper;
 
     public TensorOffsets(int value, int value2, int policy, int mlh, int uncV, int uncP,
-                         int pieceMove, int pieceCapture, int punimSelf, int punimOpponent)
+                         int pieceMove, int pieceCapture, int punimSelf, int punimOpponent,
+                         int qDevLower, int qDevUpper)
     {
       Value = value;
       Value2 = value2;
@@ -763,6 +792,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
       PieceCapture = pieceCapture;
       PunimSelf = punimSelf;
       PunimOpponent = punimOpponent;
+      QDevLower = qDevLower;
+      QDevUpper = qDevUpper;
     }
   }
 
@@ -783,6 +814,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     int pieceCaptureOffset = 0;
     int punimSelfOffset = 0;
     int punimOpponentOffset = 0;
+    int qDevLowerOffset = 0;
+    int qDevUpperOffset = 0;
 
     int currentOffset = 0;
     for (int t = 0; t < outputInfos.Length; t++)
@@ -834,6 +867,14 @@ public class NNEvaluatorTensorRT : NNEvaluator
       {
         punimOpponentOffset = currentOffset;
       }
+      else if (t == qDevLowerTensorIndex)
+      {
+        qDevLowerOffset = currentOffset;
+      }
+      else if (t == qDevUpperTensorIndex)
+      {
+        qDevUpperOffset = currentOffset;
+      }
 
       // Align to 256-byte boundary (128 fp16 elements)
       const int ALIGN = 128;
@@ -844,7 +885,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     int effectiveValue2Offset = (SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND && value3Size > 0) ? value3Offset : value2Offset;
 
     return new TensorOffsets(valueOffset, effectiveValue2Offset, policyOffset, mlhOffset, uncVOffset, uncPOffset,
-                             pieceMoveOffset, pieceCaptureOffset, punimSelfOffset, punimOpponentOffset);
+                             pieceMoveOffset, pieceCaptureOffset, punimSelfOffset, punimOpponentOffset,
+                             qDevLowerOffset, qDevUpperOffset);
   }
 
 
@@ -919,6 +961,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                             CompressedPolicyVector[] policies,
                                             Half[] plyBinMove, Half[] plyBinCapture,
                                             Half[] punimSelf, Half[] punimOpponent,
+                                            FP16[] extraStat0, FP16[] extraStat1,
                                             float valueHead1Temperature, float valueHead2Temperature,
                                             float valueHead1TemperatureScaling, float valueHead2TemperatureScaling,
                                             bool wdlIsLogistic,
@@ -1076,6 +1119,13 @@ public class NNEvaluatorTensorRT : NNEvaluator
         int posPunimOpponentOffset = offsets.PunimOpponent + i * punimOpponentSizePerPos;
         ExtractPunimOutputs(subBatchOutput, posPunimSelfOffset, posPunimOpponentOffset, punimSelf, punimOpponent, punimDestOffset);
       }
+
+      // ===== Extract Q Deviation Outputs (if present) =====
+      if (hasQDeviation)
+      {
+        extraStat0[resultIndex] = (FP16)subBatchOutput[offsets.QDevLower + i * qDevLowerSize];
+        extraStat1[resultIndex] = (FP16)subBatchOutput[offsets.QDevUpper + i * qDevUpperSize];
+      }
     });
   }
 
@@ -1134,6 +1184,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     FP16[] m = mBuffer;
     FP16[] uncV = uncVBuffer;
     FP16[] uncP = uncPBuffer;
+    FP16[] extraStat0 = extraStat0Buffer;
+    FP16[] extraStat1 = extraStat1Buffer;
     CompressedPolicyVector[] policies = policiesBuffer;
     CompressedActionVector[] actions = Array.Empty<CompressedActionVector>();
     Half[] plyBinMove = plyBinMoveBuffer;
@@ -1164,6 +1216,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
       ExtractSubBatchResults(batch, globalStartPosition, positionCount, engineBatchSize,
                              threadLocalOutputFloatBuffer, w, l, w2, l2, m, uncV, uncP, policies,
                              plyBinMove, plyBinCapture, punimSelf, punimOpponent,
+                             extraStat0, extraStat1,
                              valueHead1Temperature, valueHead2Temperature,
                              valueHead1TemperatureScaling, valueHead2TemperatureScaling,
                              NetType == ONNXNetExecutor.NetTypeEnum.TPG);
@@ -1240,7 +1293,9 @@ public class NNEvaluatorTensorRT : NNEvaluator
       plyBinMoveProbs: hasPlyBinOutputs ? plyBinMove : default,
       plyBinCaptureProbs: hasPlyBinOutputs ? plyBinCapture : default,
       punimSelfProbs: hasPunimOutputs ? punimSelf : default,
-      punimOpponentProbs: hasPunimOutputs ? punimOpponent : default);
+      punimOpponentProbs: hasPunimOutputs ? punimOpponent : default,
+      extraStat0: hasQDeviation ? extraStat0 : default,
+      extraStat1: hasQDeviation ? extraStat1 : default);
   }
 
 
@@ -1354,6 +1409,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                       CompressedPolicyVector[] policies,
                                       Half[] plyBinMove, Half[] plyBinCapture,
                                       Half[] punimSelf, Half[] punimOpponent,
+                                      FP16[] extraStat0, FP16[] extraStat1,
                                       float valueHead1Temperature, float valueHead2Temperature,
                                       float valueHead1TemperatureScaling, float valueHead2TemperatureScaling,
                                       bool wdlIsLogistic)
@@ -1518,6 +1574,13 @@ public class NNEvaluatorTensorRT : NNEvaluator
         int posPunimSelfOffset = offsets.PunimSelf + i * punimSelfSizePerPos;
         int posPunimOpponentOffset = offsets.PunimOpponent + i * punimOpponentSizePerPos;
         ExtractPunimOutputs(subBatchOutput, posPunimSelfOffset, posPunimOpponentOffset, punimSelf, punimOpponent, punimDestOffset);
+      }
+
+      // ===== Extract Q Deviation Outputs (if present) =====
+      if (hasQDeviation)
+      {
+        extraStat0[resultIndex] = (FP16)subBatchOutput[offsets.QDevLower + i * qDevLowerSize];
+        extraStat1[resultIndex] = (FP16)subBatchOutput[offsets.QDevUpper + i * qDevUpperSize];
       }
     });
   }
