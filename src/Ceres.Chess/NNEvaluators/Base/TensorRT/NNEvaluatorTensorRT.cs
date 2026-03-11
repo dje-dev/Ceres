@@ -232,7 +232,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
                              int softMaxBatchSize = 0,
                              int optimizationLevel = 3,
                              bool forceBF16 = false,
-                             bool refittable = false)
+                             bool refittable = false,
+                             int fp32AllNormsOverride = -1)
   {
     if (!File.Exists(onnxFileName))
     {
@@ -289,6 +290,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
       options.UseFP16 = 1;
       options.UseBF16 = 0;
       options.FP32PostAttentionNorm = 1;
+      options.FP32Softmax = 1;
+      options.FP32AllNorms = 3; // scope 3 = smolgen norms only (sufficient, zero perf cost)
 
       // NOTE: BF16 is best on datacenter cards (works for all nets, no upcasting required)
       //       Consumer cards can use FP32+post attention norm which is high accuraacy for most nets
@@ -306,6 +309,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
       options.FP32PostAttentionNorm = 0;
       options.FP32PostAttentionNormStrict = 0;
       options.FP32SmolgenNorm = 0;
+      options.FP32Softmax = 0;
+      options.FP32AllNorms = 0;
     }
 
     if (refittable)
@@ -313,9 +318,14 @@ public class NNEvaluatorTensorRT : NNEvaluator
       options.Refittable = 1;
     }
 
+    if (fp32AllNormsOverride >= 0)
+    {
+      options.FP32AllNorms = fp32AllNormsOverride;
+    }
+
     options.Validate();
 
-    Console.WriteLine($"  Build options: FP16={options.UseFP16}, BF16={options.UseBF16}, FP32PostAttentionNorm={options.FP32PostAttentionNorm}, UseCUDAGraphs={options.UseCudaGraphs}");
+    Console.WriteLine($"  Build options: FP16={options.UseFP16}, BF16={options.UseBF16}, FP32PostAttentionNorm={options.FP32PostAttentionNorm}, FP32Softmax={options.FP32Softmax}, FP32AllNorms={options.FP32AllNorms}, UseCUDAGraphs={options.UseCudaGraphs}");
 
     const int MIN_BATCH_SIZE_PER_GPU = 6;
     pool = new MultiGPUEnginePool(trt, onnxFileName, effectiveSizesPerGPU, poolMode, options, 0, 0, GpuIDs, MIN_BATCH_SIZE_PER_GPU, cacheDir);
@@ -1614,6 +1624,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     //const bool ENABLE_GRAPHS = false;
     bool forceBF16 = options is NNEvaluatorOptionsCeres optionsCeres && optionsCeres.UseBF16;
     bool refittable = options is NNEvaluatorOptionsCeres optionsCeresRefit && optionsCeresRefit.Refittable;
+    int fp32AllNorms = options is NNEvaluatorOptionsCeres optionsCeresNorms ? optionsCeresNorms.Fp32AllNorms : -1;
     NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
                                               netType,
                                               EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
@@ -1625,7 +1636,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                               softMaxBatchSize: 1024,
                                               optimizationLevel: options.OptimizationLevel,
                                               forceBF16: forceBF16,
-                                              refittable: refittable);
+                                              refittable: refittable,
+                                              fp32AllNormsOverride: fp32AllNorms);
     trtNativeEngine.Options = options;
 
     EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework

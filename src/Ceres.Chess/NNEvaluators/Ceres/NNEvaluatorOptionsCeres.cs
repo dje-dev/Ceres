@@ -114,6 +114,13 @@ namespace Ceres.Chess.NNEvaluators.Ceres
     public bool Refittable { get; init; } = false;
 
     /// <summary>
+    /// FP32 norm upcasting scope for TensorRT FP16 mode.
+    /// -1 = use mode default, 0 = off, 1 = all norms,
+    /// 2 = Q/K/V per-head only, 3 = smolgen only, 4 = Q/K/V + smolgen.
+    /// </summary>
+    public int Fp32AllNorms { get; init; } = -1;
+
+    /// <summary>
     /// Mode for determining "plys since last move" value to feed into the neural network.
     /// </summary>
     public PlySinceLastMoveModeEnum PlySinceLastMoveMode { get; init; } = PlySinceLastMoveModeEnum.Zero;
@@ -208,6 +215,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres
 
       bool useBF16 = CheckOptionSpecifiedElseDefaultBoolean(optionsDict, "BF16", false);
       bool refittable = CheckOptionSpecifiedElseDefaultBoolean(optionsDict, "REFITTABLE", false);
+      int fp32AllNorms = CheckOptionSpecifiedElseDefaultInt(optionsDict, "FP32ALLNORMS", -1, -1, 4);
 
       PlySinceLastMoveModeEnum plySinceMode = baseOptions is NNEvaluatorOptionsCeres ceresOptions
                                                            ? ceresOptions.PlySinceLastMoveMode
@@ -249,6 +257,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres
         PlySinceLastMoveMode = plySinceMode,
         UseBF16 = useBF16,
         Refittable = refittable,
+        Fp32AllNorms = fp32AllNorms,
       };
 
       return optionsCeres;

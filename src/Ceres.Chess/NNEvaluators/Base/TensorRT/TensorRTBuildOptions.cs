@@ -108,6 +108,20 @@ public record struct TensorRTBuildOptions
   public int FP32SmolgenNorm;
 
   /// <summary>
+  /// Force FP32 precision for all Softmax layers.
+  /// 0 = disabled (default), 1 = enabled.
+  /// Prevents exp() overflow in FP16 (max 65504, exp(11) already near limit).
+  /// </summary>
+  public int FP32Softmax;
+
+  /// <summary>
+  /// Force FP32 precision for normalization chains.
+  /// 0 = disabled (default), 1 = all norms, 2 = Q/K/V per-head only,
+  /// 3 = smolgen only, 4 = Q/K/V + smolgen (non-residual).
+  /// </summary>
+  public int FP32AllNorms;
+
+  /// <summary>
   /// Enable engine refitting support (1 = true, 0 = false (default)).
   /// When enabled, the engine can have its weights updated at runtime without rebuilding.
   /// Uses BuilderFlag::kREFIT_IDENTICAL which requires identical weight shapes.
@@ -133,6 +147,8 @@ public record struct TensorRTBuildOptions
     FP32PostAttentionNorm = 0,
     FP32PostAttentionNormStrict = 0,
     FP32SmolgenNorm = 0,
+    FP32Softmax = 0,
+    FP32AllNorms = 0,
     Refittable = 0
   };
 

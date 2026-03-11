@@ -294,6 +294,8 @@ extern "C"
     options->fp32PostAttentionNorm = 0;
     options->fp32PostAttentionNormStrict = 0;
     options->fp32SmolgenNorm = 0;
+    options->fp32Softmax = 0;
+    options->fp32AllNorms = 0;
     options->refittable = 0;
   }
 
@@ -518,6 +520,243 @@ static std::unordered_set<int32_t> FindResidualStreamNormLayers(
   return residualNormLayers;
 }
 
+
+// Build set of ALL normalization layer indices (not just residual stream).
+// Includes Q/K/V per-head norms, smolgen norms, and any other norm chains.
+// Norm scope values for fp32AllNorms:
+//   1 = all norms (Q/K/V + smolgen + residual + embedding)
+//   2 = Q/K/V per-head norms only (entry producer is kSHUFFLE from Reshape)
+//   3 = smolgen norms only (entry producer is non-residual kELEMENTWISE)
+//   4 = Q/K/V + smolgen (non-residual, excludes residual-stream norms)
+static std::unordered_set<int32_t> FindAllNormLayers(
+  const nvinfer1::INetworkDefinition* network, int32_t totalLayers, int32_t scope = 1)
+{
+  // Build producer map: tensor name -> producing layer index
+  std::unordered_map<std::string, int32_t> tensorProducer;
+  for (int32_t i = 0; i < totalLayers; ++i)
+  {
+    auto* layer = network->getLayer(i);
+    for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
+    {
+      auto* tensor = layer->getOutput(j);
+      if (tensor && tensor->getName())
+      {
+        tensorProducer[tensor->getName()] = i;
+      }
+    }
+  }
+
+  // Count native kNORMALIZATION layers
+  int nativeNormCount = 0;
+  for (int32_t i = 0; i < totalLayers; ++i)
+  {
+    if (network->getLayer(i)->getType() == nvinfer1::LayerType::kNORMALIZATION)
+      nativeNormCount++;
+  }
+
+  std::unordered_set<int32_t> allNormLayers;
+
+  if (nativeNormCount > 0)
+  {
+    // Path A: native kNORMALIZATION - mark ALL of them (scope filtering not supported)
+    for (int32_t i = 0; i < totalLayers; ++i)
+    {
+      if (network->getLayer(i)->getType() == nvinfer1::LayerType::kNORMALIZATION)
+      {
+        allNormLayers.insert(i);
+      }
+    }
+    fprintf(stderr, "[TensorRT] AllNorms(scope=%d): %d native kNORMALIZATION layers\n",
+      scope, (int)allNormLayers.size());
+  }
+  else
+  {
+    // Path B: decomposed norms - find entry points and classify by producer type
+
+    // Pre-scan: find max sequential ONNX norm index to distinguish from TRT suffixes.
+    // ONNX norms are numbered 0,1,2,...,N-1 sequentially. TRT decomposition creates
+    // additional layers with large suffix numbers (typically > N).
+    // Collect all numbers from rms_norm layer names, find the longest sequential run from 0.
+    std::vector<int> allNormNumbers;
+    for (int32_t i = 0; i < totalLayers; ++i)
+    {
+      auto* layer = network->getLayer(i);
+      std::string name(layer->getName());
+      auto pos = name.find("rms_norm");
+      if (pos == std::string::npos)
+        continue;
+      size_t numStart = pos + 8;
+      if (numStart < name.size() && name[numStart] == '_')
+        numStart++;
+      std::string numStr;
+      while (numStart < name.size() && name[numStart] >= '0' && name[numStart] <= '9')
+        numStr += name[numStart++];
+      if (!numStr.empty())
+        allNormNumbers.push_back(std::stoi(numStr));
+      else
+        allNormNumbers.push_back(0); // bare "rms_norm" = ONNX index 0
+    }
+    // Find max ONNX index: largest N such that all of 0..N appear in the set.
+    std::unordered_set<int> normNumberSet(allNormNumbers.begin(), allNormNumbers.end());
+    int maxOnnxNormIdx = -1;
+    for (int n = 0; normNumberSet.count(n); ++n)
+      maxOnnxNormIdx = n;
+
+    int countQKV = 0, countSmolgen = 0, countResidual = 0, countOther = 0;
+
+    for (int32_t i = 0; i < totalLayers; ++i)
+    {
+      auto* layer = network->getLayer(i);
+      if (!HasNormName(layer->getName()))
+        continue;
+      if (!IsComputeLayerType(layer->getType()))
+        continue;
+
+      // Check if this is an entry point (producer is not a norm layer)
+      auto* inputTensor = layer->getInput(0);
+      if (!inputTensor || !inputTensor->getName())
+      {
+        countOther++;
+        if (scope == 1) allNormLayers.insert(i);
+        continue;
+      }
+      auto it = tensorProducer.find(inputTensor->getName());
+      if (it == tensorProducer.end())
+      {
+        countOther++;
+        if (scope == 1) allNormLayers.insert(i);
+        continue;
+      }
+      auto* producer = network->getLayer(it->second);
+      if (HasNormName(producer->getName()))
+        continue; // Not an entry point
+
+      // Classify entry point by producer type and norm index
+      auto prodType = producer->getType();
+      std::string prodName(producer->getName());
+      std::string entryName(layer->getName());
+
+      bool isResidualAdd = (prodType == nvinfer1::LayerType::kELEMENTWISE)
+        && (prodName.find("add") != std::string::npos
+          || prodName.find("Add") != std::string::npos
+          || prodName.find("skip") != std::string::npos);
+
+      // Extract ONNX norm index from TRT layer name.
+      // TRT names decomposed layers: "node_rms_norm[_N][_TRT_SUFFIX]"
+      // ONNX indices are sequential 0..maxOnnxNormIdx; anything beyond is a TRT suffix.
+      // Pattern: norms 0=embedding, then per block: 3 QKV + 2 smolgen + 2 residual
+      int normIdx = -1;
+      auto pos = entryName.find("rms_norm");
+      if (pos != std::string::npos)
+      {
+        size_t numStart = pos + 8; // skip "rms_norm"
+        if (numStart < entryName.size() && entryName[numStart] == '_')
+          numStart++;
+        std::string numStr;
+        while (numStart < entryName.size() && entryName[numStart] >= '0' && entryName[numStart] <= '9')
+          numStr += entryName[numStart++];
+        if (!numStr.empty())
+        {
+          int parsed = std::stoi(numStr);
+          normIdx = (parsed <= maxOnnxNormIdx) ? parsed : 0;
+        }
+        else
+        {
+          normIdx = 0; // "rms_norm" without number = index 0
+        }
+      }
+
+      // Classify by ONNX norm index within block structure
+      // Block 0: norm_0=embedding, norm_1-3=QKV, norm_4-5=smolgen, norm_6-7=residual
+      // Block b (b>=1): norm_{1+7b}-{3+7b}=QKV, norm_{4+7b}-{5+7b}=smolgen, norm_{6+7b}-{7+7b}=residual
+      bool isQKV = false;
+      bool isSmolgen = false;
+      if (normIdx >= 0)
+      {
+        if (normIdx == 0)
+        {
+          // Embedding norm - treat as "other"
+        }
+        else
+        {
+          int blockOffset = (normIdx - 1) % 7; // 0-6 within block
+          isQKV = (blockOffset >= 0 && blockOffset <= 2); // first 3 in block
+          isSmolgen = (blockOffset >= 3 && blockOffset <= 4); // next 2 in block
+          // blockOffset 5-6 are residual
+        }
+      }
+
+      bool include = false;
+      if (isResidualAdd || (!isQKV && !isSmolgen && normIdx >= 0 && ((normIdx - 1) % 7) >= 5))
+      {
+        countResidual++;
+        include = (scope == 1);
+      }
+      else if (isQKV)
+      {
+        countQKV++;
+        include = (scope == 1 || scope == 2 || scope == 4);
+      }
+      else if (isSmolgen)
+      {
+        countSmolgen++;
+        include = (scope == 1 || scope == 3 || scope == 4);
+      }
+      else
+      {
+        countOther++;
+        include = (scope == 1 || scope == 4);
+      }
+
+      if (include)
+      {
+        allNormLayers.insert(i);
+      }
+    }
+
+    int entryCount = (int)allNormLayers.size();
+
+    // Propagate through norm chains from selected entry points
+    bool changed = true;
+    while (changed)
+    {
+      changed = false;
+      for (int32_t i = 0; i < totalLayers; ++i)
+      {
+        if (allNormLayers.count(i))
+          continue;
+        auto* layer = network->getLayer(i);
+        if (!HasNormName(layer->getName()))
+          continue;
+        if (!IsComputeLayerType(layer->getType()))
+          continue;
+
+        for (int32_t inp = 0; inp < layer->getNbInputs(); ++inp)
+        {
+          auto* inputTensor = layer->getInput(inp);
+          if (!inputTensor || !inputTensor->getName())
+            continue;
+          auto it = tensorProducer.find(inputTensor->getName());
+          if (it != tensorProducer.end() && allNormLayers.count(it->second))
+          {
+            allNormLayers.insert(i);
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+
+    fprintf(stderr, "[TensorRT] AllNorms(scope=%d): entries: %d QKV + %d smolgen + %d residual + %d other, "
+      "%d selected + %d chain = %d layers\n",
+      scope, countQKV, countSmolgen, countResidual, countOther,
+      entryCount, (int)allNormLayers.size() - entryCount, (int)allNormLayers.size());
+  }
+
+  return allNormLayers;
+}
+
+
 // Helper: strict mode - only match main encoder post-attention ln1
 // Matches: /transformer_layer.X/ln1/...
 // Excludes: /transformer_layer.X/attention/ln1/... (smolgen related)
@@ -688,6 +927,52 @@ extern "C"
       }
       fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for normalization (%s mode)\n",
         layersMarked, totalLayers, modeName);
+    }
+
+    // Force FP32 for all Softmax layers (prevents exp() overflow in FP16)
+    if (opts->fp32Softmax)
+    {
+      config->setFlag(nvinfer1::BuilderFlag::kOBEY_PRECISION_CONSTRAINTS);
+      int totalLayers = network->getNbLayers();
+      int softmaxMarked = 0;
+      for (int32_t i = 0; i < totalLayers; ++i)
+      {
+        auto* layer = network->getLayer(i);
+        if (layer->getType() == nvinfer1::LayerType::kSOFTMAX)
+        {
+          layer->setPrecision(nvinfer1::DataType::kFLOAT);
+          for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
+          {
+            layer->setOutputType(j, nvinfer1::DataType::kFLOAT);
+          }
+          softmaxMarked++;
+        }
+      }
+      fprintf(stderr, "[TensorRT] Marked %d Softmax layers as FP32\n", softmaxMarked);
+    }
+
+    // Force FP32 for normalization chains (scope: 1=all, 2=QKV, 3=smolgen, 4=QKV+smolgen)
+    if (opts->fp32AllNorms)
+    {
+      config->setFlag(nvinfer1::BuilderFlag::kOBEY_PRECISION_CONSTRAINTS);
+      int totalLayers = network->getNbLayers();
+      auto allNormSet = FindAllNormLayers(network.get(), totalLayers, opts->fp32AllNorms);
+      int normsMarked = 0;
+      for (int32_t i = 0; i < totalLayers; ++i)
+      {
+        if (allNormSet.count(i) > 0)
+        {
+          auto* layer = network->getLayer(i);
+          layer->setPrecision(nvinfer1::DataType::kFLOAT);
+          for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
+          {
+            layer->setOutputType(j, nvinfer1::DataType::kFLOAT);
+          }
+          normsMarked++;
+        }
+      }
+      fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for norms (scope=%d)\n",
+        normsMarked, totalLayers, opts->fp32AllNorms);
     }
 
     // Determine batch sizes for optimization profile
@@ -914,6 +1199,15 @@ extern "C"
     hash ^= std::hash<int32_t>{}(opts->fp32PostAttentionNorm) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
     hash ^= std::hash<int32_t>{}(opts->fp32PostAttentionNormStrict) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
     hash ^= std::hash<int32_t>{}(opts->fp32SmolgenNorm) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+    // Only include new fields in hash when non-zero, to avoid invalidating existing cached engines
+    if (opts->fp32Softmax)
+    {
+      hash ^= std::hash<int32_t>{}(opts->fp32Softmax) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+    }
+    if (opts->fp32AllNorms)
+    {
+      hash ^= std::hash<int32_t>{}(opts->fp32AllNorms) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+    }
     // Only include refittable in hash when true, so existing cached files (with false) remain valid
     if (opts->refittable)
     {
@@ -2154,10 +2448,10 @@ extern "C"
     {
       std::lock_guard<std::mutex> lock(g_mutex);
       SetError("cudaMemcpyAsync H2D failed on stream " + std::to_string(streamIdx) +
-               ": " + cudaGetErrorString(err) +
-               " (dst=" + std::to_string((uintptr_t)dst) +
-               " src=" + std::to_string((uintptr_t)src) +
-               " bytes=" + std::to_string(bytes) + ")");
+        ": " + cudaGetErrorString(err) +
+        " (dst=" + std::to_string((uintptr_t)dst) +
+        " src=" + std::to_string((uintptr_t)src) +
+        " bytes=" + std::to_string(bytes) + ")");
       return -2;
     }
     return 0;
@@ -2174,7 +2468,7 @@ extern "C"
     {
       std::lock_guard<std::mutex> lock(g_mutex);
       SetError("cudaMemcpyAsync D2H failed on stream " + std::to_string(streamIdx) +
-               ": " + cudaGetErrorString(err));
+        ": " + cudaGetErrorString(err));
       return -2;
     }
     return 0;
@@ -2825,6 +3119,52 @@ extern "C"
       }
       fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for normalization (%s mode)\n",
         layersMarked, totalLayers, modeName);
+    }
+
+    // Force FP32 for all Softmax layers (prevents exp() overflow in FP16)
+    if (opts->fp32Softmax)
+    {
+      config->setFlag(nvinfer1::BuilderFlag::kOBEY_PRECISION_CONSTRAINTS);
+      int totalLayers = network->getNbLayers();
+      int softmaxMarked = 0;
+      for (int32_t i = 0; i < totalLayers; ++i)
+      {
+        auto* layer = network->getLayer(i);
+        if (layer->getType() == nvinfer1::LayerType::kSOFTMAX)
+        {
+          layer->setPrecision(nvinfer1::DataType::kFLOAT);
+          for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
+          {
+            layer->setOutputType(j, nvinfer1::DataType::kFLOAT);
+          }
+          softmaxMarked++;
+        }
+      }
+      fprintf(stderr, "[TensorRT] Marked %d Softmax layers as FP32\n", softmaxMarked);
+    }
+
+    // Force FP32 for normalization chains (scope: 1=all, 2=QKV, 3=smolgen, 4=QKV+smolgen)
+    if (opts->fp32AllNorms)
+    {
+      config->setFlag(nvinfer1::BuilderFlag::kOBEY_PRECISION_CONSTRAINTS);
+      int totalLayers = network->getNbLayers();
+      auto allNormSet = FindAllNormLayers(network.get(), totalLayers, opts->fp32AllNorms);
+      int normsMarked = 0;
+      for (int32_t i = 0; i < totalLayers; ++i)
+      {
+        if (allNormSet.count(i) > 0)
+        {
+          auto* layer = network->getLayer(i);
+          layer->setPrecision(nvinfer1::DataType::kFLOAT);
+          for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
+          {
+            layer->setOutputType(j, nvinfer1::DataType::kFLOAT);
+          }
+          normsMarked++;
+        }
+      }
+      fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for norms (scope=%d)\n",
+        normsMarked, totalLayers, opts->fp32AllNorms);
     }
 
     // Create N optimization profiles (one per batch size, Exact mode: min=opt=max)

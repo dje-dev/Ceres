@@ -55,6 +55,8 @@ extern "C"
     int32_t fp32PostAttentionNorm;     // 1 = force FP32 for post-attention norm (ln1) layers, 0 = false (default)
     int32_t fp32PostAttentionNormStrict; // 1 = stricter filter: only main encoder ln1, exclude smolgen ln1
     int32_t fp32SmolgenNorm;           // 1 = only smolgen-related ln1 inside attention (the critical layers)
+    int32_t fp32Softmax;               // 1 = force FP32 for all Softmax layers, 0 = false (default)
+    int32_t fp32AllNorms;              // 1 = force FP32 for ALL norm chains (not just residual stream), 0 = false (default)
     int32_t refittable;                // 1 = enable refit support (kREFIT_IDENTICAL), 0 = false (default)
   };
 
