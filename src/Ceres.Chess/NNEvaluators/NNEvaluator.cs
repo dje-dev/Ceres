@@ -535,6 +535,14 @@ namespace Ceres.Chess.NNEvaluators
         }
       }
 
+      // Compute FortressP if ply-bin move outputs are available and position is known.
+      float fortressP = float.NaN;
+      if (batch.HasPlyBinOutputs && mgPos.HasValue && plyBinMove != null)
+      {
+        MGPosition pos = mgPos.Value;
+        fortressP = NNEvaluatorResult.ComputeFortressP(plyBinMove, in pos, pos.BlackToMove);
+      }
+
       result = new NNEvaluatorResult(w, l, w1, l1, w2, l2, m, uncertaintyV, uncertaintyP,
                                      policyRef.policies.Span[policyRef.index],
                                      HasAction ? actionRef.actions.Span[actionRef.index] : default,
@@ -542,7 +550,8 @@ namespace Ceres.Chess.NNEvaluators
                                      rawNetworkOutputs, RawNetworkOutputNames,
                                      plyBinMove, plyBinCapture,
                                      punimSelf, punimOpponent,
-                                     ourKingSquare, theirKingSquare);
+                                     ourKingSquare, theirKingSquare,
+                                     fortressP);
     }
 
     #endregion
