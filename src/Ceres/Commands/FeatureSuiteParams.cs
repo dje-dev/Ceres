@@ -19,9 +19,9 @@ using System.IO;
 using System.Reflection.PortableExecutable;
 using Ceres.Base.DataTypes;
 using Ceres.Chess;
+using Ceres.Chess.GameEngines;
 using Ceres.Chess.UserSettings;
 using Ceres.Features.GameEngines;
-using Ceres.Features.Players;
 using Ceres.Features.Suites;
 
 #endregion

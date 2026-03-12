@@ -17,8 +17,8 @@ using System;
 using System.Collections.Generic;
 
 using Ceres.Chess;
+using Ceres.Chess.GameEngines;
 using Ceres.Base.DataTypes;
-using Ceres.Features.Players;
 using Ceres.Features.Tournaments;
 
 #endregion

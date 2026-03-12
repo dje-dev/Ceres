@@ -36,7 +36,6 @@ using Ceres.MCTS.Params;
 using Ceres.Base.Misc;
 using Ceres.Base.Benchmarking;
 using System.Collections.Concurrent;
-using Ceres.Features.Players;
 using Ceres.Base.Math;
 using Ceres.Chess.NNEvaluators.Internals;
 using System.Linq;

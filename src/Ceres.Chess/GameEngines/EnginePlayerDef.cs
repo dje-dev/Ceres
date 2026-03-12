@@ -14,13 +14,10 @@
 #region Using directives
 
 using System;
-using Ceres.Chess;
-using Ceres.Chess.GameEngines;
-using Ceres.Features.GameEngines;
 
 #endregion
 
-namespace Ceres.Features.Players
+namespace Ceres.Chess.GameEngines
 {
   /// <summary>
   /// Definition of an engine player (e.g. participating in a tournament or suite)

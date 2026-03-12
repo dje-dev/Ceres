@@ -20,8 +20,8 @@ using System.Linq;
 
 using Ceres.Base.Misc;
 using Ceres.Chess;
+using Ceres.Chess.GameEngines;
 using Ceres.Features.GameEngines;
-using Ceres.Features.Players;
 
 #endregion
 

@@ -14,11 +14,10 @@
 #region Using directives
 
 using System;
-using Ceres.Chess.GameEngines;
 
 #endregion
 
-namespace Ceres.Features.GameEngines
+namespace Ceres.Chess.GameEngines
 {
   /// <summary>
   /// Abstract base class for definitions of game engines,
@@ -52,7 +51,7 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public abstract bool SupportsNodesPerGameMode { get; }
 
-    
+
     /// <summary>
     /// Abstract virtual mthod to create underlying engine.
     /// </summary>
@@ -68,4 +67,3 @@ namespace Ceres.Features.GameEngines
     public abstract void ModifyDeviceIndexIfNotPooled(int deviceIndexIncrement);
   }
 }
-

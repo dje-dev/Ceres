@@ -20,8 +20,8 @@ using System.Collections.Generic;
 using System.Threading;
 
 using Ceres.Chess;
+using Ceres.Chess.GameEngines;
 using Ceres.Chess.UserSettings;
-using Ceres.Features.Players;
 using Ceres.Base.DataTypes;
 
 #endregion

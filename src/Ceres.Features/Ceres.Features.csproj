@@ -22,6 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Players\" />
     <Folder Include="Suites\StandardTests\" />
   </ItemGroup>
 

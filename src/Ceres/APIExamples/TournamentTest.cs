@@ -27,7 +27,6 @@ using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.UserSettings;
-using Ceres.Features.Players;
 using Ceres.Features.Suites;
 using Ceres.Features.Tournaments;
 using Ceres.Features.GameEngines;
