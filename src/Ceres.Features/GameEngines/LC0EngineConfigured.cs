@@ -109,7 +109,13 @@ namespace Ceres.Features.GameEngines
       int MOVE_OVERHEAD = (int)(new ParamsSearch().MoveOverheadSeconds * 1000);
       lzOptions += $"--move-overhead={MOVE_OVERHEAD} ";
 
-      if (alwaysFillHistory) lzOptions += $" --history-fill=always ";
+
+      if (alwaysFillHistory)
+      {
+        // As of approximately version 0.32 the history-fill is removed
+        //  seemingly replaced by --history-fill-new
+        lzOptions += $" --history-fill-new=fen_only ";
+      }
 
       if (overrideBatchSize == null && OVERRIDE_LC0_BATCH_SIZE.HasValue)
       {
