@@ -33,6 +33,7 @@ using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.Chess.Positions;
 using Ceres.Chess.SearchResultVerboseMoveInfo;
 using Ceres.Chess.UserSettings;
+using Ceres.Chess.Visualization;
 using Ceres.Features.GameEngines;
 using Ceres.Features.UCI;
 using Ceres.MCTS.Iteration;

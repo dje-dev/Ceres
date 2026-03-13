@@ -20,7 +20,7 @@ using Ceres.Chess;
 
 #endregion
 
-namespace Ceres.Features.Visualization.AnalysisGraph
+namespace Ceres.Chess.Visualization
 {
   /// <summary>
   /// Static helper methods that convert Position into an SVG image format.

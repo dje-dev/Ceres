@@ -25,6 +25,7 @@ using Ceres.Chess.Games.Utils;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.Positions;
+using Ceres.Chess.Visualization;
 
 #endregion
 

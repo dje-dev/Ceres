@@ -25,7 +25,7 @@ using Ceres.Chess.UserSettings;
 
 #endregion
 
-namespace Ceres.Features.Visualization.AnalysisGraph
+namespace Ceres.Chess.Visualization
 {
   /// <summary>
   /// Collection of miscellaneous static helper methods relating to Graphviz and SVG.
