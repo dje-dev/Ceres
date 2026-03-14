@@ -17,8 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using AutoMapper;
-
+using Ceres.Base.Misc;
 using Ceres.Chess.PositionEvalCaching;
 using Chess.Ceres.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Specifications;
@@ -483,30 +482,19 @@ namespace Ceres.Chess.NNEvaluators.Defs
 
     #region Cloning
 
-    static IMapper cloneMapper = null;
-
     /// <summary>
-    /// Returns a shallow clone of the NNEvaluatorDef.
-    /// 
-    /// This is necessary because an underlying NNEvaluatorDef may be replicated multiple times, 
+    /// Returns a deep clone of the NNEvaluatorDef.
+    ///
+    /// This is necessary because an underlying NNEvaluatorDef may be replicated multiple times,
     /// each with a different target GPU ID.
-    /// 
-    /// Previously ObjUtils.DeepClone was used but this relied upon the now-deprecated BinarySerialization.
     /// </summary>
     /// <returns></returns>
     public NNEvaluatorDef Clone()
     {
-      if (cloneMapper == null)
-      {
-        MapperConfiguration config = new MapperConfiguration(cfg => cfg.CreateMap<NNEvaluatorDef, NNEvaluatorDef>());
-        cloneMapper = config.CreateMapper();
-      }
-
-      NNEvaluatorDef ret = cloneMapper.Map<NNEvaluatorDef>(this);
+      NNEvaluatorDef ret = ObjUtils.DeepClone(this);
       ret.DynamicByPosPredicate = DynamicByPosPredicate;
       for (int i = 0; i < Devices.Length; i++)
       {
-        // Make sure the boxed tuple with the DeviceInfo is cloned to a new object.
         ret.Devices[i].Device = Devices[i].Device with { };
       }
 
