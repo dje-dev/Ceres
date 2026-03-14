@@ -26,7 +26,7 @@ using Ceres.Chess.NNEvaluators;
 
 using Ceres.MCTS.Params;
 
-using Ceres.Features.Commands;
+using Ceres.Base.OperatingSystem;
 using Ceres.Features.UCI;
 
 #endregion
