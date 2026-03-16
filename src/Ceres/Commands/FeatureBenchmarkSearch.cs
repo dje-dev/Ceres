@@ -23,6 +23,7 @@ using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Params;
 using Ceres.Features.GameEngines;
+using Ceres.MCTS.GameEngines;
 
 #endregion
 

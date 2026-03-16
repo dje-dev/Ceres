@@ -27,6 +27,7 @@ using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.Positions;
 using Ceres.Features.GameEngines;
 using Ceres.Features.UCI;
+using Ceres.MCTS.GameEngines;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes.Analysis;
 using Ceres.MCTS.Params;

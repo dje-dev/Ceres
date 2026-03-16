@@ -14,6 +14,7 @@
 #region Using directives
 
 using Ceres.Chess.GameEngines;
+using Ceres.MCTS.GameEngines;
 using Ceres.MCTS.Params;
 using System.Collections.Generic;
 

@@ -46,6 +46,7 @@ using Ceres.Features.Visualization.AnalysisGraph;
 using Ceres.Chess.UserSettings;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NNEvaluators;
+using Ceres.MCTS.GameEngines;
 
 #endregion
 

@@ -39,6 +39,7 @@ using System.Collections.Concurrent;
 using Ceres.Base.Math;
 using Ceres.Chess.NNEvaluators.Internals;
 using System.Linq;
+using Ceres.MCTS.GameEngines;
 
 #endregion
 

@@ -36,6 +36,7 @@ using Ceres.Chess.UserSettings;
 using Ceres.Chess.Visualization;
 using Ceres.Features.GameEngines;
 using Ceres.Features.UCI;
+using Ceres.MCTS.GameEngines;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;

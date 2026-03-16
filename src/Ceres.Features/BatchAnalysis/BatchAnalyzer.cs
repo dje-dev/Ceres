@@ -29,6 +29,7 @@ using System.Text.Json.Serialization;
 using System.IO;
 using Ceres.Base.Benchmarking;
 using Ceres.MCTS.Params;
+using Ceres.MCTS.GameEngines;
 
 #endregion
 

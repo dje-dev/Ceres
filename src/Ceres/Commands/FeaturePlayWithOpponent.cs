@@ -25,6 +25,7 @@ using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.Chess.UserSettings;
 using Ceres.Features.GameEngines;
+using Ceres.MCTS.GameEngines;
 
 #endregion
 

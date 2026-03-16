@@ -45,6 +45,7 @@ using Ceres.Chess.Games.Utils;
 using Ceres.Chess.Data.Nets;
 using Chess.Ceres.PlayEvaluation;
 using System.Linq;
+using Ceres.MCTS.GameEngines;
 
 #endregion
 

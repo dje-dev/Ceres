@@ -39,6 +39,7 @@ using Ceres.Chess.NNEvaluators.LC0DLL;
 using Ceres.MCTS.MTCSNodes.Analysis;
 using ManagedCuda.BasicTypes;
 using Ceres.Features.UCI;
+using Ceres.MCTS.GameEngines;
 
 #endregion
 

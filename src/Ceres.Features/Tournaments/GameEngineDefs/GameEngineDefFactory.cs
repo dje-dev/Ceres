@@ -15,6 +15,7 @@
 
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.MCTS.GameEngines;
 using Ceres.MCTS.Params;
 using System.Collections.Generic;
 

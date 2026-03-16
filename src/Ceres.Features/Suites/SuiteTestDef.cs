@@ -19,6 +19,7 @@ using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.Games.Utils;
 using Ceres.Features.GameEngines;
+using Ceres.MCTS.GameEngines;
 
 #endregion
 
