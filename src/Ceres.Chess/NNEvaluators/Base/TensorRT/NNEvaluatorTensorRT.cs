@@ -676,7 +676,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     // Capture buffer size for thread-local allocation in handler
     int requiredBufferSize = outputFloatBufferSize;
 
-    SubBatchOutputHandler handler = (int globalStartPosition, int positionCount, int engineBatchSize, Half[] rawOutput) =>
+    SubBatchOutputHandler handler = (int globalStartPosition, int positionCount, int engineBatchSize, IntPtr rawOutputPtr, int outputElementCount) =>
     {
       // Ensure thread-local buffer is allocated
       if (threadLocalOutputFloatBuffer == null || threadLocalOutputFloatBuffer.Length < requiredBufferSize)
@@ -684,8 +684,12 @@ public class NNEvaluatorTensorRT : NNEvaluator
         threadLocalOutputFloatBuffer = new float[requiredBufferSize];
       }
 
-      // Vectorized conversion from Half to float
-      TensorPrimitives.ConvertToSingle(rawOutput, threadLocalOutputFloatBuffer.AsSpan(0, rawOutput.Length));
+      // Vectorized conversion from Half to float (directly from pinned host memory)
+      unsafe
+      {
+        ReadOnlySpan<Half> rawSpan = new ReadOnlySpan<Half>((void*)rawOutputPtr, outputElementCount);
+        TensorPrimitives.ConvertToSingle(rawSpan, threadLocalOutputFloatBuffer.AsSpan(0, outputElementCount));
+      }
 
       ExtractSubBatchResultsNative(globalStartPosition, positionCount, engineBatchSize,
                                    threadLocalOutputFloatBuffer, w, l, w2, l2, m, uncV, uncP, policies,
@@ -1202,7 +1206,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     // Capture buffer size for thread-local allocation in handler
     int requiredBufferSize = outputFloatBufferSize;
 
-    SubBatchOutputHandler handler = (int globalStartPosition, int positionCount, int engineBatchSize, Half[] rawOutput) =>
+    SubBatchOutputHandler handler = (int globalStartPosition, int positionCount, int engineBatchSize, IntPtr rawOutputPtr, int outputElementCount) =>
     {
       // Ensure thread-local buffer is allocated (each GPU thread gets its own buffer)
       if (threadLocalOutputFloatBuffer == null || threadLocalOutputFloatBuffer.Length < requiredBufferSize)
@@ -1210,8 +1214,12 @@ public class NNEvaluatorTensorRT : NNEvaluator
         threadLocalOutputFloatBuffer = new float[requiredBufferSize];
       }
 
-      // Vectorized conversion from Half to float using thread-local buffer
-      TensorPrimitives.ConvertToSingle(rawOutput, threadLocalOutputFloatBuffer.AsSpan(0, rawOutput.Length));
+      // Vectorized conversion from Half to float directly from pinned host memory
+      unsafe
+      {
+        ReadOnlySpan<Half> rawSpan = new ReadOnlySpan<Half>((void*)rawOutputPtr, outputElementCount);
+        TensorPrimitives.ConvertToSingle(rawSpan, threadLocalOutputFloatBuffer.AsSpan(0, outputElementCount));
+      }
 
       ExtractSubBatchResults(batch, globalStartPosition, positionCount, engineBatchSize,
                              threadLocalOutputFloatBuffer, w, l, w2, l2, m, uncV, uncP, policies,

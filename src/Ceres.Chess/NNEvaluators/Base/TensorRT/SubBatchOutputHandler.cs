@@ -25,5 +25,6 @@ namespace Ceres.Chess.NNEvaluators.TensorRT;
 /// <param name="globalStartPosition">Starting position index in the original batch</param>
 /// <param name="positionCount">Number of actual positions processed (may be less than engineBatchSize)</param>
 /// <param name="engineBatchSize">The engine's batch size (output buffer is sized for this)</param>
-/// <param name="rawOutput">Raw output buffer from inference (tensor-major layout)</param>
-public delegate void SubBatchOutputHandler(int globalStartPosition, int positionCount, int engineBatchSize, Half[] rawOutput);
+/// <param name="rawOutputPtr">Pointer to raw output in pinned host memory (tensor-major layout, Half elements)</param>
+/// <param name="outputElementCount">Number of Half elements valid in rawOutputPtr</param>
+public delegate void SubBatchOutputHandler(int globalStartPosition, int positionCount, int engineBatchSize, IntPtr rawOutputPtr, int outputElementCount);
