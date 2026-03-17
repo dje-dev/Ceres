@@ -211,6 +211,9 @@ namespace Ceres.MCTS.Iteration
                        bool forceNoTablebaseTerminals,
                        List<MGMove> searchMovesTablebaseRestricted)
     {
+      // Ensure engine initialization is performed (thread-safe, only runs once)
+      MCTSEngineInitialization.BaseInitialize();
+
       if (searchLimit.IsPerGameLimit)
       {
         throw new Exception("Per game search limits not supported");
