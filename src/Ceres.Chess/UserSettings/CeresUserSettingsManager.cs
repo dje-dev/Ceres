@@ -138,7 +138,8 @@ namespace Ceres.Chess.UserSettings
         NNWeightsFilesLC0.RegisterDirectory(settings.DirLC0Networks);
       }
 
-      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"Ceres user settings loaded from {settingsFileName}");
+      FileInfo ceresFileInfo = new FileInfo(settingsFileName);
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"Ceres user settings loaded from {ceresFileInfo.FullName}");
     }
 
 
