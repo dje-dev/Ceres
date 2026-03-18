@@ -657,19 +657,19 @@ public partial class MCGSEngine
   /// <summary>
   /// Depth of the deepest path seen so far.
   /// </summary>
-  public int MaxPathDepth => iterator1 == null ? iterator0.MaxPathDepth
+  public int MaxPathDepth => iterator1 == null ? (iterator0 == null ? 0 : iterator0.MaxPathDepth)
                                                    : Math.Max(iterator0.MaxPathDepth, iterator1.MaxPathDepth);
 
   /// <summary>
   /// Average depth of all paths seen so far.
   /// </summary>
-  public float AvgPathDepth => iterator1 == null ? iterator0.AvgPathDepth
+  public float AvgPathDepth => iterator1 == null ? (iterator0 == null ? 0 : iterator0.AvgPathDepth)
                                                      : StatUtils.Average(iterator0.AvgPathDepth, iterator1.AvgPathDepth);
 
   /// <summary>
   /// Fraction of node selection attempts that yielded a usable node.
   /// </summary>
-  public float NodeSelectionYieldFrac => iterator1 == null ? iterator0.NodeSelectionYieldFrac
+  public float NodeSelectionYieldFrac => iterator1 == null ? (iterator0 == null ? 0 : iterator0.NodeSelectionYieldFrac)
                                                            : StatUtils.Average(iterator0.NodeSelectionYieldFrac, iterator1.NodeSelectionYieldFrac);
 }
 
