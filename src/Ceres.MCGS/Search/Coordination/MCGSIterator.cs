@@ -236,6 +236,13 @@ public class MCGSIterator : IDisposable
   /// </summary>
   public float AvgPathDepth => (float)PathsSet.SumNonAbortedPathVisits / PathsSet.CountNonAbortedPathVisits;
 
+  /// <summary>
+  /// Fraction of node selection attempts that yielded a usable node.
+  /// </summary>
+  public float NodeSelectionYieldFrac => PathsSet.CountTotalPathsAttempted == 0
+                                       ? 0
+                                       : (float)PathsSet.CountNonAbortedPathVisits / (float)PathsSet.CountTotalPathsAttempted;
+
 
   /// <summary>
   /// Runs the iteration loop.

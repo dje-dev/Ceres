@@ -67,5 +67,17 @@ public record GameEngineSearchResultCeres : GameEngineSearchResult
   {
     Search = search;
     BestMove = bestMove;
+
+    // Populate the new search statistics fields from the manager.
+    MCTSManager manager = search.Manager;
+    NumNodesWhenChoseTopNNode = manager.NumNodesWhenChoseTopNNode;
+    NumNNBatches = manager.Context.NumNNBatches;
+    NumNNNodes = manager.Context.NumNNNodes;
+    TopNNodeN = manager.TopNChildIndex is null ? 0 : manager.TopNChildN;
+    FractionNumNodesWhenChoseTopNNode = manager.FractionNumNodesWhenChoseTopNNode;
+    AvgDepth = manager.Context.AvgDepth;
+    MaxDepth = 0; // Not available in MCTS (MaxDepth is not tracked separately)
+    NodeSelectionYieldFrac = manager.Context.NodeSelectionYieldFrac;
+    PickedNonTopNMoveStr = bestMove?.BestMoveWasTopN == false ? "!" : " ";
   }
 }

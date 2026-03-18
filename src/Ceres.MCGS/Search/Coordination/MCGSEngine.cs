@@ -665,5 +665,11 @@ public partial class MCGSEngine
   /// </summary>
   public float AvgPathDepth => iterator1 == null ? iterator0.AvgPathDepth
                                                      : StatUtils.Average(iterator0.AvgPathDepth, iterator1.AvgPathDepth);
+
+  /// <summary>
+  /// Fraction of node selection attempts that yielded a usable node.
+  /// </summary>
+  public float NodeSelectionYieldFrac => iterator1 == null ? iterator0.NodeSelectionYieldFrac
+                                                           : StatUtils.Average(iterator0.NodeSelectionYieldFrac, iterator1.NodeSelectionYieldFrac);
 }
 

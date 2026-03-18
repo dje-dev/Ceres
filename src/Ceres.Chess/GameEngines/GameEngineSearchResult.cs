@@ -95,6 +95,51 @@ namespace Ceres.Chess.GameEngines
     /// </summary>
     public List<VerboseMoveStat> VerboseMoveStats;
 
+    /// <summary>
+    /// Number of nodes in tree when the eventual top-N move was first chosen.
+    /// </summary>
+    public int NumNodesWhenChoseTopNNode;
+
+    /// <summary>
+    /// Number of neural network evaluation batches during search.
+    /// </summary>
+    public int NumNNBatches;
+
+    /// <summary>
+    /// Number of neural network node evaluations during search.
+    /// </summary>
+    public int NumNNNodes;
+
+    /// <summary>
+    /// Visit count of the top-N child at end of search.
+    /// </summary>
+    public int TopNNodeN;
+
+    /// <summary>
+    /// Fraction of total nodes used when the top-N move was chosen.
+    /// </summary>
+    public float FractionNumNodesWhenChoseTopNNode;
+
+    /// <summary>
+    /// Average depth of nodes in the search tree.
+    /// </summary>
+    public float AvgDepth;
+
+    /// <summary>
+    /// Maximum depth reached in the search tree.
+    /// </summary>
+    public float MaxDepth;
+
+    /// <summary>
+    /// Fraction of node selection attempts that yielded a usable node.
+    /// </summary>
+    public float NodeSelectionYieldFrac;
+
+    /// <summary>
+    /// Indicator if the best move was not the top-N move ("!" if non-top-N, " " otherwise).
+    /// </summary>
+    public string PickedNonTopNMoveStr;
+
     #endregion
 
     public GameEngineSearchResult(string moveString, float scoreQ, float scoreCentipawns, float mAvg, 

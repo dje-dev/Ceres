@@ -91,5 +91,17 @@ public record GameEngineSearchResultCeresMCGS : GameEngineSearchResult
     BestMoveInfo = bestMoveInfo;
     ScoreQRoot = scoreQRoot;
     Stats = new GameEngineSearchResultsStats() with { RatioVisitsToNodes = ratioVisitsToNodes };
+
+    // Populate the new search statistics fields from the manager.
+    MCGSManager manager = search.Manager;
+    NumNodesWhenChoseTopNNode = manager.NumNodesWhenChoseTopNNode;
+    NumNNBatches = search.SearchRootNode.Graph.NNBatchesCount;
+    NumNNNodes = search.SearchRootNode.Graph.NNPositionEvaluationsCount;
+    TopNNodeN = manager.TopNChildN;
+    FractionNumNodesWhenChoseTopNNode = manager.FractionNumNodesWhenChoseTopNNode;
+    AvgDepth = manager.AvgDepth;
+    MaxDepth = manager.MaxDepth;
+    NodeSelectionYieldFrac = manager.Engine.NodeSelectionYieldFrac;
+    PickedNonTopNMoveStr = bestMoveInfo?.BestMoveWasTopN == false ? "!" : " ";
   }
 }

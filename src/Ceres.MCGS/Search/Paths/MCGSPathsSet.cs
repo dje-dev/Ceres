@@ -39,7 +39,12 @@ public partial class MCGSPathsSet : IDisposable
   public readonly ConcurrentQueue<MCGSPath> Paths;
 
   /// <summary>
-  /// Total number of paths processed.
+  /// Total number of paths processed (including aborted).
+  /// </summary>
+  public long CountTotalPathsAttempted;
+
+  /// <summary>
+  /// Total number of non-aborted paths processed.
   /// </summary>
   public long CountNonAbortedPathVisits;
 
@@ -89,8 +94,11 @@ public partial class MCGSPathsSet : IDisposable
   {
     Debug.Assert(path.TerminationReason != MCGSPathTerminationReason.NotYetTerminated);
     path.LeafVisitRef.NumVisitsAccepted = (short)numVisitsAcceptedLeafVisit;
-    
-    // Update running statistics.
+
+    // Track total paths attempted (including aborted).
+    CountTotalPathsAttempted++;
+
+    // Update running statistics for non-aborted paths.
     if (path.TerminationReason != MCGSPathTerminationReason.Abort)
     {
       CountNonAbortedPathVisits++;
