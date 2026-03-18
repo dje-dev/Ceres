@@ -116,11 +116,110 @@ namespace Ceres.Chess.UserSettings
     public static void SaveToDefaultFile() => SaveToFile(DefaultCeresConfigFileName);
 
 
+    /// <summary>
+    /// Loads Ceres.json settings file with the following preference order:
+    /// 1. Path specified by CERES_JSON environment variable
+    /// 2. Current working directory
+    /// 3. User's home directory
+    /// Throws an exception with detailed information about searched locations if not found.
+    /// This method is thread-safe and will only load the settings file once.
+    /// </summary>
+    public static void LoadCeresJSON()
+    {
+      if (ceresJSONLoaded)
+      {
+        return;
+      }
+
+      lock (loadCeresJSONLock)
+      {
+        if (ceresJSONLoaded)
+        {
+          return;
+        }
+
+        const string CERES_JSON_ENV_VAR = "CERES_JSON";
+        const string CERES_JSON_FILENAME = "Ceres.json";
+
+        // 1. Check environment variable
+        string envPath = Environment.GetEnvironmentVariable(CERES_JSON_ENV_VAR);
+        if (!string.IsNullOrWhiteSpace(envPath))
+        {
+          if (File.Exists(envPath))
+          {
+            LoadFromFile(envPath);
+            ceresJSONLoaded = true;
+            return;
+          }
+        }
+
+        // 2. Check current working directory
+        string currentDirPath = Path.Combine(Directory.GetCurrentDirectory(), CERES_JSON_FILENAME);
+        if (File.Exists(currentDirPath))
+        {
+          LoadFromFile(currentDirPath);
+          ceresJSONLoaded = true;
+          return;
+        }
+
+        // 3. Check user's home directory
+        string homeDirPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), CERES_JSON_FILENAME);
+        if (File.Exists(homeDirPath))
+        {
+          LoadFromFile(homeDirPath);
+          ceresJSONLoaded = true;
+          return;
+        }
+
+        // File not found in any location - output message and create default file
+        const string DEFAULT_CERES_JSON = """
+{
+  "SyzygyPath": null,
+  "DirCeresNetworks": ".",
+  "DirLC0Networks": ".",
+  "device": "GPU:0"
+}
+""";
+
+        Console.WriteLine();
+        Console.WriteLine($"Could not locate {CERES_JSON_FILENAME}. Searched locations:");
+
+        if (!string.IsNullOrWhiteSpace(envPath))
+        {
+          Console.WriteLine($"  1. Environment variable {CERES_JSON_ENV_VAR}: '{envPath}' - NOT FOUND");
+        }
+        else
+        {
+          Console.WriteLine($"  1. Environment variable {CERES_JSON_ENV_VAR}: not set");
+        }
+
+        Console.WriteLine($"  2. Current working directory: '{currentDirPath}' - NOT FOUND");
+        Console.WriteLine($"  3. User's home directory: '{homeDirPath}' - NOT FOUND");
+
+        Console.WriteLine();
+        ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"*** NOTE: Configuration file {CERES_JSON_FILENAME} not found.");
+        Console.WriteLine($"A new {CERES_JSON_FILENAME} will be created in the current working directory with default settings:");
+        Console.WriteLine("To proceed, either use UCI setoption commands for network and device or complete this Ceres.json and restart.");
+        Console.WriteLine(DEFAULT_CERES_JSON);
+        Console.WriteLine();
+
+        File.WriteAllText(currentDirPath, DEFAULT_CERES_JSON);
+        LoadFromFile(currentDirPath);
+        ceresJSONLoaded = true;
+      }
+    }
+
+
     static CeresUserSettings settings = null;
+    static readonly object loadCeresJSONLock = new object();
+    static bool ceresJSONLoaded = false;
 
     /// <summary>
     /// Reads settings from specified settings file.
     /// The DirLC0Networks directory (if present) will be registered with NNWeightsFilesLC0.
+    /// Supports property aliases:
+    ///   - "network" for "DefaultNetworkSpecString"
+    ///   - "device" for "DefaultDeviceSpecString"
     /// </summary>
     public static void LoadFromFile(string settingsFileName)
     {
@@ -130,6 +229,10 @@ namespace Ceres.Chess.UserSettings
       }
 
       string jsonString = File.ReadAllText(settingsFileName);
+
+      // Preprocess JSON to map property aliases to canonical names
+      jsonString = MapPropertyAliases(jsonString);
+
       JsonSerializerOptions options = new JsonSerializerOptions() { AllowTrailingCommas = true };
       settings = JsonSerializer.Deserialize<CeresUserSettings>(jsonString, options);
 
@@ -140,6 +243,42 @@ namespace Ceres.Chess.UserSettings
 
       FileInfo ceresFileInfo = new FileInfo(settingsFileName);
       ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"Ceres user settings loaded from {ceresFileInfo.FullName}");
+    }
+
+
+    /// <summary>
+    /// Maps property aliases to their canonical names in JSON string.
+    /// Supports:
+    ///   - "network" --> "DefaultNetworkSpecString"
+    ///   - "device" --> "DefaultDeviceSpecString"
+    /// </summary>
+    private static string MapPropertyAliases(string jsonString)
+    {
+      using JsonDocument doc = JsonDocument.Parse(jsonString, new JsonDocumentOptions { AllowTrailingCommas = true });
+
+      using MemoryStream stream = new MemoryStream();
+      using (Utf8JsonWriter writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+      {
+        writer.WriteStartObject();
+
+        foreach (JsonProperty property in doc.RootElement.EnumerateObject())
+        {
+          // Map aliases to canonical property names
+          string propertyName = property.Name switch
+          {
+            "network" => "DefaultNetworkSpecString",
+            "device" => "DefaultDeviceSpecString",
+            _ => property.Name
+          };
+
+          writer.WritePropertyName(propertyName);
+          property.Value.WriteTo(writer);
+        }
+
+        writer.WriteEndObject();
+      }
+
+      return System.Text.Encoding.UTF8.GetString(stream.ToArray());
     }
 
 

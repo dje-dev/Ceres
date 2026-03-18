@@ -1,0 +1,505 @@
+﻿#region License notice
+
+/*
+  This file is part of the Ceres project at https://github.com/dje-dev/ceres.
+  Copyright (C) 2020- by David Elliott and the Ceres Authors.
+
+  Ceres is free software under the terms of the GNU General Public License v3.0.
+  You should have received a copy of the GNU General Public License
+  along with Ceres. If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#endregion
+
+#region Using directives
+
+using System;
+using System.Diagnostics;
+
+using Ceres.Chess;
+using Ceres.Chess.EncodedPositions;
+
+using Ceres.MCGS.Managers;
+using Ceres.MCGS.Search.Params;
+using Ceres.MCGS.Search.PUCT;
+using Ceres.MCGS.Search.Coordination;
+
+using Ceres.MCGS.Graphs.GEdges;
+using Ceres.MCGS.Graphs.GEdgeHeaders;
+using Ceres.MCGS.Graphs.GNodes;
+using Ceres.MCGS.Graphs;
+
+#endregion
+
+namespace Ceres.MCGS.Search.Strategies;
+
+/// <summary>
+/// Implements PUCT-based child selection and backup strategy.
+/// </summary>
+public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
+{
+  public ParamsSearch ParamsSearch => Engine.Manager.ParamsSearch;
+  public ParamsSelect ParamsSelect => Engine.Manager.ParamsSelect;
+
+
+  /// <summary>
+  /// Allocate buffer to hold child visit counts (one for each possible path depth).
+  /// // TODO: why do we need one for each possible depth?
+  /// </summary>
+  [ThreadStatic]
+  static short[][] childVisitCountsArray;
+
+  /// <summary>
+  /// Allocate buffer to hold child visit scores (one for each possible path depth).
+  /// </summary>
+  [ThreadStatic]
+  static double[][] childScoresArray;
+
+
+  /// <summary>
+  /// Local copy of variable for efficient access.
+  /// </summary>
+  private int backupOffPathNumAdditionalLevelsToPropagate;
+
+  bool refreshSiblingDuringBackupToNode;
+
+
+  /// <summary>
+  /// Constructor.
+  /// </summary>
+  public MCGSStrategyPUCT(MCGSEngine engine) : base(engine)
+  {
+    backupOffPathNumAdditionalLevelsToPropagate = engine.Manager.ParamsSearch.OffPathBackupNumAdditionalLevelsToPropagate;
+    refreshSiblingDuringBackupToNode = MCGSParamsFixed.REFRESH_SIBLING_DURING_BACKUP_PHASE && Engine.Manager.ParamsSearch.EnablePseudoTranspositionBlending;
+  }
+
+  private static void CheckThreadStaticsInitialized()
+  {
+    if (childVisitCountsArray == null)
+    {
+      const int MAX_PATH_DEPTH = 255;
+      childVisitCountsArray = new short[MAX_PATH_DEPTH][];
+      childScoresArray = new double[MAX_PATH_DEPTH][];
+    }
+  }
+
+  /// <summary>
+  /// Maximum number of children to consider when selecting child to visit.
+  /// 
+  /// All of the children visited continue to be eligible,
+  /// plus enough additional children to satisfy the numTargetVisits
+  /// under the pessimistic (unlikely) assumption that PUCT chose
+  /// consecutive children starting at the beginning of the unexpanded children.
+  /// </summary>
+  /// <param name="node"></param>
+  /// <param name="numTargetVisits"></param>
+  /// <returns></returns>
+  internal override int NumChildrenToConsider(GNode node, int numTargetVisits) => node.NumEdgesExpanded + numTargetVisits;
+
+
+  void PossiblyRearrangeOrderUsingAction(GNode node, Graph graph, ParamsSearch paramsSearch, ParamsSelect paramsSelect)
+  {
+    // ************* DISABLED ***********
+    return;
+    // **********************************
+
+    float actionHeadSelectionWeight = paramsSearch.ActionHeadSelectionWeight;
+
+    ref readonly GNodeStruct nodeRef = ref node.NodeRef;
+
+    // If using action head and this is the first visit,
+    // resort the children using the scores computed inclusive of the action head influence.
+    if (nodeRef.N == 1
+      //       && nodeRef.NInFlight == 0
+      //       && nodeRef.NInFlight1 == 0
+      && nodeRef.NumPolicyMoves > 1
+      && actionHeadSelectionWeight > 0)
+    {
+      //        if (nodeRef.NInFlight > 0 || nodeRef.NInFlight1 > 0)
+      //        {
+      //          throw new Exception("Internal error, unexpected state.");
+      //        }
+
+      // Compute scores for all children so we can sort based on that.
+      Span<double> scores = stackalloc double[nodeRef.NumPolicyMoves];
+      PUCTSelector.ComputeTopChildScores(graph, node,
+                                         paramsSearch,
+                                         paramsSelect,
+                                         0,
+                                         false,
+                                         rootMovePruningStatus: null,
+                                         dualCollisionFraction: ParamsSearch.Execution.DualIteratorAlternateCollisionFraction,
+                                         minChildIndex: 0,
+                                         maxChildIndex: nodeRef.NumPolicyMoves - 1,
+                                         numTargetVisits: 0, // to indicate all
+                                         scores: scores,
+                                         childVisitCounts: default,// not needed
+                                         cpuctMultiplier: 1.0f,
+                                         temperatureMultiplier: 1.0f);
+
+
+      // Bubble sort to get items in same order as the scores.
+      const float MIN_PROBABILITY_FOR_ACTION_BOOST = 0.03f; // ****************** HARDCODED *****************
+
+      Span<GEdgeHeaderStruct> moveInfosSpan = node.EdgeHeadersSpan;
+      int numSwapped;
+      do
+      {
+        numSwapped = 0;
+        for (int i = 1; i < nodeRef.NumPolicyMoves; i++)
+        {
+          // Do not swap for low probability nodes.
+          if (moveInfosSpan[i].P < MIN_PROBABILITY_FOR_ACTION_BOOST)
+          {
+            break;
+          }
+
+          if (scores[i] > scores[i - 1])
+          {
+            numSwapped++;
+
+            // Swap scores, children and actions.
+            (scores[i - 1], scores[i]) = (scores[i], scores[i - 1]);
+            (moveInfosSpan[i - 1], moveInfosSpan[i]) = (moveInfosSpan[i], moveInfosSpan[i - 1]);
+          }
+
+        }
+      } while (numSwapped > 0);
+    }
+  }
+
+
+  public static void RearrangeForQOrder(Span<double> scores, double maxDelta, Action<int, int> swapFunc)
+  {
+    int length = scores.Length;
+    bool changed;
+
+    do
+    {
+      changed = false;
+
+      // i1 is the later index
+      for (int i1 = 0; i1 < length; i1++)
+      {
+        double s1 = scores[i1];
+
+        // i2 is the earlier index
+        for (int i2 = 0; i2 < i1; i2++)
+        {
+          double s2 = scores[i2];
+
+          // Violation: earlier score is more than maxDelta greater
+          if (s2 > s1 + maxDelta)
+          {
+            // Swap the two indices via callback (and also locally).
+            swapFunc(i2, i1);
+            (scores[i2], scores[i1]) = (scores[i1], scores[i2]);
+
+            // scores has changed; refresh s1 from its new position.
+            s1 = scores[i1];
+
+            changed = true;
+          }
+        }
+      }
+
+    } while (changed);
+  }
+
+
+  public static void RearrangeForContiguity(Span<short> counts, Span<double> associatedScores, int indexFirstElementMustFillContiguously)
+  {
+    if (counts.Length <= indexFirstElementMustFillContiguously)
+    {
+      return;
+    }
+
+    int writePos = indexFirstElementMustFillContiguously;
+
+    for (int readPos = indexFirstElementMustFillContiguously; readPos < counts.Length; readPos++)
+    {
+      if (counts[readPos] != 0)
+      {
+        if (readPos != writePos)
+        {
+          counts[writePos] = counts[readPos];
+          counts[readPos] = 0;
+
+          if (!associatedScores.IsEmpty)
+          {
+            associatedScores[writePos] = associatedScores[readPos];
+            associatedScores[readPos] = 0;
+          }
+        }
+        writePos++;
+      }
+    }
+  }
+
+  public override NodeSelectAccumulator SelectChildren(GNode parentNode,
+                                                       int selectorID,
+                                                       int depth,
+                                                       int numChildrenToConsider,
+                                                       int numTargetVisits,
+                                                       bool alsoComputeScores,
+                                                       float cpuctMultiplier,
+                                                       float temperatureMultiplier,
+                                                       bool refreshStaleEdges,
+                                                       MCGSFutilityPruningStatus[] rootMovePruningStatus,
+                                                       out Span<short> childVisitCounts,
+                                                       out Span<double> childScores)
+  {
+    CheckThreadStaticsInitialized();
+
+    PossiblyRearrangeOrderUsingAction(parentNode, Engine.Graph, ParamsSearch, ParamsSelect);
+
+    // Allocate space to hold visit counts/scores at this level (if not already allocated).
+    if (childVisitCountsArray[depth] == null)
+    {
+      childVisitCountsArray[depth] = new short[CompressedPolicyVector.NUM_MOVE_SLOTS];
+      if (alsoComputeScores)
+      {
+        childScoresArray[depth] = new double[CompressedPolicyVector.NUM_MOVE_SLOTS];
+      }
+    }
+
+    // Create properly sized and cleared spans for visit counts and scores.
+    childVisitCounts = new Span<short>(childVisitCountsArray[depth], 0, numChildrenToConsider);
+    childVisitCounts.Clear();
+    if (alsoComputeScores)
+    {
+      childScores = new Span<double>(childScoresArray[depth], 0, numChildrenToConsider);
+      childScores.Clear();
+    }
+    else
+    {
+      childScores = default;
+    }
+
+    NodeSelectAccumulator childStats =
+      PUCTSelector.ComputeTopChildScores(Engine.Graph, parentNode,
+                                         ParamsSearch,
+                                         ParamsSelect,
+                                         selectorID,
+                                         refreshStaleEdges,
+                                         rootMovePruningStatus,
+                                         dualCollisionFraction: ParamsSearch.Execution.DualIteratorAlternateCollisionFraction,
+                                         minChildIndex: 0,
+                                         maxChildIndex: numChildrenToConsider - 1,
+                                         numTargetVisits,
+                                         childScores,
+                                         childVisitCounts,
+                                         cpuctMultiplier,
+                                         temperatureMultiplier);
+
+    if (Engine.Manager.ParamsSearch.MoveOrderingPhase != ParamsSearch.MoveOrderingPhaseEnum.None)
+    {
+      RearrangeForContiguity(childVisitCounts, childScores, parentNode.NumEdgesExpanded);
+    }
+#if DEBUG
+    // Verify in-order
+    bool haveSeenZero = false;
+    for (int i = parentNode.NumEdgesExpanded; i < numChildrenToConsider; i++)
+    {
+      if (childVisitCounts[i] != 0)
+      {
+        Debug.Assert(!haveSeenZero);
+      }
+      else
+      {
+        haveSeenZero = true;
+      }
+    }
+#endif
+
+    return childStats;
+  }
+
+
+
+#if NOT
+  Debug.Assert(Math.Abs(newQ) < 1.2f);
+    node.NodeRef.Q = newQ;
+
+    if (false && node.Graph.TestFlag && node.N > 1 && node.N <= 100 && !node.Terminal.IsTerminal())
+    {
+      GEdge rpoResult = RPOTests.BestMove(node, 
+                                          qWhenNoChildren: (float)node.Q - 0.32f, // not actualy used
+                                          numChildrenToConsider: node.NumEdgesExpanded,
+                                          lambda: 0.5f,
+                                          lambdaPower: 0.5f,
+                                          weighted: false);
+
+      // For total W, using value of node itself plus the Q coming from the RPO calculation
+      double totalW = (-rpoResult.Q * (node.N - 1) )+ (node.V * 1);
+
+      newQ = totalW / node.N;
+      node.NodeRef.Q = newQ;
+      node.NodeRef.D = 0; // ??
+
+      if (includePseudoTranspositions)
+      {
+        throw new NotImplementedException("Need to disable this for comparability (not yet implemented)");
+      }
+    }
+
+  }
+#endif
+
+
+  /// <summary>
+  /// Backs up the value of a newly evaluated leaf node to a specified node.
+  /// </summary>
+  /// <param name="node"></param>
+  /// <param name="deltaN"></param>
+  /// <param name="deltaW"></param>
+  /// <param name="deltaD"></param>
+  /// <param name="refreshSiblingContribution"></param>
+  public override void BackupToNode(GNode node, int deltaN, double deltaW, double deltaD)
+  {
+    int startN = node.N;
+
+    // Increment N.
+    node.NodeRef.N += deltaN;
+
+    if (node.CheckmateKnownToExistAmongChildren)
+    {
+      // Q should have already been set and will not change.
+      Debug.Assert(node.Q >= 0.995);
+    }
+    else
+    {
+      double oldWPure = node.ComputeQPure() * startN;
+      double newWPure = oldWPure + deltaW;
+      double newQPure = newWPure / (startN + deltaN);
+
+      node.ResetNodeQUsingNewQPure(newQPure, refreshSiblingDuringBackupToNode);
+
+      // Update D using running average.
+      double oldDSum = node.D * startN;
+      double newDSum = oldDSum + deltaD;
+      node.NodeRef.D = newDSum / (startN + deltaN);
+    }
+
+#if DEBUG
+    int count = 0;
+    for (int i=0;i<node.NumEdgesExpanded;i++)
+    {
+      count += node.ChildEdgeAtIndex(i).N;
+    }
+    Debug.Assert(node.N == count + (node.Terminal.IsTerminal() ? node.N : 1));
+#endif
+  }
+
+
+  /// <summary>
+  /// Backs up the value of a newly evaluated leaf node to a specified edge.
+  /// </summary>
+  /// <param name="edge"></param>
+  /// <param name="deltaN"></param>
+  /// <param name="deltaNDrawByRepetition"></param>
+  /// <param name="newChildQ"></param>
+  /// <param name="newD"></param>
+  /// <param name="drawKnownToExistAtChild"></param>
+  public override void BackupToEdge(GEdge edge, int deltaN,  double newQChild, double newD, bool drawKnownToExistAtChild)
+  {
+    Debug.Assert(Math.Abs(newQChild) < 1.2f);
+
+    // If this backed up value looks to us better than a draw but
+    // we know that the opponent has an available draw,
+    // reset value to 0.
+    if (MCGSParamsFixed.ENABLE_DRAW_KNOWN_TO_EXIST && drawKnownToExistAtChild && newQChild < 0)
+    {
+      edge.ChildNodeHasDrawKnownToExist = true;
+      newQChild = 0;
+      // TODO: deltaD adjust, should it be -deltaW?
+    }
+
+    double deltaQ = newQChild - edge.Q;
+
+    if (MCGSParamsFixed.TRACK_NODE_EDGE_UNCERTAINTY)
+    {
+      double priorMean = edge.N <= 1 ? newQChild : edge.Q; // first point is just the new sample
+      edge.AddUpdateSample(priorMean, newQChild);
+    }
+
+    // The N on edges represents the number of visits along this path to the child node,
+    // independent of total visits to the child (some of which may have arisen via other parents).
+    // (see: https://github.com/lightvector/KataGo/blob/master/docs/GraphSearch.md).
+    edge.N += deltaN;
+    edge.QChild = newQChild;
+
+    // Note that the assertion on edge N and child N
+    // does not apply in coalesce mode because in that case one node appears twice in the path
+    // (once as the leaf) and that BackupToNode at the leaf is omitted
+    // to allow the node to be updated exactly once (at the earlier visit).
+//    Debug.Assert(Engine.Manager.ParamsSearch.PathTranspositionMode == Paths.MCGSPathMode.Coalesce
+//            || !(edge.Type == GEdgeStruct.EdgeType.ChildEdge && edge.N > edge.ChildNode.N));
+
+    // Potentially propagate Q changes upward to other parents of the child node.
+    if (backupOffPathNumAdditionalLevelsToPropagate > 0
+      && Math.Abs(deltaQ) > MCGSParamsFixed.PROPAGATE_OFF_VISIT_PARENTS_MIN_Q_DELTA
+      && edge.Type == GEdgeStruct.EdgeType.ChildEdge
+      && edge.ChildNode.NumParentsMoreThanOne)
+    {
+      Debug.Assert(edge.ParentNode.GraphStore.GraphEnabled); // stale flag only to be used in graph mode when desychronization possible
+
+      PropagateQChangesUpward(edge.ChildNode, edge, backupOffPathNumAdditionalLevelsToPropagate);
+    }
+  }
+
+
+  /// <summary>
+  /// Recursively propagates Q value changes to other parent edges of a node,
+  /// continuing upward through the graph as needed.
+  /// </summary>
+  /// <param name="childNode">The edge that was just updated</param>
+  /// <param name="edgeToNotUpdate">Optionally an edge that should be ignored</param>
+  /// <param name="levelsRemaining">Number of levels remaining before stopping propagation</param>
+  private void PropagateQChangesUpward(GNode childNode, GEdge edgeToNotUpdate, int levelsRemaining)
+  {
+    if (levelsRemaining == 0)
+    {
+      return;
+    }
+
+    double newChildQ = childNode.Q;
+    bool shouldContinueMoreLevels = levelsRemaining > 1;
+
+    foreach (GEdge edge in childNode.ParentEdges)
+    {
+      if (edge != edgeToNotUpdate
+        && edge.N > 0
+        && !edge.ChildNodeHasDrawKnownToExist)
+      {
+        // Only mark stale if the delta of Q on the edge is also significant.
+        // (it could happen that it was already stale in a way that cancelled with this staleness).
+        double edgeDeltaQ = newChildQ - edge.Q;
+
+        if (Math.Abs(edgeDeltaQ) > MCGSParamsFixed.PROPAGATE_OFF_VISIT_PARENTS_MIN_Q_DELTA)
+        {
+          if (!shouldContinueMoreLevels)
+          {
+            // Don't continue upward, but do mark this edge as stale so that future
+            // visits to it (during select phase) will notice and update during gather of children.
+            edge.IsStale = true;
+          }
+          else
+          {
+            // Update the parent node with the delta
+            double deltaW = edgeDeltaQ * edge.N;
+            double deltaD = 0; // TODO: implement this.
+            BackupToNode(edge.ParentNode, 0, deltaW, deltaD);
+
+            // Update the edge Q value
+            edge.QChild = newChildQ;
+
+            // Recursively propagate to this edge's other parents
+            PropagateQChangesUpward(edge.ParentNode, default, levelsRemaining - 1);
+          }
+        }
+      }
+    }
+  }
+}
+

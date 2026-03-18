@@ -14,6 +14,7 @@
 #region Using directives 
 
 using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -24,6 +25,7 @@ using Ceres.Base.Misc;
 using Ceres.Base.Environment;
 using Ceres.Base.OperatingSystem;
 using Ceres.Base.CUDA;
+using Ceres.Chess;
 using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.Environment;
@@ -44,7 +46,24 @@ namespace Ceres
     /// <param name="args"></param>
     static void Main(string[] args)
     {
-      LaunchUCI(args);
+      // Scan for /v1 flag to select legacy MCTS engine.
+      List<string> filteredArgs = new List<string>();
+      if (args != null)
+      {
+        foreach (string arg in args)
+        {
+          if (arg.Equals("/v1", StringComparison.OrdinalIgnoreCase))
+          {
+            CeresEngineConfig.ActiveEngine = CeresEngineVersion.V1MCTS;
+          }
+          else
+          {
+            filteredArgs.Add(arg);
+          }
+        }
+      }
+
+      LaunchUCI(filteredArgs.ToArray());
     }
 
 
@@ -70,25 +89,7 @@ namespace Ceres
       HardwareManager.VerifyHardwareSoftwareCompatability();
 
       // Load (or cause to be created) a settings file.
-      if (!CeresUserSettingsManager.DefaultConfigFileExists)
-      {
-        const string DEFAULT_CERES_JSON = @"
-{
-  ""SyzygyPath"": null,
-  ""DirCeresNetworks"": ""."",
-  ""DirLC0Networks"": ""."",
-  ""DefaultDeviceSpecString"": ""GPU:0"",
-}
-";
-
-        Console.WriteLine();
-        ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"*** NOTE: Configuration file {CeresUserSettingsManager.DefaultCeresConfigFileName} not found in working directory.");
-        Console.WriteLine($"A new Ceres.json will be created with default settings:");
-        Console.WriteLine(DEFAULT_CERES_JSON);
-
-        System.IO.File.WriteAllText(CeresUserSettingsManager.DefaultCeresConfigFileName, DEFAULT_CERES_JSON);
-        CeresUserSettingsManager.LoadFromDefaultFile();
-      }
+      CeresUserSettingsManager.LoadCeresJSON();
 
       // Configure logging level
       CeresEnvironment.MONITORING_EVENTS = enableLogging;
@@ -161,7 +162,7 @@ namespace Ceres
     const string BannerString =
     @"
 |=========================================================|
-| Ceres - A Monte Carlo Tree Search Chess Engine          |
+| Ceres - {ENGINE}                                        |
 |                                                         |
 | (c) 2020- David Elliott and the Ceres Authors           |
 |   Use help to list available commands.                  |
@@ -178,22 +179,30 @@ namespace Ceres
 
       string cudaVersion = $"{majorCUDAVersion}.{minorCUDAVersion}";     
 
+      string engineLabel = CeresEngineConfig.IsMCGS
+        ? "Monte Carlo Graph Search Engine (MCGS v2)"
+        : "Monte Carlo Tree Search Engine (MCTS v1)";
+
       string[] bannerLines = BannerString.Split(Environment.NewLine);
       foreach (string line in bannerLines)
       {
         if (line.StartsWith("| Ceres"))
         {
+          string ceresLine = $"| Ceres - {engineLabel}";
+          int spaceLeft = line.Length - ceresLine.Length;
+          string padding = new string(' ', Math.Max(0, spaceLeft - 1));
+
           ConsoleColor defaultColor = Console.ForegroundColor;
           Console.Write("|");
           Console.ForegroundColor = ConsoleColor.Magenta;
-          Console.Write(line.Substring(1, line.Length - 2));
+          Console.Write($" Ceres - {engineLabel}{padding}");
           Console.ForegroundColor = defaultColor;
           Console.WriteLine("|");
         }
 
         else if (line.StartsWith("|  Version"))
         {
-          string version = $"|  Version {CeresVersion.VersionString} [git:{GitInfo.LastCommitSHA}]";
+          string version = $"|  Version {Chess.CeresVersion.VersionString} [git:{GitInfo.LastCommitSHA}]";
           int spaceLeft = line.Length - version.Length;
           string empty = new string(' ', 3 + spaceLeft - 1);
           Console.WriteLine($"{version}{empty}|");

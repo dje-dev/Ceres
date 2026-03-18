@@ -27,7 +27,6 @@ using Ceres.Chess.NNEvaluators;
 using Ceres.MCTS.Params;
 
 using Ceres.Base.OperatingSystem;
-using Ceres.Features.UCI;
 
 #endregion
 
@@ -282,31 +281,58 @@ namespace Ceres.Commands
     {
       FeatureUCIParams uciParams = FeatureUCIParams.ParseUCICommand(keyValueArgs);
 
-      Action<NNEvaluatorDef, NNEvaluator, int, int, int?> backendBenchEvaluator = delegate (NNEvaluatorDef evalDef, NNEvaluator evaluator,
-                                                                                            int minSize, int maxSize, int? stepSize)
-      {
-        FeatureBenchmarkBackend backendBench = new();
-        (NNEvaluator, List<(int, float)>) speed = backendBench.ExecuteBenchmark(evalDef, evaluator);
-        Console.WriteLine();
-      };
-
       Action<NNEvaluatorDef, int> searchBenchmarkAction = delegate (NNEvaluatorDef evalDef, int secondsPerMove)
       {
         FeatureBenchmarkSearch.Benchmark(evalDef, SearchLimit.SecondsPerMove(secondsPerMove), false, int.MaxValue);
         Console.WriteLine();
       };
 
-      UCIManager ux = new UCIManager(uciParams.NetworkSpec, uciParams.DeviceSpec,
-                                     searchModifier, selectModifier, null, null, null,
-                                     uciParams.Pruning == false,
-                                     CeresUserSettingsManager.Settings.UCILogFile,
-                                     CeresUserSettingsManager.Settings.SearchLogFile,
-                                     backendBenchEvaluator,
-                                     searchBenchmarkAction);
+      if (CeresEngineConfig.IsMCGS)
+      {
+        Action<NNEvaluatorDef, NNEvaluator, int, int, int, int> backendBenchMCGS =
+          delegate (NNEvaluatorDef evalDef, NNEvaluator evaluator, int minSize, int maxSize, int stepSize, int numPositions)
+          {
+            FeatureBenchmarkBackend backendBench = new();
+            backendBench.ExecuteBenchmark(evalDef, evaluator);
+            Console.WriteLine();
+          };
 
-      Console.WriteLine();
-      Console.WriteLine("Entering UCI command processing mode.");
-      ux.PlayUCI();
+        Ceres.MCGS.UCI.UCIManagerMCGS ux = new Ceres.MCGS.UCI.UCIManagerMCGS(
+          uciParams.NetworkSpec, uciParams.DeviceSpec,
+          null, null, null, null, null,
+          uciParams.Pruning == false,
+          CeresUserSettingsManager.Settings.UCILogFile,
+          CeresUserSettingsManager.Settings.SearchLogFile,
+          backendBenchMCGS,
+          searchBenchmarkAction);
+
+        Console.WriteLine();
+        Console.WriteLine("Entering UCI command processing mode (MCGS v2).");
+        ux.PlayUCI();
+      }
+      else
+      {
+        Action<NNEvaluatorDef, NNEvaluator, int, int, int?> backendBenchMCTS =
+          delegate (NNEvaluatorDef evalDef, NNEvaluator evaluator, int minSize, int maxSize, int? stepSize)
+          {
+            FeatureBenchmarkBackend backendBench = new();
+            backendBench.ExecuteBenchmark(evalDef, evaluator);
+            Console.WriteLine();
+          };
+
+        Ceres.MCTS.UCI.UCIManager ux = new Ceres.MCTS.UCI.UCIManager(
+          uciParams.NetworkSpec, uciParams.DeviceSpec,
+          searchModifier, selectModifier, null, null, null,
+          uciParams.Pruning == false,
+          CeresUserSettingsManager.Settings.UCILogFile,
+          CeresUserSettingsManager.Settings.SearchLogFile,
+          backendBenchMCTS,
+          searchBenchmarkAction);
+
+        Console.WriteLine();
+        Console.WriteLine("Entering UCI command processing mode (MCTS v1).");
+        ux.PlayUCI();
+      }
     }
   }
 }
