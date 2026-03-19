@@ -77,7 +77,7 @@ public readonly record struct GraphRootToSearchRootNodeInfo(GNode ChildNode, in 
 /// Managers a rooted directed acyclic graph (DAG) consistig of GNodes (for chess positions)
 /// and associated information (e.g. parent/child linkages).
 /// </summary>
-public unsafe class Graph : IDisposable
+public unsafe partial class Graph : IDisposable
 {
   public readonly GraphStore Store;
 
