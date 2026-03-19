@@ -90,6 +90,9 @@ public class GameEngineDefCeres : GameEngineDef
   /// </summary>
   public override bool SupportsNodesPerGameMode => true;
 
+  /// <inheritdoc/>
+  public override bool IsCeresEngine => true;
+
 
   /// <summary>
   /// Implementation of virtual method to create underlying engine.
@@ -119,6 +122,12 @@ public class GameEngineDefCeres : GameEngineDef
       EvaluatorDefSecondary.TryModifyDeviceID(EvaluatorDefSecondary.DeviceIndices[0] + deviceIndexIncrement);
     }
   }
+
+  public override NNEvaluatorDef GetEvaluatorDef() => EvaluatorDef;
+  public override void DisableTreeReuse() => SearchParams.TreeReuseEnabled = false;
+  public override bool GetReusePositionEvaluationsFromOther() => SearchParams.ReusePositionEvaluationsFromOtherTree;
+  public override void SetReusePositionEvaluationsFromOther(bool value) => SearchParams.ReusePositionEvaluationsFromOtherTree = value;
+  public override bool GetFutilityPruningStopSearchEnabled() => SearchParams.FutilityPruningStopSearchEnabled;
 
   /// <summary>
   /// Returns string description.

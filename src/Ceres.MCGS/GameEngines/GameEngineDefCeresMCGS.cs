@@ -32,6 +32,9 @@ public class GameEngineDefCeresMCGS : GameEngineDef
 {
   public override bool SupportsNodesPerGameMode => true;
 
+  /// <inheritdoc/>
+  public override bool IsCeresEngine => true;
+
   public readonly NNEvaluatorDef EvaluatorDef;
 
   public readonly ParamsSearch SearchParams;
@@ -81,6 +84,12 @@ public class GameEngineDefCeresMCGS : GameEngineDef
     return ret;
   }
 
+
+  public override NNEvaluatorDef GetEvaluatorDef() => EvaluatorDef;
+  public override void DisableTreeReuse() => SearchParams.GraphReuseEnabled = false;
+  public override bool GetReusePositionEvaluationsFromOther() => SearchParams.ReusePositionEvaluationsFromOtherGraph;
+  public override void SetReusePositionEvaluationsFromOther(bool value) => SearchParams.ReusePositionEvaluationsFromOtherGraph = value;
+  public override bool GetFutilityPruningStopSearchEnabled() => SearchParams.FutilityPruningStopSearchEnabled;
 
   public override void ModifyDeviceIndexIfNotPooled(int deviceIndexIncrement)
   {

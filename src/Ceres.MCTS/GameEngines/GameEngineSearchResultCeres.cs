@@ -79,5 +79,9 @@ public record GameEngineSearchResultCeres : GameEngineSearchResult
     MaxDepth = 0; // Not available in MCTS (MaxDepth is not tracked separately)
     NodeSelectionYieldFrac = manager.Context.NodeSelectionYieldFrac;
     PickedNonTopNMoveStr = bestMove?.BestMoveWasTopN == false ? "!" : " ";
+    ScoreQRoot = (float)search.Manager.Root.Q;
+    CountTablebaseHits = search.Manager.CountTablebaseHits;
+    CountSearchContinuations = search.CountSearchContinuations;
+    BestMoveMG = bestMove.BestMove;
   }
 }

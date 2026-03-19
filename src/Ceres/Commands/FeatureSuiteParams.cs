@@ -23,7 +23,6 @@ using Ceres.Chess.GameEngines;
 using Ceres.Chess.UserSettings;
 using Ceres.Features.GameEngines;
 using Ceres.Features.Suites;
-using Ceres.MCTS.GameEngines;
 
 #endregion
 
@@ -67,7 +66,7 @@ namespace Ceres.Commands
       string epdFilename = Path.Combine(CeresUserSettingsManager.Settings.DirEPD, suiteName);
       if (!File.Exists(epdFilename)) throw new Exception($"Specified EPD not found: {epdFilename}");
 
-      bool opponentIsCeres = playerOther != null && (playerOther.EngineDef is GameEngineDefCeres);
+      bool opponentIsCeres = playerOther != null && playerOther.EngineDef.GetEvaluatorDef() != null;
       EnginePlayerDef engineExternal = opponentIsCeres ? null : playerOther;
       EnginePlayerDef engineCeres2 = opponentIsCeres ? playerOther : null;
       SuiteTestDef suiteDef = new SuiteTestDef($"SUITE TEST {CeresUserSettingsManager.Settings.DirEPD}", 

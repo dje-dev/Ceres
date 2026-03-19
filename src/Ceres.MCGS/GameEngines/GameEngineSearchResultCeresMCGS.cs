@@ -48,10 +48,6 @@ public record GameEngineSearchResultCeresMCGS : GameEngineSearchResult
   /// </summary>
   public readonly BestMoveInfoMCGS BestMoveInfo;
 
-  public MGMove BestMoveMG { get; private set; }
-
-  public float ScoreQRoot { get; private set; }
-
   public GameEngineSearchResultsStats Stats;
 
 
@@ -103,5 +99,8 @@ public record GameEngineSearchResultCeresMCGS : GameEngineSearchResult
     MaxDepth = manager.MaxDepth;
     NodeSelectionYieldFrac = manager.Engine.NodeSelectionYieldFrac;
     PickedNonTopNMoveStr = bestMoveInfo?.BestMoveWasTopN == false ? "!" : " ";
+    CountTablebaseHits = manager.CountTablebaseHits;
+    CountSearchContinuations = search.CountSearchContinuations;
+    VisitEntropy = manager.Engine.Graph.CalcAvgVisitEntropy();
   }
 }

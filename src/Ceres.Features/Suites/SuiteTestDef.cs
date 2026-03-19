@@ -18,14 +18,12 @@ using System.IO;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.Games.Utils;
-using Ceres.Features.GameEngines;
-using Ceres.MCTS.GameEngines;
 
 #endregion
 
 namespace Ceres.Features.Suites
 {
-  public delegate void EvaluatedPosCallback(EPDEntry epd, float correctnessScore, SearchResultInfo searchResult);
+  public delegate void EvaluatedPosCallback(EPDEntry epd, float correctnessScore, GameEngineSearchResult searchResult);
 
   /// <summary>
   /// Defines the parameters of a suite test.
@@ -113,8 +111,8 @@ namespace Ceres.Features.Suites
 
 
     public bool RunCeres2Engine => CeresEngine2Def != null;
-    public GameEngineDefCeres Engine1Def => CeresEngine1Def.EngineDef as GameEngineDefCeres;
-    public GameEngineDefCeres Engine2Def => CeresEngine2Def?.EngineDef as GameEngineDefCeres;
+    public GameEngineDef Engine1Def => CeresEngine1Def.EngineDef;
+    public GameEngineDef Engine2Def => CeresEngine2Def?.EngineDef;
 
 
     /// <summary>
@@ -133,14 +131,14 @@ namespace Ceres.Features.Suites
                         EnginePlayerDef ceresEngine2Def = null,
                         EnginePlayerDef externalEngineDef = null)
     {
-      if (ceresEngine2Def != null && (ceresEngine2Def.EngineDef is not GameEngineDefCeres))
+      if (ceresEngine2Def != null && ceresEngine2Def.EngineDef.GetEvaluatorDef() == null)
       {
         throw new Exception("ceresEngine2Def is expected to be for a Ceres engine");
       }
 
-      if (externalEngineDef != null && (externalEngineDef.EngineDef is GameEngineDefCeres))
+      if (externalEngineDef != null && externalEngineDef.EngineDef.GetEvaluatorDef() != null)
       {
-        throw new Exception("externalEngineDef is not expected to be for a Ceres engine, instead GameEngineDefLC0 or GameEngineDefUCI");
+        throw new Exception("externalEngineDef is not expected to be for a Ceres engine");
       }
 
       ID = id;

@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using Ceres.Chess.NNEvaluators.Defs;
 
 #endregion
 
@@ -65,5 +66,16 @@ namespace Ceres.Chess.GameEngines
     /// </summary>
     /// <param name="deviceIndexIncrement"></param>
     public abstract void ModifyDeviceIndexIfNotPooled(int deviceIndexIncrement);
+
+    /// <summary>
+    /// If this engine definition is for a Ceres engine (MCTS or MCGS).
+    /// </summary>
+    public virtual bool IsCeresEngine => false;
+
+    public virtual NNEvaluatorDef GetEvaluatorDef() => null;
+    public virtual void DisableTreeReuse() { }
+    public virtual bool GetReusePositionEvaluationsFromOther() => false;
+    public virtual void SetReusePositionEvaluationsFromOther(bool value) { }
+    public virtual bool GetFutilityPruningStopSearchEnabled() => false;
   }
 }
