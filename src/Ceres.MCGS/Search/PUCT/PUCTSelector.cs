@@ -326,8 +326,8 @@ public static class PUCTSelector
   /// 	(3) Impute Q via Boltzmann Calibration: Uses the formula:
   /// 	   Q_i = Q_anchor + tau * (log(pi_i) - log(pi_anchor))
   /// where:
-  ///   -	tau = 0.10 — temperature parameter fitted from empirical data
-  ///   -  anchor is the best child's negated Q (note: -q is passed, flipping perspective for minimax)
+  ///   -	tau = temperature parameter, possibly fitted from empirical data or tuned
+  ///   - anchor is the best child's negated Q (note: -q is passed, flipping perspective for minimax)
   /// </summary>
   /// 
   private static double[] ImputeQForUnvisitedChildren(GNode node, GatheredChildStats stats, int numToProcess)
@@ -368,7 +368,7 @@ public static class PUCTSelector
     }
 
     // when fitted from sample data from small/medium-sized graphs we see 0.07 (low N) to 0.13 (higher N)
-    const float TAU = 0.30f;
+    float TAU = 0.25f;
 
     void SetQFromChild(int childIndex, Span<float> ret)
     {
