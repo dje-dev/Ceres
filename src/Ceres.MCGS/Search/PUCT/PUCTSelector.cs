@@ -125,12 +125,12 @@ public static class PUCTSelector
         return $"{label,-20} " + string.Join(" ", values);
       }
 
+      // Compute what the default FPU value would be without imputation
+      double defaultFPU = paramsSelect.CalcQWhenNoChildren(node.IsSearchRoot, node.Q, stats.SumPVisited);
+
       const bool VERBOSE = false;
       if (VERBOSE)
       {
-        // Compute what the default FPU value would be without imputation
-        double defaultFPU = paramsSelect.CalcQWhenNoChildren(node.IsSearchRoot, node.Q, stats.SumPVisited);
-
         Console.WriteLine();
         Console.WriteLine($"NumEdgesExpanded = {numExpanded}, Q = {node.Q:0.00}, DefaultFPU = {defaultFPU:0.00}");
         Console.WriteLine(FormatRow("Before imputation:", i =>
@@ -140,6 +140,17 @@ public static class PUCTSelector
       }
 
       qWhenNoChildrenComposite = ImputeQForUnvisitedChildren(node, stats, numToProcess);
+
+      // Cap Q values for unexpanded children to not exceed defaultFPU + 0.30.
+      double maxQ = 0.30 + defaultFPU;
+      for (int i = numExpanded; i <= maxChildIndex; i++)
+      {
+        if (qWhenNoChildrenComposite[i] > maxQ)
+        {
+          qWhenNoChildrenComposite[i] = maxQ;
+        }
+      }
+
       Debug.Assert(!double.IsNaN(qWhenNoChildrenComposite[0]));
 
 #if DEBUG
