@@ -18,7 +18,9 @@ using System.IO;
 using System.Linq;
 using System.Numerics.Tensors;
 using System.Threading.Tasks;
+
 using Ceres.Base.DataTypes;
+using Ceres.Base.Math;
 using Ceres.Base.Threading;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
@@ -31,7 +33,6 @@ using Ceres.Chess.NNEvaluators.Ceres;
 using Ceres.Chess.NNEvaluators.Ceres.TPG;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.UserSettings;
-using Microsoft.ML.OnnxRuntime;
 
 #endregion
 
@@ -1218,6 +1219,14 @@ public class NNEvaluatorTensorRT : NNEvaluator
       unsafe
       {
         ReadOnlySpan<Half> rawSpan = new ReadOnlySpan<Half>((void*)rawOutputPtr, outputElementCount);
+
+        // Check for NaNs on raw Half data (half the bandwidth vs checking floats)
+        int usedOutputElements = positionCount * outputElementsPerPosition;
+        if (MathUtils.ContainsNaN(rawSpan.Slice(0, usedOutputElements)))
+        {
+          throw new Exception($"NaN detected in TensorRT output (batch {positionCount} positions, {usedOutputElements} elements)");
+        }
+
         TensorPrimitives.ConvertToSingle(rawSpan, threadLocalOutputFloatBuffer.AsSpan(0, outputElementCount));
       }
 
