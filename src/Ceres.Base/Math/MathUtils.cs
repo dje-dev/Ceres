@@ -16,6 +16,10 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.X86;
 
 using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
@@ -128,6 +132,159 @@ public static class MathUtils
   /// <param name="b"></param>
   /// <returns></returns>
   public static bool EqualsOrBothNaN(FP16 a, FP16 b) => a == b || (FP16.IsNaN(a) && FP16.IsNaN(b));
+
+
+  /// <summary>
+  /// Checks if the span contains any NaN values using SIMD acceleration when available.
+  /// </summary>
+  /// <param name="data">The span of float values to check.</param>
+  /// <returns>True if any NaN values are found, false otherwise.</returns>
+  public static bool ContainsNaN(ReadOnlySpan<float> data)
+  {
+    if (Avx.IsSupported)
+    {
+      ref float ptr = ref MemoryMarshal.GetReference(data);
+      int i = 0;
+      int vectorEnd = data.Length - Vector256<float>.Count;
+      while (i <= vectorEnd)
+      {
+        Vector256<float> v = Vector256.LoadUnsafe(ref ptr, (nuint)i);
+        Vector256<float> cmp = Avx.Compare(v, v, FloatComparisonMode.UnorderedNotEqualNonSignaling);
+        if (!Avx.TestZ(cmp, cmp))
+        {
+          return true;
+        }
+        i += Vector256<float>.Count;
+      }
+      for (; i < data.Length; i++)
+      {
+        if (float.IsNaN(data[i]))
+        {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    if (AdvSimd.IsSupported)
+    {
+      ref float ptr = ref MemoryMarshal.GetReference(data);
+      int i = 0;
+      int vectorEnd = data.Length - Vector128<float>.Count;
+      while (i <= vectorEnd)
+      {
+        Vector128<float> v = Vector128.LoadUnsafe(ref ptr, (nuint)i);
+        // NaN != NaN, so comparing v to itself yields all zeros for non-NaN and non-zero for NaN.
+        Vector128<float> cmp = AdvSimd.CompareEqual(v, v);
+        // If any element is NaN, the corresponding lane in cmp will be 0 (not all-ones).
+        // MaxAcross finds the max across all lanes; if any lane is 0, min will be 0.
+        if (AdvSimd.Arm64.MinAcross(cmp.AsUInt32()).ToScalar() == 0)
+        {
+          return true;
+        }
+        i += Vector128<float>.Count;
+      }
+      for (; i < data.Length; i++)
+      {
+        if (float.IsNaN(data[i]))
+        {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    for (int i = 0; i < data.Length; i++)
+    {
+      if (float.IsNaN(data[i]))
+      {
+        return true;
+      }
+    }
+    return false;
+  }
+
+
+  /// <summary>
+  /// Checks if the span contains any NaN values using SIMD acceleration when available.
+  /// </summary>
+  /// <param name="data">The span of Half values to check.</param>
+  /// <returns>True if any NaN values are found, false otherwise.</returns>
+  public static bool ContainsNaN(ReadOnlySpan<Half> data)
+  {
+    // Half NaN: exponent bits all 1s (0x7C00) and mantissa non-zero.
+    // So a value is NaN if (bits & 0x7FFF) > 0x7C00.
+    const ushort NaNThreshold = 0x7C00;
+
+    if (Avx2.IsSupported)
+    {
+      ref ushort ptr = ref Unsafe.As<Half, ushort>(ref MemoryMarshal.GetReference(data));
+      Vector256<ushort> mask = Vector256.Create((ushort)0x7FFF);
+      Vector256<ushort> threshold = Vector256.Create(NaNThreshold);
+
+      int i = 0;
+      int vectorEnd = data.Length - Vector256<ushort>.Count;
+      while (i <= vectorEnd)
+      {
+        Vector256<ushort> v = Vector256.LoadUnsafe(ref ptr, (nuint)i);
+        Vector256<ushort> abs = Avx2.And(v, mask);
+        // Compare greater than threshold (signed compare, but values are positive after masking)
+        Vector256<short> cmp = Avx2.CompareGreaterThan(abs.AsInt16(), threshold.AsInt16());
+        if (!Avx.TestZ(cmp.AsInt32(), cmp.AsInt32()))
+        {
+          return true;
+        }
+        i += Vector256<ushort>.Count;
+      }
+      for (; i < data.Length; i++)
+      {
+        if (Half.IsNaN(data[i]))
+        {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    if (AdvSimd.IsSupported)
+    {
+      ref ushort ptr = ref Unsafe.As<Half, ushort>(ref MemoryMarshal.GetReference(data));
+      Vector128<ushort> mask = Vector128.Create((ushort)0x7FFF);
+      Vector128<ushort> threshold = Vector128.Create(NaNThreshold);
+
+      int i = 0;
+      int vectorEnd = data.Length - Vector128<ushort>.Count;
+      while (i <= vectorEnd)
+      {
+        Vector128<ushort> v = Vector128.LoadUnsafe(ref ptr, (nuint)i);
+        Vector128<ushort> abs = AdvSimd.And(v, mask);
+        // Compare greater than threshold
+        Vector128<ushort> cmp = AdvSimd.CompareGreaterThan(abs, threshold);
+        if (AdvSimd.Arm64.MaxAcross(cmp).ToScalar() != 0)
+        {
+          return true;
+        }
+        i += Vector128<ushort>.Count;
+      }
+      for (; i < data.Length; i++)
+      {
+        if (Half.IsNaN(data[i]))
+        {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    for (int i = 0; i < data.Length; i++)
+    {
+      if (Half.IsNaN(data[i]))
+      {
+        return true;
+      }
+    }
+    return false;
+  }
 
 
   /// <summary>
