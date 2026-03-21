@@ -47,6 +47,8 @@ using Ceres.MCGS.Search.Coordination;
 using Ceres.MCGS.Search.Params;
 using Ceres.MCGS.Utils;
 using Ceres.MCGS.Visualization.AnalysisGraph;
+using Ceres.MCGS.Visualization.PlyVisualization;
+using Ceres.Chess.NetEvaluation.Batch;
 
 #endregion
 
@@ -352,6 +354,7 @@ public partial class UCIManagerMCGS
           UCIWriteLine("show-graph-plot - shows a graphical representation of full search graph");
           UCIWriteLine("graph [1-10]    - invokes graph feature to show the principal variations from last search (requires configuration), e.g. graph 7");
           UCIWriteLine("gamecomp        - invokes the game comparison feature to graph the divergence points in one or more games (requires configuration)");
+          UCIWriteLine("plyviz          - generates HTML visualization of PlyBin distributions for current position");
           UCIWriteLine("");
           break;
 
@@ -516,6 +519,38 @@ public partial class UCIManagerMCGS
 
         case string c when c.StartsWith("gamecomp"):
           UCIManagerHelpersMCGS.ProcessGameComp(c, UCIWriteLine);
+          break;
+
+        case "plyviz":
+          if (InitializeEngineIfNeeded())
+          {
+            NNEvaluator evaluator = CeresEngine.Evaluators.Evaluator0;
+            NNEvaluatorResult plyvizResult = evaluator.Evaluate(curPositionAndMoves);
+            if (plyvizResult.PlyBinMoveProbs == null)
+            {
+              UCIWriteLine("info string PlyBin outputs not available for this network");
+            }
+            else
+            {
+              Position plyvizPos = curPositionAndMoves.FinalPosition;
+              bool isBlack = plyvizPos.SideToMove == SideType.Black;
+              (Half[,] moveProbs, Half[,] capProbs) = PlyBinVisualization.ConvertProbs(plyvizResult, isBlack);
+              List<PVCandidate> pvs = PVExtractor.ExtractPVs(plyvizResult, plyvizPos);
+              string fen = plyvizPos.FEN;
+              string plyvizTitle = "PlyBin - " + fen;
+              string plyvizPath = Path.Combine(Path.GetTempPath(), "ceres_plyviz.html");
+              List<PlyBinEntry> plyvizEntries =
+              [
+                new PlyBinEntry(fen, plyvizTitle, moveProbs, capProbs, plyvizResult.ToString(),
+                                PunimSelfProbs: plyvizResult.PunimSelfProbs,
+                                PunimOpponentProbs: plyvizResult.PunimOpponentProbs,
+                                ProjectedPVs: pvs, MLH: plyvizResult.M)
+              ];
+              string outputFile = PlyBinVisualization.GenerateMulti(plyvizEntries, plyvizTitle, plyvizPath);
+              UCIWriteLine("info string Ply Visualization page output to " + outputFile);
+              StringUtils.LaunchBrowserWithURL(outputFile);
+            }
+          }
           break;
 
         case "dump-params":
