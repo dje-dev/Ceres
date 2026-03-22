@@ -249,6 +249,8 @@ namespace Ceres.Chess.NNEvaluators.Ceres
         Value1UncertaintyTemperatureScalingFactor = valueUncertaintyTempScalingFactor1,
         Value2UncertaintyTemperatureScalingFactor = valueUncertaintyTempScalingFactor2,
         PolicyTemperature = baseOptions.PolicyTemperature,
+        FractionPolicyHead2 = baseOptions.FractionPolicyHead2,
+        Policy2BlendLogits = baseOptions.Policy2BlendLogits,
         PVExtensionDepth = baseOptions.PVExtensionDepth,
         UseMiddlegameSlowdown = baseOptions.UseMiddlegameSlowdown,
         EnableCUDAGraphs = baseOptions.EnableCUDAGraphs,

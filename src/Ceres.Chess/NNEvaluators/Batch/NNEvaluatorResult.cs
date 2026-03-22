@@ -60,9 +60,14 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public readonly float UncertaintyP;
 
     /// <summary>
-    /// Policy head output.
+    /// Policy head output (blended if P2FRAC > 0 and policy2 exists).
     /// </summary>
     public readonly CompressedPolicyVector Policy;
+
+    /// <summary>
+    /// Secondary policy head output (unblended), or default if not available.
+    /// </summary>
+    public readonly CompressedPolicyVector Policy2;
 
     /// <summary>
     /// Action win/draw/loss probabilities.
@@ -164,6 +169,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
                              float win2P, float loss2P,
                              float m, float uncertaintyV, float uncertaintyP,
                              CompressedPolicyVector policy,
+                             CompressedPolicyVector policy2,
                              CompressedActionVector actionsWDL,
                              NNEvaluatorResultActivations activations,
                              Half[] priorState,
@@ -191,6 +197,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       UncertaintyV = uncertaintyV;
       UncertaintyP = uncertaintyP;
       Policy = policy;
+      Policy2 = policy2;
       Activations = activations;
       PriorState = priorState;
       ExtraStat0 = extraStat0;
@@ -490,7 +497,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
         extras += $" FP={FortressP,5:F2}";
       }
 
-      return $"<NNPositionEvaluation V={V,6:F2}{extraV}{extras}{dev} Policy={Policy}>";
+      string policy2Str = Policy2.Count > 0 ? $" Policy2={Policy2}" : "";
+      return $"<NNPositionEvaluation V={V,6:F2}{extraV}{extras}{dev} Policy={Policy}{policy2Str}>";
     }
   }
 }

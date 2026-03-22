@@ -102,6 +102,8 @@ namespace Ceres.Chess.NNEvaluators
       float value2Weight = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "V2FRAC", FractionValueHead2);
       float policyUncertaintyScaling = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "POLUNC_SCALE", PolicyUncertaintyTemperatureScalingFactor);
       float policyTemperature = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "POLTEMP", PolicyTemperature);
+      float policy2Weight = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "P2FRAC", FractionPolicyHead2);
+      bool policy2BlendLogits = CheckOptionSpecifiedElseDefaultBoolean(optionsDict, "P2BLENDLOGITS", Policy2BlendLogits);
 
       bool useCUDAGraphs = CheckOptionSpecifiedElseDefaultBoolean(optionsDict, "CUDAGRAPHS", EnableCUDAGraphs);
       int optimizationLevel = CheckOptionSpecifiedElseDefaultInt(optionsDict, "OPT", OptimizationLevel, 0, 5);
@@ -117,6 +119,8 @@ namespace Ceres.Chess.NNEvaluators
         ValueHead1Temperature = value1Temperature,
         ValueHead2Temperature = value2Temperature,
         PolicyTemperature = policyTemperature,
+        FractionPolicyHead2 = policy2Weight,
+        Policy2BlendLogits = policy2BlendLogits,
         PVExtensionDepth = (int)pvExtensionDepth,
         EnableCUDAGraphs = useCUDAGraphs,
         PolicyUncertaintyTemperatureScalingFactor = policyUncertaintyScaling,
@@ -136,10 +140,21 @@ namespace Ceres.Chess.NNEvaluators
     public virtual float PolicyTemperature { get; init; } =  DEFAULT_POLICY_TEMPERATURE;
 
     /// <summary>
-    /// Optional scaling factor that determines the amount by which 
+    /// Optional scaling factor that determines the amount by which
     /// the policy temperature is scaled based on position-specific policy uncertainty.
     /// </summary>
     public virtual float PolicyUncertaintyTemperatureScalingFactor { get; init; } = 0;
+
+    /// <summary>
+    /// Fraction of the policy head 2 that is used to blend into the primary policy.
+    /// </summary>
+    public virtual float FractionPolicyHead2 { get; init; } = 0f;
+
+    /// <summary>
+    /// If true, policy2 blending is performed by weighted addition in logit space (before softmax).
+    /// If false, blending is performed after converting each head to probabilities.
+    /// </summary>
+    public virtual bool Policy2BlendLogits { get; init; } = true;
 
     #endregion
 

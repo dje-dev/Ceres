@@ -53,6 +53,7 @@ internal class PositionsEvaluationBatchMerged : IPositionEvaluationBatch
   private readonly bool hasState;
   private readonly bool hasPlyBinOutputs;
   private readonly bool hasPunimOutputs;
+  private readonly bool hasPolicySecondary;
 
   /// <summary>
   /// Constructor.
@@ -84,6 +85,7 @@ internal class PositionsEvaluationBatchMerged : IPositionEvaluationBatch
     hasState = batches[0].HasState;
     hasPlyBinOutputs = batches[0].HasPlyBinOutputs;
     hasPunimOutputs = batches[0].HasPunimOutputs;
+    hasPolicySecondary = batches[0].HasPolicySecondary;
   }
 
 
@@ -104,6 +106,8 @@ internal class PositionsEvaluationBatchMerged : IPositionEvaluationBatch
   bool IPositionEvaluationBatch.HasPlyBinOutputs => hasPlyBinOutputs;
 
   bool IPositionEvaluationBatch.HasPunimOutputs => hasPunimOutputs;
+
+  bool IPositionEvaluationBatch.HasPolicySecondary => hasPolicySecondary;
 
   /// <summary>
   /// Number of positions in batch.
@@ -167,6 +171,12 @@ internal class PositionsEvaluationBatchMerged : IPositionEvaluationBatch
   {
     (int batchIndex, int localIndex) = GetIndices(index);
     return Batches[batchIndex].GetPolicy(localIndex);
+  }
+
+  (Memory<CompressedPolicyVector> policies, int index) IPositionEvaluationBatch.GetPolicy2(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetPolicy2(localIndex);
   }
 
 

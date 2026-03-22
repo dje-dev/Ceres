@@ -37,6 +37,7 @@ namespace Ceres.Chess.NNEvaluators
     readonly bool hasUncertaintyP;
     readonly bool hasAction;
     readonly bool hasValueSecondary;
+    readonly bool hasPolicySecondary;
     readonly bool policyReturnedSameOrderMoveList;
 
     #endregion
@@ -85,6 +86,7 @@ namespace Ceres.Chess.NNEvaluators
     /// If the evaluator has an secondary value head.
     /// </summary>
     public override bool HasValueSecondary => hasValueSecondary;
+    public override bool HasPolicySecondary => hasPolicySecondary;
 
 
     /// <summary>
@@ -107,6 +109,7 @@ namespace Ceres.Chess.NNEvaluators
       hasUncertaintyP = true;
       policyReturnedSameOrderMoveList = true;
       hasValueSecondary = true;
+      hasPolicySecondary = true;
       hasAction = true;
 
       // We must track additional position information if required by any of the evaluators
@@ -120,6 +123,7 @@ namespace Ceres.Chess.NNEvaluators
         if (!evaluator.HasUncertaintyP) hasUncertaintyP = false;
         if (!evaluator.PolicyReturnedSameOrderMoveList) policyReturnedSameOrderMoveList = false;
         if (!evaluator.HasValueSecondary) hasValueSecondary = false;
+        if (!evaluator.HasPolicySecondary) hasPolicySecondary = false;
         if (!evaluator.HasAction) hasAction = false;
       }
     }

@@ -54,6 +54,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public bool HasState;
     public bool HasPlyBinOutputs;
     public bool HasPunimOutputs;
+    public bool HasPolicySecondary;
     public int NumPos;
 
     /// <summary>
@@ -69,6 +70,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
     #region Output raw data
 
     public Memory<CompressedPolicyVector> Policies;
+
+    /// <summary>
+    /// Secondary policy vectors (unblended policy2 head output).
+    /// </summary>
+    public Memory<CompressedPolicyVector> Policies2;
 
     /// <summary>
     /// Vector of win probabilities.
@@ -560,6 +566,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     bool IPositionEvaluationBatch.HasPunimOutputs => HasPunimOutputs;
 
+    bool IPositionEvaluationBatch.HasPolicySecondary => HasPolicySecondary;
+
     ReadOnlySpan<Half> IPositionEvaluationBatch.GetPlyBinMoveProbs(int index) => GetPlyBinMoveProbs(index);
     ReadOnlySpan<Half> IPositionEvaluationBatch.GetPlyBinCaptureProbs(int index) => GetPlyBinCaptureProbs(index);
     ReadOnlySpan<Half> IPositionEvaluationBatch.GetPunimSelfProbs(int index) => GetPunimSelfProbs(index);
@@ -586,6 +594,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <returns></returns>
     (Memory<CompressedPolicyVector> policies, int index)
       IPositionEvaluationBatch.GetPolicy(int index) => (Policies, index);
+
+    (Memory<CompressedPolicyVector> policies, int index)
+      IPositionEvaluationBatch.GetPolicy2(int index) => (Policies2, index);
 
 
     /// <summary>
@@ -662,7 +673,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                    Memory<Half> plyBinMoveProbs = default,
                                    Memory<Half> plyBinCaptureProbs = default,
                                    Memory<Half> punimSelfProbs = default,
-                                   Memory<Half> punimOpponentProbs = default)
+                                   Memory<Half> punimOpponentProbs = default,
+                                   bool hasPolicySecondary = false,
+                                   Memory<CompressedPolicyVector> policies2 = default)
     {
       IsWDL = isWDL;
       HasM = hasM;
@@ -674,6 +687,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       HasState = hasState;
       HasPlyBinOutputs = !plyBinMoveProbs.IsEmpty;
       HasPunimOutputs = !punimSelfProbs.IsEmpty;
+      HasPolicySecondary = hasPolicySecondary;
 
       W = makeCopy ? w.Slice(0, numPos).ToArray() : w;
       Policies = makeCopy ? policies.Slice(0, numPos).ToArray() : policies;
@@ -697,6 +711,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
       {
         W2 = makeCopy ? w2.Slice(0, numPos).ToArray() : w2;
         L2 = (isWDL && makeCopy) ? l2.Slice(0, numPos).ToArray() : l2;
+      }
+
+      if (!policies2.IsEmpty)
+      {
+        Policies2 = makeCopy ? policies2.Slice(0, numPos).ToArray() : policies2;
       }
 
       Stats = stats;

@@ -40,6 +40,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     bool HasPunimOutputs => false;
 
     bool HasValueSecondary { get; }
+    bool HasPolicySecondary => false;
 
     FP16 GetWinP(int index);
     FP16 GetLossP(int index);
@@ -65,6 +66,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     ReadOnlySpan<Half> GetPunimOpponentProbs(int index) => default;
 
     (Memory<CompressedPolicyVector> policies, int index) GetPolicy(int index);
+    (Memory<CompressedPolicyVector> policies, int index) GetPolicy2(int index) => (Memory<CompressedPolicyVector>.Empty, 0);
     (Memory<CompressedActionVector> actions, int index) GetAction(int index);
 
 

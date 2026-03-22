@@ -228,6 +228,11 @@ namespace Ceres.Chess.NNEvaluators
     public abstract bool HasValueSecondary { get; }
 
     /// <summary>
+    /// If the evaluator has a secondary policy head.
+    /// </summary>
+    public virtual bool HasPolicySecondary => false;
+
+    /// <summary>
     /// Optional contextual information to be potentially used 
     /// as supplemental input for the evaluation of children.
     /// </summary>
@@ -470,6 +475,15 @@ namespace Ceres.Chess.NNEvaluators
       Half[] stateInfo = HasState ? batch.GetState(batchIndex) : null;
 
       (Memory<CompressedPolicyVector> policies, int index) policyRef = batch.GetPolicy(batchIndex);
+      CompressedPolicyVector policy2 = default;
+      if (HasPolicySecondary)
+      {
+        (Memory<CompressedPolicyVector> p2Mem, int p2Idx) = batch.GetPolicy2(batchIndex);
+        if (!p2Mem.IsEmpty)
+        {
+          policy2 = p2Mem.Span[p2Idx];
+        }
+      }
       (Memory<CompressedActionVector> actions, int index) actionRef = HasAction ? batch.GetAction(batchIndex) : default;
 
       FP16 extraStat0 = batch.GetExtraStat0(batchIndex);
@@ -545,6 +559,7 @@ namespace Ceres.Chess.NNEvaluators
 
       result = new NNEvaluatorResult(w, l, w1, l1, w2, l2, m, uncertaintyV, uncertaintyP,
                                      policyRef.policies.Span[policyRef.index],
+                                     policy2,
                                      HasAction ? actionRef.actions.Span[actionRef.index] : default,
                                      activations, stateInfo, extraStat0, extraStat1,
                                      rawNetworkOutputs, RawNetworkOutputNames,
