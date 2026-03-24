@@ -3045,6 +3045,19 @@ extern "C"
       return -7;
     }
 
+    // Reject float32 ONNX models early (before expensive engine build).
+    // The managed Half[] buffers assume 2-byte elements; float32 I/O would cause crashes.
+    for (int32_t i = 0; i < network->getNbInputs(); ++i)
+    {
+      if (network->getInput(i)->getType() == nvinfer1::DataType::kFLOAT)
+      {
+        SetError("Unsupported ONNX model: input '" + std::string(network->getInput(i)->getName()) +
+          "' uses float32. Only float16/bfloat16 ONNX models are supported by the TensorRT native evaluator. "
+          "Convert the model to float16 first.");
+        return -20;
+      }
+    }
+
     // Create builder config
     auto config = std::unique_ptr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
     if (!config)
