@@ -16,19 +16,18 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
-using Ceres.Base.Math;
-using Ceres.Base.DataTypes;
 using Ceres.Base.DataType;
-
+using Ceres.Base.DataTypes;
+using Ceres.Base.Math;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
-using Ceres.Chess.MoveGen.Converters;
-using Ceres.Chess.MoveGen;
-using Ceres.Chess.Positions;
 using Ceres.Chess.LC0.Boards;
+using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
+using Ceres.Chess.Positions;
 
 #endregion
 
@@ -155,14 +154,16 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     public byte Unused1;
 
     /// <summary>
-    /// Ply until next irreversible move by self (one-hot encoded over 8 bins).
+    /// Ply until next irreversible move by self.
     /// An irreversible move is a pawn move or capture.
+    /// Classified (with bin smoothing) into one of 8 bins including "never."
     /// </summary>
     public byte PUNIMSelf;
 
     /// <summary>
-    /// Ply until next irreversible move by opponent (one-hot encoded over 8 bins).
+    /// Ply until next irreversible move by opponent.
     /// An irreversible move is a pawn move or capture.
+    /// Classified (with bin smoothing) into one of 8 bins including "never."
     /// </summary>
     public byte PUNIMOpponent;
 
