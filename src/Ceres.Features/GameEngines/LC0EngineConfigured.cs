@@ -194,13 +194,7 @@ namespace Ceres.Features.GameEngines
         lzOptions += " --verbose-move-stats ";
       }
 
-      string EXE = CeresUserSettingsManager.GetLC0ExecutableFileName();
-
-      if (overrideEXE != null)
-      {
-        EXE = overrideEXE;
-      }
-
+      string EXE = overrideEXE ?? CeresUserSettingsManager.GetLC0ExecutableFileName();
       return (EXE, lzOptions);
     }
 
