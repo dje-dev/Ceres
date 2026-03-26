@@ -197,6 +197,9 @@ public class NNEvaluatorTensorRT : NNEvaluator
   public override bool HasPolicySecondary => hasPolicySecondary;
 
   /// <inheritdoc/>
+  public override bool SupportsAdvancedPolicyFeatures => true;
+
+  /// <inheritdoc/>
   public override int MaxBatchSize => maxBatchSize;
 
   public override InputTypes InputsRequired => InputTypes.Positions | InputTypes.Boards | InputTypes.Moves | (HasState ? InputTypes.State : 0);
@@ -691,6 +694,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     // Policy2 blend parameters
     float fractionPolicyHead2 = (hasPolicySecondary ? Options?.FractionPolicyHead2 : null) ?? 0.0f;
     bool policy2BlendLogits = Options?.Policy2BlendLogits ?? true;
+    float policy1Temperature = Options?.Policy1Temperature ?? 1.0f;
+    float policy2Temperature = Options?.Policy2Temperature ?? 1.0f;
 
     // Capture buffer size for thread-local allocation in handler
     int requiredBufferSize = outputFloatBufferSize;
@@ -718,6 +723,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                    valueHead1Temperature, valueHead2Temperature,
                                    valueHead1TemperatureScaling, valueHead2TemperatureScaling,
                                    fractionPolicyHead2, policy2BlendLogits,
+                                   policy1Temperature, policy2Temperature,
                                    NetType == ONNXNetExecutor.NetTypeEnum.TPG,
                                    posMoveIsLegal);
     };
@@ -1000,6 +1006,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                             float valueHead1Temperature, float valueHead2Temperature,
                                             float valueHead1TemperatureScaling, float valueHead2TemperatureScaling,
                                             float fractionPolicyHead2, bool policy2BlendLogits,
+                                            float policy1Temperature, float policy2Temperature,
                                             bool wdlIsLogistic,
                                             Func<int, int, bool> posMoveIsLegal)
   {
@@ -1153,11 +1160,35 @@ public class NNEvaluatorTensorRT : NNEvaluator
         {
           if (policy2BlendLogits)
           {
-            // Blend in logit space: weighted average of logits, then softmax
+            // Apply per-head temperatures to logits before blending (in logit space)
+            // Temperature is applied by dividing logits: logits_tempered = logits / temperature
+            // Note: For logit-space blending, temperature is applied before blending.
+            Span<float> temperedLogits1 = stackalloc float[numMoves];
+            Span<float> temperedLogits2 = stackalloc float[numMoves];
+
+            if (policy1Temperature != 1.0f)
+            {
+              TensorPrimitives.Multiply(logits, 1.0f / policy1Temperature, temperedLogits1);
+            }
+            else
+            {
+              logits.CopyTo(temperedLogits1);
+            }
+
+            if (policy2Temperature != 1.0f)
+            {
+              TensorPrimitives.Multiply(logits2, 1.0f / policy2Temperature, temperedLogits2);
+            }
+            else
+            {
+              logits2.CopyTo(temperedLogits2);
+            }
+
+            // Blend in logit space: weighted average of tempered logits, then softmax
             float frac1 = 1.0f - fractionPolicyHead2;
             for (int mv = 0; mv < numMoves; mv++)
             {
-              logits[mv] = frac1 * logits[mv] + fractionPolicyHead2 * logits2[mv];
+              logits[mv] = frac1 * temperedLogits1[mv] + fractionPolicyHead2 * temperedLogits2[mv];
             }
             // Recompute maxLogit for the blended logits
             maxLogit = logits[0];
@@ -1171,6 +1202,13 @@ public class NNEvaluatorTensorRT : NNEvaluator
           }
           else
           {
+            // Probability blending mode - P1TEMP and P2TEMP not supported
+            if (policy1Temperature != 1.0f || policy2Temperature != 1.0f)
+            {
+              throw new NotSupportedException("P1TEMP and P2TEMP options are only supported when P2BLENDLOGITS=true (logit-space blending). " +
+                                              "Set P2BLENDLOGITS=true or use P1TEMP=1 and P2TEMP=1 for probability-space blending.");
+            }
+
             // Probability blending: softmax policy1, then blend with policy2 probs
             TensorPrimitives.Subtract(logits, maxLogit, logits);
             if (policyTemperature != 1.0f)
@@ -1320,6 +1358,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     // Policy2 blend parameters
     float fractionPolicyHead2 = (hasPolicySecondary ? Options?.FractionPolicyHead2 : null) ?? 0.0f;
     bool policy2BlendLogits = Options?.Policy2BlendLogits ?? true;
+    float policy1Temperature = Options?.Policy1Temperature ?? 1.0f;
+    float policy2Temperature = Options?.Policy2Temperature ?? 1.0f;
 
     // Capture buffer size for thread-local allocation in handler
     int requiredBufferSize = outputFloatBufferSize;
@@ -1355,6 +1395,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                              valueHead1Temperature, valueHead2Temperature,
                              valueHead1TemperatureScaling, valueHead2TemperatureScaling,
                              fractionPolicyHead2, policy2BlendLogits,
+                             policy1Temperature, policy2Temperature,
                              NetType == ONNXNetExecutor.NetTypeEnum.TPG);
     };
 
@@ -1552,6 +1593,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                       float valueHead1Temperature, float valueHead2Temperature,
                                       float valueHead1TemperatureScaling, float valueHead2TemperatureScaling,
                                       float fractionPolicyHead2, bool policy2BlendLogits,
+                                      float policy1Temperature, float policy2Temperature,
                                       bool wdlIsLogistic)
   {
     // Compute tensor offsets once outside the parallel loop
@@ -1718,10 +1760,34 @@ public class NNEvaluatorTensorRT : NNEvaluator
         {
           if (policy2BlendLogits)
           {
+            // Apply per-head temperatures to logits before blending (in logit space)
+            // Temperature is applied by dividing logits: logits_tempered = logits / temperature
+            Span<float> temperedLogits1 = stackalloc float[numMoves];
+            Span<float> temperedLogits2 = stackalloc float[numMoves];
+
+            if (policy1Temperature != 1.0f)
+            {
+              TensorPrimitives.Multiply(logits, 1.0f / policy1Temperature, temperedLogits1);
+            }
+            else
+            {
+              logits.CopyTo(temperedLogits1);
+            }
+
+            if (policy2Temperature != 1.0f)
+            {
+              TensorPrimitives.Multiply(logits2, 1.0f / policy2Temperature, temperedLogits2);
+            }
+            else
+            {
+              logits2.CopyTo(temperedLogits2);
+            }
+
+            // Blend in logit space: weighted average of tempered logits, then softmax
             float frac1 = 1.0f - fractionPolicyHead2;
             for (int mv = 0; mv < numMoves; mv++)
             {
-              logits[mv] = frac1 * logits[mv] + fractionPolicyHead2 * logits2[mv];
+              logits[mv] = frac1 * temperedLogits1[mv] + fractionPolicyHead2 * temperedLogits2[mv];
             }
             maxLogit = logits[0];
             for (int mv = 1; mv < numMoves; mv++)
@@ -1734,6 +1800,13 @@ public class NNEvaluatorTensorRT : NNEvaluator
           }
           else
           {
+            // Probability blending mode - P1TEMP and P2TEMP not supported
+            if (policy1Temperature != 1.0f || policy2Temperature != 1.0f)
+            {
+              throw new NotSupportedException("P1TEMP and P2TEMP options are only supported when P2BLENDLOGITS=true (logit-space blending). " +
+                                              "Set P2BLENDLOGITS=true or use P1TEMP=1 and P2TEMP=1 for probability-space blending.");
+            }
+
             TensorPrimitives.Subtract(logits, maxLogit, logits);
             if (policyTemperature != 1.0f)
             {

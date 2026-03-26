@@ -38,6 +38,11 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     public readonly Memory<Float16> PolicyVectors;
 
     /// <summary>
+    /// Secondary policy head (policy2).
+    /// </summary>
+    public readonly Memory<Float16> Policy2Vectors;
+
+    /// <summary>
     /// Action head.
     /// </summary>
     public readonly Memory<Float16> ActionLogits;
@@ -75,6 +80,10 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// </summary>
     public Dictionary<string, Float16[]> RawNetworkOutputs;
 
+    /// <summary>
+    /// If the network has a secondary policy head.
+    /// </summary>
+    public bool HasPolicySecondary => !Policy2Vectors.IsEmpty;
 
 
     /// <summary>
@@ -91,7 +100,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// <param name="values"></param>
     /// <param name="policyLogisticVectors"></param>
     /// <param name="draws"></param>
-    public ONNXRuntimeExecutorResultBatch(bool isWDL, Memory<Float16> values, Memory<Float16> values2, Memory<Float16> policyLogisticVectors,
+    public ONNXRuntimeExecutorResultBatch(bool isWDL, Memory<Float16> values, Memory<Float16> values2,
+                                          Memory<Float16> policyLogisticVectors, Memory<Float16> policy2LogisticVectors,
                                           Memory<Float16> mlh, Memory<Float16> uncertaintyV, Memory<Float16> uncertaintyP,
                                           Memory<Float16> extraStats0, Memory<Float16> extraStats1,
                                           float[][] valueFCActiviations,
@@ -109,6 +119,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       }
 
       PolicyVectors = policyLogisticVectors; // still in logistic form
+      Policy2Vectors = policy2LogisticVectors; // still in logistic form
       ActionLogits = actionLogisticVectors; // still in logistic form
 
       MLH = mlh;

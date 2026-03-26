@@ -122,6 +122,17 @@ public class NNEvaluatorONNX : NNEvaluator
   readonly bool hasUncertaintyV;
   readonly bool hasUncertaintyP;
   readonly bool hasAction;
+  readonly bool hasPolicySecondary;
+
+  /// <summary>
+  /// If the evaluator has a secondary policy head.
+  /// </summary>
+  public override bool HasPolicySecondary => hasPolicySecondary;
+
+  /// <summary>
+  /// If the evaluator supports advanced policy features (Policy2 blending, per-head temperatures).
+  /// </summary>
+  public override bool SupportsAdvancedPolicyFeatures => true;
 
   /// <summary>
   /// If an input with the name "squares_byte" exists
@@ -225,6 +236,7 @@ public class NNEvaluatorONNX : NNEvaluator
   /// <param name="options"></param>
   /// <param name="hasValueSecondary"></param>
   /// <param name="hasState"></param>
+  /// <param name="hasPolicySecondary"></param>
   public NNEvaluatorONNX(string engineID, string onnxModelFileName, byte[] onnxModelBytes,
                          NNDeviceType deviceType, int gpuID, bool useTRT,
                          ONNXNetExecutor.NetTypeEnum type, int maxBatchSize,
@@ -236,7 +248,8 @@ public class NNEvaluatorONNX : NNEvaluator
                          bool useHistory = true, NNEvaluatorOptions options = null,
                          bool hasValueSecondary = false,
                          bool hasState = false,
-                         NNEvaluatorHeadOverride[] headOverrides = null)
+                         NNEvaluatorHeadOverride[] headOverrides = null,
+                         bool hasPolicySecondary = false)
   {
     EngineNetworkID = engineID;
     ONNXFileName = onnxModelFileName;
@@ -249,6 +262,7 @@ public class NNEvaluatorONNX : NNEvaluator
     this.hasUncertaintyV = hasUncertaintyV;
     this.hasUncertaintyP = hasUncertaintyP;
     this.hasAction = hasAction;
+    this.hasPolicySecondary = hasPolicySecondary;
     this.HasState = hasState;
     DeviceType = deviceType;
     OutputValue = outputValue;
@@ -673,7 +687,7 @@ public class NNEvaluatorONNX : NNEvaluator
                                        HasAction, HasValueSecondary, HasState, numPos,
                                        MemoryMarshal.Cast<Float16, FP16>(result.ValuesRaw.Span),
                                        MemoryMarshal.Cast<Float16, FP16>(result.Values2Raw.Span),
-                                       result.PolicyVectors,//*/result.PolicyFlat, 
+                                       result.PolicyVectors, result.Policy2Vectors,
                                        result.ActionLogits,
                                        MemoryMarshal.Cast<Float16, FP16>(result.MLH.Span),
                                        MemoryMarshal.Cast<Float16, FP16>(result.UncertaintyV.Span),
@@ -688,6 +702,8 @@ public class NNEvaluatorONNX : NNEvaluator
                                        ValueHeadLogistic, PositionEvaluationBatch.PolicyType.LogProbabilities, false,
                                        batch,
                                        Options.PolicyTemperature, Options.PolicyUncertaintyTemperatureScalingFactor,
+                                       Options.FractionPolicyHead2, Options.Policy2BlendLogits,
+                                       Options.Policy1Temperature, Options.Policy2Temperature,
                                        stats, rawNetworkOutputs, RawNetworkOutputNames, useRentedPolicyBuffer);
 
     //#if NOT

@@ -174,6 +174,15 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public virtual bool Policy2BlendLogits { get; init; } = true;
 
+    /// <summary>
+    /// Returns true if any advanced policy features are requested that require
+    /// a secondary policy head (Policy2 blending or per-head temperatures).
+    /// </summary>
+    public bool RequiresSecondaryPolicyHead =>
+      FractionPolicyHead2 != 0
+      || Policy1Temperature != DEFAULT_POLICY1_TEMPERATURE
+      || Policy2Temperature != DEFAULT_POLICY2_TEMPERATURE;
+
     #endregion
 
     #region Head Overrides

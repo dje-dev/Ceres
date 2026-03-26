@@ -636,6 +636,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
 
 
       int INDEX_POLICIES = FindIndex(1858);
+      int INDEX_POLICIES2 = FindIndex(1858, INDEX_POLICIES, "policy2", true);
       int INDEX_WDL = FindIndex(3);
       int INDEX_WDL2 = FindIndex(3, INDEX_WDL, "value2", true);
       int INDEX_WDL3 = FindIndex(3, INDEX_WDL, "value3", true);
@@ -658,6 +659,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       Memory<Float16> uncertantiesV = hasUNC ? eval[INDEX_UNC].Item2 : null;
       Memory<Float16> uncertantiesP = hasUNC_POLICY ? eval[INDEX_UNC_POLICY].Item2 : null;
       Memory<Float16> policiesLogistics = eval[INDEX_POLICIES].Item2;
+      Memory<Float16> policies2Logistics = INDEX_POLICIES2 != -1 ? eval[INDEX_POLICIES2].Item2 : default;
 
       Memory<Float16> actionLogits = INDEX_ACTION != -1 ? eval[INDEX_ACTION].Item2 : default;
       Memory<Float16> values = eval[INDEX_WDL].Item2;
@@ -671,7 +673,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
 
       // TODO: This is just a fake, fill it in someday
       Memory<Float16> priorState = hasState ? eval[INDEX_STATE].Item2 : default; //  new Float16[numPositionsUsed * 64 * 4]
-      ONNXRuntimeExecutorResultBatch result = new(isWDL, values, values2, policiesLogistics, mlh,
+      ONNXRuntimeExecutorResultBatch result = new(isWDL, values, values2, policiesLogistics, policies2Logistics, mlh,
                                                    uncertantiesV, uncertantiesP,
                                                    extraStats0, extraStats1, value_fc_activations,
                                                    actionLogits, priorState,

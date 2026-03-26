@@ -34,6 +34,7 @@ using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.NNEvaluators.Ceres;
 using Ceres.Chess.NNEvaluators.Ceres.TPG;
 using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.Chess.NNEvaluators.Helpers;
 using Ceres.Chess.Positions;
 
 using static Ceres.Chess.NNEvaluators.Ceres.NNEvaluatorOptionsCeres;
@@ -233,6 +234,13 @@ namespace Ceres.Chess.NNEvaluators
     public virtual bool HasPolicySecondary => false;
 
     /// <summary>
+    /// If the evaluator supports advanced policy features such as
+    /// dual-head policy blending (Policy2) and per-head temperatures (P1TEMP/P2TEMP).
+    /// Evaluators that don't support these should leave this as false.
+    /// </summary>
+    public virtual bool SupportsAdvancedPolicyFeatures => false;
+
+    /// <summary>
     /// Optional contextual information to be potentially used 
     /// as supplemental input for the evaluation of children.
     /// </summary>
@@ -336,6 +344,12 @@ namespace Ceres.Chess.NNEvaluators
     /// <returns></returns>
     public IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
+      // Validate that advanced policy features are only used with evaluators that support them.
+      if (Options != null && Options.RequiresSecondaryPolicyHead && !SupportsAdvancedPolicyFeatures)
+      {
+        Helpers.PolicyHeadProcessingHelper.ThrowIfAdvancedPolicyFeaturesRequested(Options, GetType().Name);
+      }
+
       SetMovesIfNeeded(positions);
 
       if (ZeroHistoryPlanes)
