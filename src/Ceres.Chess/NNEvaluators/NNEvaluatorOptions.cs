@@ -30,6 +30,8 @@ namespace Ceres.Chess.NNEvaluators
     public const float DEFAULT_VALUE1_TEMPERATURE = 1f;
     public const float DEFAULT_VALUE2_TEMPERATURE = 1f;
     public const float DEFAULT_POLICY_TEMPERATURE = 1f;
+    public const float DEFAULT_POLICY1_TEMPERATURE = 1f;
+    public const float DEFAULT_POLICY2_TEMPERATURE = 1f;
 
     #region Value Head Options
 
@@ -103,6 +105,8 @@ namespace Ceres.Chess.NNEvaluators
       float policyUncertaintyScaling = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "POLUNC_SCALE", PolicyUncertaintyTemperatureScalingFactor);
       float policyTemperature = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "POLTEMP", PolicyTemperature);
       float policy2Weight = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "P2FRAC", FractionPolicyHead2);
+      float policy1Temperature = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "P1TEMP", Policy1Temperature);
+      float policy2Temperature = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "P2TEMP", Policy2Temperature);
       bool policy2BlendLogits = CheckOptionSpecifiedElseDefaultBoolean(optionsDict, "P2BLENDLOGITS", Policy2BlendLogits);
 
       bool useCUDAGraphs = CheckOptionSpecifiedElseDefaultBoolean(optionsDict, "CUDAGRAPHS", EnableCUDAGraphs);
@@ -120,6 +124,8 @@ namespace Ceres.Chess.NNEvaluators
         ValueHead2Temperature = value2Temperature,
         PolicyTemperature = policyTemperature,
         FractionPolicyHead2 = policy2Weight,
+        Policy1Temperature = policy1Temperature,
+        Policy2Temperature = policy2Temperature,
         Policy2BlendLogits = policy2BlendLogits,
         PVExtensionDepth = (int)pvExtensionDepth,
         EnableCUDAGraphs = useCUDAGraphs,
@@ -149,6 +155,18 @@ namespace Ceres.Chess.NNEvaluators
     /// Fraction of the policy head 2 that is used to blend into the primary policy.
     /// </summary>
     public virtual float FractionPolicyHead2 { get; init; } = 0f;
+
+    /// <summary>
+    /// Temperature applied to policy head 1 logits before blending with policy head 2.
+    /// Value of 1.0 means no temperature adjustment.
+    /// </summary>
+    public virtual float Policy1Temperature { get; init; } = DEFAULT_POLICY1_TEMPERATURE;
+
+    /// <summary>
+    /// Temperature applied to policy head 2 logits before blending with policy head 1.
+    /// Value of 1.0 means no temperature adjustment.
+    /// </summary>
+    public virtual float Policy2Temperature { get; init; } = DEFAULT_POLICY2_TEMPERATURE;
 
     /// <summary>
     /// If true, policy2 blending is performed by weighted addition in logit space (before softmax).
