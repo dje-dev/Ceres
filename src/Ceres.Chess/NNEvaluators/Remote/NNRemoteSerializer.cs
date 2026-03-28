@@ -47,7 +47,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
   /// Flags indicating which output heads are present in a serialized result.
   /// </summary>
   [Flags]
-  public enum NNRemoteResultFlags : byte
+  public enum NNRemoteResultFlags : ushort
   {
     None = 0,
     IsWDL = 1 << 0,
@@ -57,6 +57,9 @@ namespace Ceres.Chess.NNEvaluators.Remote
     HasAction = 1 << 4,
     HasValueSecondary = 1 << 5,
     HasState = 1 << 6,
+    HasPlyBinOutputs = 1 << 7,
+    HasPunimOutputs = 1 << 8,
+    HasPolicySecondary = 1 << 9,
   }
 
 
@@ -311,19 +314,17 @@ namespace Ceres.Chess.NNEvaluators.Remote
     /// <summary>
     /// Builds the result flags byte from evaluator capability booleans.
     /// </summary>
-    public static NNRemoteResultFlags BuildResultFlags(bool isWDL, bool hasM,
-                                                        bool hasUncertaintyV, bool hasUncertaintyP,
-                                                        bool hasAction, bool hasValueSecondary,
-                                                        bool hasState)
+    public static NNRemoteResultFlags BuildResultFlags(NNEvaluator evaluator)
     {
       NNRemoteResultFlags flags = NNRemoteResultFlags.None;
-      if (isWDL) flags |= NNRemoteResultFlags.IsWDL;
-      if (hasM) flags |= NNRemoteResultFlags.HasM;
-      if (hasUncertaintyV) flags |= NNRemoteResultFlags.HasUncertaintyV;
-      if (hasUncertaintyP) flags |= NNRemoteResultFlags.HasUncertaintyP;
-      if (hasAction) flags |= NNRemoteResultFlags.HasAction;
-      if (hasValueSecondary) flags |= NNRemoteResultFlags.HasValueSecondary;
-      if (hasState) flags |= NNRemoteResultFlags.HasState;
+      if (evaluator.IsWDL) flags |= NNRemoteResultFlags.IsWDL;
+      if (evaluator.HasM) flags |= NNRemoteResultFlags.HasM;
+      if (evaluator.HasUncertaintyV) flags |= NNRemoteResultFlags.HasUncertaintyV;
+      if (evaluator.HasUncertaintyP) flags |= NNRemoteResultFlags.HasUncertaintyP;
+      if (evaluator.HasAction) flags |= NNRemoteResultFlags.HasAction;
+      if (evaluator.HasValueSecondary) flags |= NNRemoteResultFlags.HasValueSecondary;
+      if (evaluator.HasState) flags |= NNRemoteResultFlags.HasState;
+      if (evaluator.HasPolicySecondary) flags |= NNRemoteResultFlags.HasPolicySecondary;
       return flags;
     }
 
@@ -333,7 +334,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
     /// </summary>
     public static int MaxSerializedResultSize(int numPositions, NNRemoteResultFlags flags)
     {
-      int size = 5; // numPos + flags
+      int size = 6; // numPos(4) + flags(2)
       size += numPositions * Unsafe.SizeOf<CompressedPolicyVector>(); // policies
       size += numPositions * sizeof(ushort); // W
       if (flags.HasFlag(NNRemoteResultFlags.IsWDL)) size += numPositions * sizeof(ushort); // L
@@ -344,6 +345,9 @@ namespace Ceres.Chess.NNEvaluators.Remote
       if (flags.HasFlag(NNRemoteResultFlags.HasAction)) size += numPositions * Unsafe.SizeOf<CompressedActionVector>();
       if (flags.HasFlag(NNRemoteResultFlags.HasState)) size += numPositions * (4 + 256 * sizeof(ushort));
       size += numPositions * 2 * sizeof(ushort); // ExtraStat0 + ExtraStat1
+      if (flags.HasFlag(NNRemoteResultFlags.HasPlyBinOutputs)) size += numPositions * 512 * 2 * sizeof(ushort); // move + capture
+      if (flags.HasFlag(NNRemoteResultFlags.HasPunimOutputs)) size += numPositions * 8 * 2 * sizeof(ushort); // self + opponent
+      if (flags.HasFlag(NNRemoteResultFlags.HasPolicySecondary)) size += numPositions * Unsafe.SizeOf<CompressedPolicyVector>();
       return size + 256; // margin
     }
 
@@ -361,9 +365,17 @@ namespace Ceres.Chess.NNEvaluators.Remote
 
       BinaryPrimitives.WriteInt32LittleEndian(buffer.Slice(offset), numPos);
       offset += 4;
-      buffer[offset++] = (byte)resultFlags;
+      BinaryPrimitives.WriteUInt16LittleEndian(buffer.Slice(offset), (ushort)resultFlags);
+      offset += 2;
 
       PositionEvaluationBatch peb = batch as PositionEvaluationBatch;
+
+      // Set runtime flags for optional outputs that may be present in this specific batch.
+      if (peb.HasPlyBinOutputs && !peb.PlyBinMoveProbs.IsEmpty) resultFlags |= NNRemoteResultFlags.HasPlyBinOutputs;
+      if (peb.HasPunimOutputs && !peb.PunimSelfProbs.IsEmpty) resultFlags |= NNRemoteResultFlags.HasPunimOutputs;
+
+      // Rewrite flags with runtime additions.
+      BinaryPrimitives.WriteUInt16LittleEndian(buffer.Slice(4), (ushort)resultFlags);
       if (peb == null)
       {
         throw new InvalidOperationException("SerializeBatchResult requires a PositionEvaluationBatch.");
@@ -456,6 +468,26 @@ namespace Ceres.Chess.NNEvaluators.Remote
         offset += numPos * sizeof(ushort);
       }
 
+      // PlyBin outputs (flat: numPos * 512 Half values each)
+      if (resultFlags.HasFlag(NNRemoteResultFlags.HasPlyBinOutputs))
+      {
+        offset += WriteHalfSpan(peb.PlyBinMoveProbs.Span, numPos * 512, buffer.Slice(offset));
+        offset += WriteHalfSpan(peb.PlyBinCaptureProbs.Span, numPos * 512, buffer.Slice(offset));
+      }
+
+      // PUNIM outputs (flat: numPos * 8 Half values each)
+      if (resultFlags.HasFlag(NNRemoteResultFlags.HasPunimOutputs))
+      {
+        offset += WriteHalfSpan(peb.PunimSelfProbs.Span, numPos * 8, buffer.Slice(offset));
+        offset += WriteHalfSpan(peb.PunimOpponentProbs.Span, numPos * 8, buffer.Slice(offset));
+      }
+
+      // Policy2 (secondary policy head)
+      if (resultFlags.HasFlag(NNRemoteResultFlags.HasPolicySecondary) && !peb.Policies2.IsEmpty)
+      {
+        offset += WriteBlittableSpan(peb.Policies2.Span.Slice(0, numPos), buffer.Slice(offset));
+      }
+
       return offset;
     }
 
@@ -469,7 +501,8 @@ namespace Ceres.Chess.NNEvaluators.Remote
 
       int numPos = BinaryPrimitives.ReadInt32LittleEndian(buffer.Slice(offset));
       offset += 4;
-      NNRemoteResultFlags flags = (NNRemoteResultFlags)buffer[offset++];
+      NNRemoteResultFlags flags = (NNRemoteResultFlags)BinaryPrimitives.ReadUInt16LittleEndian(buffer.Slice(offset));
+      offset += 2;
 
       bool isWDL = flags.HasFlag(NNRemoteResultFlags.IsWDL);
       bool hasM = flags.HasFlag(NNRemoteResultFlags.HasM);
@@ -478,6 +511,9 @@ namespace Ceres.Chess.NNEvaluators.Remote
       bool hasAction = flags.HasFlag(NNRemoteResultFlags.HasAction);
       bool hasValueSecondary = flags.HasFlag(NNRemoteResultFlags.HasValueSecondary);
       bool hasState = flags.HasFlag(NNRemoteResultFlags.HasState);
+      bool hasPlyBin = flags.HasFlag(NNRemoteResultFlags.HasPlyBinOutputs);
+      bool hasPunim = flags.HasFlag(NNRemoteResultFlags.HasPunimOutputs);
+      bool hasPolicySecondary = flags.HasFlag(NNRemoteResultFlags.HasPolicySecondary);
 
       // Policies
       CompressedPolicyVector[] policies = new CompressedPolicyVector[numPos];
@@ -544,6 +580,34 @@ namespace Ceres.Chess.NNEvaluators.Remote
       FP16[] extraStat1 = new FP16[numPos];
       offset += ReadFP16Span(buffer.Slice(offset), extraStat1, numPos);
 
+      // PlyBin outputs
+      Half[] plyBinMove = null, plyBinCapture = null;
+      if (hasPlyBin)
+      {
+        plyBinMove = new Half[numPos * 512];
+        offset += ReadHalfSpan(buffer.Slice(offset), plyBinMove, numPos * 512);
+        plyBinCapture = new Half[numPos * 512];
+        offset += ReadHalfSpan(buffer.Slice(offset), plyBinCapture, numPos * 512);
+      }
+
+      // PUNIM outputs
+      Half[] punimSelf = null, punimOpponent = null;
+      if (hasPunim)
+      {
+        punimSelf = new Half[numPos * 8];
+        offset += ReadHalfSpan(buffer.Slice(offset), punimSelf, numPos * 8);
+        punimOpponent = new Half[numPos * 8];
+        offset += ReadHalfSpan(buffer.Slice(offset), punimOpponent, numPos * 8);
+      }
+
+      // Policy2 (secondary policy head)
+      CompressedPolicyVector[] policies2 = null;
+      if (hasPolicySecondary)
+      {
+        policies2 = new CompressedPolicyVector[numPos];
+        offset += ReadBlittableSpan(buffer.Slice(offset), policies2.AsSpan());
+      }
+
       // Construct the result batch using the Memory<>-based constructor.
       return new PositionEvaluationBatch(
         isWDL, hasM, hasUncV, hasUncP, hasAction,
@@ -558,7 +622,13 @@ namespace Ceres.Chess.NNEvaluators.Remote
         null,    // stats
         extraStat0,
         extraStat1,
-        makeCopy: false);
+        makeCopy: false,
+        plyBinMoveProbs: hasPlyBin ? (Memory<Half>)plyBinMove : default,
+        plyBinCaptureProbs: hasPlyBin ? (Memory<Half>)plyBinCapture : default,
+        punimSelfProbs: hasPunim ? (Memory<Half>)punimSelf : default,
+        punimOpponentProbs: hasPunim ? (Memory<Half>)punimOpponent : default,
+        hasPolicySecondary: hasPolicySecondary,
+        policies2: hasPolicySecondary ? (Memory<CompressedPolicyVector>)policies2 : default);
     }
 
     #endregion
@@ -625,7 +695,8 @@ namespace Ceres.Chess.NNEvaluators.Remote
     {
       int offset = 0;
       buffer[offset++] = success ? (byte)1 : (byte)0;
-      buffer[offset++] = (byte)resultFlags;
+      BinaryPrimitives.WriteUInt16LittleEndian(buffer.Slice(offset), (ushort)resultFlags);
+      offset += 2;
       BinaryPrimitives.WriteInt32LittleEndian(buffer.Slice(offset), maxBatchSize);
       offset += 4;
       BinaryPrimitives.WriteUInt32LittleEndian(buffer.Slice(offset), (uint)inputsRequired);
@@ -645,7 +716,8 @@ namespace Ceres.Chess.NNEvaluators.Remote
     {
       int offset = 0;
       bool success = buffer[offset++] != 0;
-      NNRemoteResultFlags resultFlags = (NNRemoteResultFlags)buffer[offset++];
+      NNRemoteResultFlags resultFlags = (NNRemoteResultFlags)BinaryPrimitives.ReadUInt16LittleEndian(buffer.Slice(offset));
+      offset += 2;
       int maxBatchSize = BinaryPrimitives.ReadInt32LittleEndian(buffer.Slice(offset));
       offset += 4;
       NNEvaluator.InputTypes inputsRequired = (NNEvaluator.InputTypes)
@@ -731,6 +803,29 @@ namespace Ceres.Chess.NNEvaluators.Remote
     {
       int byteCount = count * sizeof(ushort);
       MemoryMarshal.Cast<byte, FP16>(src.Slice(0, byteCount)).CopyTo(dest);
+      return byteCount;
+    }
+
+    /// <summary>
+    /// Writes Half values as raw bytes. Returns bytes written.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    static int WriteHalfSpan(ReadOnlySpan<Half> src, int count, Span<byte> dest)
+    {
+      ReadOnlySpan<Half> slice = src.Slice(0, count);
+      ReadOnlySpan<byte> bytes = MemoryMarshal.AsBytes(slice);
+      bytes.CopyTo(dest);
+      return bytes.Length;
+    }
+
+    /// <summary>
+    /// Reads raw bytes into Half values. Returns bytes consumed.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    static int ReadHalfSpan(ReadOnlySpan<byte> src, Half[] dest, int count)
+    {
+      int byteCount = count * sizeof(ushort);
+      MemoryMarshal.Cast<byte, Half>(src.Slice(0, byteCount)).CopyTo(dest);
       return byteCount;
     }
 

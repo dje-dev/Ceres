@@ -330,11 +330,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
         if (optionsStr != null) evalDef.OptionsString = optionsStr;
         NNEvaluator evaluator = NNEvaluatorFactory.BuildEvaluator(evalDef);
 
-        NNRemoteResultFlags resultFlags = NNRemoteSerializer.BuildResultFlags(
-          evaluator.IsWDL, evaluator.HasM,
-          evaluator.HasUncertaintyV, evaluator.HasUncertaintyP,
-          evaluator.HasAction, evaluator.HasValueSecondary,
-          evaluator.HasState);
+        NNRemoteResultFlags resultFlags = NNRemoteSerializer.BuildResultFlags(evaluator);
 
         // Try to resolve the network file path for staleness detection.
         string networkFilePath = ResolveNetworkFilePath(netSpec);

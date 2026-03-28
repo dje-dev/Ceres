@@ -90,6 +90,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
     bool cachedHasUncertaintyP;
     bool cachedHasValueSecondary;
     bool cachedHasState;
+    bool cachedHasPolicySecondary;
     int cachedMaxBatchSize;
     InputTypes cachedInputsRequired;
     NNRemoteResultFlags cachedResultFlags;
@@ -115,6 +116,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
     public override bool HasUncertaintyV => cachedHasUncertaintyV;
     public override bool HasUncertaintyP => cachedHasUncertaintyP;
     public override bool HasValueSecondary => cachedHasValueSecondary;
+    public override bool HasPolicySecondary => cachedHasPolicySecondary;
     public override int MaxBatchSize => cachedMaxBatchSize;
     public override InputTypes InputsRequired => cachedInputsRequired;
 
@@ -222,6 +224,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
       cachedHasUncertaintyP = resultFlags.HasFlag(NNRemoteResultFlags.HasUncertaintyP);
       cachedHasValueSecondary = resultFlags.HasFlag(NNRemoteResultFlags.HasValueSecondary);
       cachedHasState = resultFlags.HasFlag(NNRemoteResultFlags.HasState);
+      cachedHasPolicySecondary = resultFlags.HasFlag(NNRemoteResultFlags.HasPolicySecondary);
       cachedMaxBatchSize = maxBatch;
       // If the server requires Moves, the client must also provide Positions
       // (needed by TrySetMoves on the server to recompute moves).
