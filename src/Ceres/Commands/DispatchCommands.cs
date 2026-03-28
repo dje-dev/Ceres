@@ -257,6 +257,21 @@ namespace Ceres.Commands
         FeatureBenchmarkPerft.Execute(keyValueArgs);
       }
 
+      else if (featureName == "SERVER")
+      {
+        FeatureServerParams.ParseAndExecute(keyValueArgs);
+      }
+
+      else if (featureName == "TEST_REMOTE")
+      {
+        FeatureTestRemote.ParseAndExecute(keyValueArgs);
+      }
+
+      else if (featureName == "TEST_REMOTE_CLIENT")
+      {
+        FeatureTestRemoteClient.ParseAndExecute(keyValueArgs);
+      }
+
       else if (featureName == "GRAPH")
       {
         KeyValueSetParsed keys = new KeyValueSetParsed(args, null);

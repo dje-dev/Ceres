@@ -15,9 +15,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.Chess.NNEvaluators.Remote;
 using Ceres.Chess.NNEvaluators.Specifications.Internal;
 
 #endregion
@@ -28,9 +30,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications
   /// Manages parsing of a device specification string for neural net evaluation which 
   /// specifies the set of devices to be used in evaluation.
   /// 
-  /// Examples: 
+  /// Examples:
   ///   "GPU:0"
   ///   "GPU:0@0.5,1@0.5"
+  ///   "GPU:0,1@spark2-fast"        (remote evaluation on spark2-fast)
+  ///   "GPU:0,1@spark2-fast/50060"  (remote with custom port)
   public record NNDevicesSpecificationString
   {
     /// <summary>
@@ -104,7 +108,34 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         throw new Exception($"{deviceString} not valid, device specification expected to begin with 'GPU:'");
       }
 
-      var deviceSpec = OptionsParserHelpers.ParseDeviceOptions(deviceStringParts[1]);
+      // Extract @hostname from device indices string if present.
+      // Disambiguation: if the value after the last '@' is NOT a valid float, it's a hostname.
+      // Example: "0,1@spark2-fast" -> hostname="spark2-fast", devicesStr="0,1"
+      // Example: "0@0.75,1@0.25@myhost" -> hostname="myhost", devicesStr="0@0.75,1@0.25"
+      string remoteHost = null;
+      int remotePort = NNRemoteProtocol.DEFAULT_PORT;
+      string devicesStr = deviceStringParts[1];
+
+      int lastAt = devicesStr.LastIndexOf('@');
+      if (lastAt >= 0)
+      {
+        string afterAt = devicesStr.Substring(lastAt + 1);
+        if (!float.TryParse(afterAt, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+        {
+          // Not a weight -- it's a hostname (possibly with /port suffix).
+          remoteHost = afterAt;
+          devicesStr = devicesStr.Substring(0, lastAt);
+
+          int slashIndex = remoteHost.IndexOf('/');
+          if (slashIndex >= 0)
+          {
+            remotePort = int.Parse(remoteHost.Substring(slashIndex + 1));
+            remoteHost = remoteHost.Substring(0, slashIndex);
+          }
+        }
+      }
+
+      var deviceSpec = OptionsParserHelpers.ParseDeviceOptions(devicesStr);
       OverrideEngineType = deviceSpec.Item2;
 
       foreach (var device in deviceSpec.Item1)
@@ -118,9 +149,16 @@ namespace Ceres.Chess.NNEvaluators.Specifications
           maxBatchSize = parsedBatchFile.maxBatchSize;
           predefinedPartitions = parsedBatchFile.predefinedPartitions;
         }
-        Devices.Add((new NNEvaluatorDeviceDef(NNDeviceType.GPU, int.Parse(device.deviceID), false,
+        NNEvaluatorDeviceDef devDef = new NNEvaluatorDeviceDef(NNDeviceType.GPU, int.Parse(device.deviceID), false,
                                               maxBatchSize, optimalBatchSize, deviceSpec.overrideEngineType,
-                                              predefinedPartitions), device.weight));
+                                              predefinedPartitions);
+        // Set remote host if extracted from the device string.
+        if (remoteHost != null)
+        {
+          devDef.RemoteHost = remoteHost;
+          devDef.RemotePort = remotePort;
+        }
+        Devices.Add((devDef, device.weight));
       }
 
       ComboType = Devices.Count == 1 ? NNEvaluatorDeviceComboType.Single

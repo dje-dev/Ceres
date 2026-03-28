@@ -64,6 +64,17 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// </summary>
     public List<(int batchSize, int[] partitionBatchSizes)> PredefinedOptimalBatchPartitions;
 
+    /// <summary>
+    /// If non-null, the hostname of a remote NN evaluation server.
+    /// When set, evaluation is performed remotely via TCP.
+    /// </summary>
+    public string RemoteHost;
+
+    /// <summary>
+    /// TCP port of the remote NN evaluation server (default 50055).
+    /// </summary>
+    public int RemotePort = 50055;
+
 
     /// <summary>
     /// Constructor.
@@ -75,11 +86,11 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <param name="optimalBatchSize"></param>
     /// <param name="overrideEngineType"></param>
     /// <param name="predefinedOptimalBatchPartitions"></param>
-    public NNEvaluatorDeviceDef(NNDeviceType type, 
-                                int deviceIndex, 
+    public NNEvaluatorDeviceDef(NNDeviceType type,
+                                int deviceIndex,
                                 bool lowPriority = false,
-                                int? maxBatchSize = null, 
-                                int? optimalBatchSize  = null,
+                                int? maxBatchSize = null,
+                                int? optimalBatchSize = null,
                                 string overrideEngineType = null,
                                 List<(int batchSize, int[] partitionBatchSizes)> predefinedOptimalBatchPartitions = null)
     {
