@@ -390,12 +390,18 @@ public static class MCGSPosGraphNodeDumper
 
         DumpNodeStr(manager, depth, node, priorNode, node, edge, countSeen, fullDetail, writer);
 
+        // Stop if position has been seen before (cycle detected, draw by repetition).
+        if (countSeen > 0)
+        {
+          writer.WriteLine("  (draw by repetition - cycle detected)");
+          return;
+        }
+
         // Stop dumping of N becomes too small
         if (node.N < minN)
         {
           return;
         }
-
 
         GEdge mustVisitEdge = default;
         if (mustVisitNodes != null)
