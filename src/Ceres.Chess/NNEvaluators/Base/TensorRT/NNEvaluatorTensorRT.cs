@@ -1202,18 +1202,12 @@ public class NNEvaluatorTensorRT : NNEvaluator
           }
           else
           {
-            // Probability blending mode - P1TEMP and P2TEMP not supported
-            if (policy1Temperature != 1.0f || policy2Temperature != 1.0f)
-            {
-              throw new NotSupportedException("P1TEMP and P2TEMP options are only supported when P2BLENDLOGITS=true (logit-space blending). " +
-                                              "Set P2BLENDLOGITS=true or use P1TEMP=1 and P2TEMP=1 for probability-space blending.");
-            }
-
-            // Probability blending: softmax policy1, then blend with policy2 probs
+            // Probability blending: softmax each head with per-head temperature, then blend
+            float p1CombinedTemp = policyTemperature * policy1Temperature;
             TensorPrimitives.Subtract(logits, maxLogit, logits);
-            if (policyTemperature != 1.0f)
+            if (p1CombinedTemp != 1.0f)
             {
-              TensorPrimitives.Multiply(logits, 1.0f / policyTemperature, logits);
+              TensorPrimitives.Multiply(logits, 1.0f / p1CombinedTemp, logits);
             }
             TensorPrimitives.Exp(logits, logits);
             float sum1 = TensorPrimitives.Sum(logits);
@@ -1221,13 +1215,35 @@ public class NNEvaluatorTensorRT : NNEvaluator
             {
               TensorPrimitives.Multiply(logits, 1.0f / sum1, logits);
             }
-            // logits[] now holds policy1 probabilities, blend with policy2 probs
+
             float frac1 = 1.0f - fractionPolicyHead2;
-            for (int mv = 0; mv < numMoves; mv++)
+            if (policy2Temperature != 1.0f)
             {
-              logits[mv] = frac1 * logits[mv] + fractionPolicyHead2 * p2Probs[mv];
+              Span<float> temperedP2 = stackalloc float[numMoves];
+              float p2CombinedTemp = policyTemperature * policy2Temperature;
+              TensorPrimitives.Subtract(logits2, maxLogit2, temperedP2);
+              if (p2CombinedTemp != 1.0f)
+              {
+                TensorPrimitives.Multiply(temperedP2, 1.0f / p2CombinedTemp, temperedP2);
+              }
+              TensorPrimitives.Exp(temperedP2, temperedP2);
+              float sumT2 = TensorPrimitives.Sum(temperedP2);
+              if (sumT2 > 0)
+              {
+                TensorPrimitives.Multiply(temperedP2, 1.0f / sumT2, temperedP2);
+              }
+              for (int mv = 0; mv < numMoves; mv++)
+              {
+                logits[mv] = frac1 * logits[mv] + fractionPolicyHead2 * temperedP2[mv];
+              }
             }
-            // logits[] is already probabilities, skip softmax below
+            else
+            {
+              for (int mv = 0; mv < numMoves; mv++)
+              {
+                logits[mv] = frac1 * logits[mv] + fractionPolicyHead2 * p2Probs[mv];
+              }
+            }
             CompressedPolicyVector.Initialize(ref policies[resultIndex], SideType.White, indices, logits, alreadySorted: false);
             policyInitialized = true;
           }
@@ -1800,17 +1816,12 @@ public class NNEvaluatorTensorRT : NNEvaluator
           }
           else
           {
-            // Probability blending mode - P1TEMP and P2TEMP not supported
-            if (policy1Temperature != 1.0f || policy2Temperature != 1.0f)
-            {
-              throw new NotSupportedException("P1TEMP and P2TEMP options are only supported when P2BLENDLOGITS=true (logit-space blending). " +
-                                              "Set P2BLENDLOGITS=true or use P1TEMP=1 and P2TEMP=1 for probability-space blending.");
-            }
-
+            // Probability blending: softmax each head with per-head temperature, then blend
+            float p1CombinedTemp = policyTemperature * policy1Temperature;
             TensorPrimitives.Subtract(logits, maxLogit, logits);
-            if (policyTemperature != 1.0f)
+            if (p1CombinedTemp != 1.0f)
             {
-              TensorPrimitives.Multiply(logits, 1.0f / policyTemperature, logits);
+              TensorPrimitives.Multiply(logits, 1.0f / p1CombinedTemp, logits);
             }
             TensorPrimitives.Exp(logits, logits);
             float sum1 = TensorPrimitives.Sum(logits);
@@ -1818,10 +1829,34 @@ public class NNEvaluatorTensorRT : NNEvaluator
             {
               TensorPrimitives.Multiply(logits, 1.0f / sum1, logits);
             }
+
             float frac1 = 1.0f - fractionPolicyHead2;
-            for (int mv = 0; mv < numMoves; mv++)
+            if (policy2Temperature != 1.0f)
             {
-              logits[mv] = frac1 * logits[mv] + fractionPolicyHead2 * p2Probs[mv];
+              Span<float> temperedP2 = stackalloc float[numMoves];
+              float p2CombinedTemp = policyTemperature * policy2Temperature;
+              TensorPrimitives.Subtract(logits2, maxLogit2, temperedP2);
+              if (p2CombinedTemp != 1.0f)
+              {
+                TensorPrimitives.Multiply(temperedP2, 1.0f / p2CombinedTemp, temperedP2);
+              }
+              TensorPrimitives.Exp(temperedP2, temperedP2);
+              float sumT2 = TensorPrimitives.Sum(temperedP2);
+              if (sumT2 > 0)
+              {
+                TensorPrimitives.Multiply(temperedP2, 1.0f / sumT2, temperedP2);
+              }
+              for (int mv = 0; mv < numMoves; mv++)
+              {
+                logits[mv] = frac1 * logits[mv] + fractionPolicyHead2 * temperedP2[mv];
+              }
+            }
+            else
+            {
+              for (int mv = 0; mv < numMoves; mv++)
+              {
+                logits[mv] = frac1 * logits[mv] + fractionPolicyHead2 * p2Probs[mv];
+              }
             }
             CompressedPolicyVector.Initialize(ref policies[resultIndex], side, indices, logits, alreadySorted: false);
             policyInitialized = true;

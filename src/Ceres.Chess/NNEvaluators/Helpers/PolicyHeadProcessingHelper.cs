@@ -109,8 +109,8 @@ public static class PolicyHeadProcessingHelper
   /// <param name="numMoves">Number of legal moves</param>
   /// <param name="fractionPolicyHead2">Fraction of policy2 to blend (0 = policy1 only, 1 = policy2 only)</param>
   /// <param name="blendInLogitSpace">If true, blend logits before softmax; if false, blend probabilities after softmax</param>
-  /// <param name="policy1Temperature">Temperature for policy1 (only used in logit-space blending)</param>
-  /// <param name="policy2Temperature">Temperature for policy2 (only used in logit-space blending)</param>
+  /// <param name="policy1Temperature">Temperature for policy1 head</param>
+  /// <param name="policy2Temperature">Temperature for policy2 head</param>
   /// <param name="baseTemperature">Base policy temperature applied to final result</param>
   /// <param name="policyUncertaintyScalingFactor">Scaling factor for policy uncertainty adjustment</param>
   /// <param name="policyUncertainty">Policy uncertainty value for this position</param>
@@ -176,20 +176,22 @@ public static class PolicyHeadProcessingHelper
     }
     else
     {
-      // Probability-space blending: per-head temperatures not supported
-      if (policy1Temperature != 1.0f || policy2Temperature != 1.0f)
-      {
-        throw new NotSupportedException(
-          "P1TEMP and P2TEMP options are only supported when P2BLENDLOGITS=true (logit-space blending). " +
-          "Set P2BLENDLOGITS=true or use P1TEMP=1 and P2TEMP=1 for probability-space blending.");
-      }
-
-      // Compute policy1 probabilities
+      // Probability-space blending: softmax each head with per-head temperature, then blend
+      float p1CombinedTemp = effectiveTemperature * policy1Temperature;
       float maxLogit1 = TensorPrimitives.Max(p1);
-      ComputeSoftmaxProbabilitiesWithMax(p1, effectiveTemperature, blended, maxLogit1);
+      ComputeSoftmaxProbabilitiesWithMax(p1, p1CombinedTemp, blended, maxLogit1);
 
-      // Blend probabilities: blended = frac1 * blended + fractionPolicyHead2 * unblendedP2
-      BlendProbabilities(blended, unblendedP2, numMoves, fractionPolicyHead2);
+      if (policy2Temperature != 1.0f)
+      {
+        // Recompute p2 probs with per-head temperature for blending
+        Span<float> temperedP2 = stackalloc float[numMoves];
+        ComputeSoftmaxProbabilitiesWithMax(p2, baseTemperature * policy2Temperature, temperedP2, TensorPrimitives.Max(p2));
+        BlendProbabilities(blended, temperedP2, numMoves, fractionPolicyHead2);
+      }
+      else
+      {
+        BlendProbabilities(blended, unblendedP2, numMoves, fractionPolicyHead2);
+      }
     }
   }
 
