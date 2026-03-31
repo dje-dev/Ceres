@@ -14,10 +14,9 @@
 #region Using directives
 
 using System;
+using System.Diagnostics;
 using System.Numerics.Tensors;
 using System.Runtime.CompilerServices;
-using Ceres.Base.DataTypes;
-using Ceres.Chess.EncodedPositions;
 
 #endregion
 
@@ -198,6 +197,7 @@ public static class PolicyHeadProcessingHelper
 
   /// <summary>
   /// Blends logits from two policy heads with optional per-head temperature scaling.
+  /// Uses the softmax trick (subtract max before temperature scaling) to prevent numeric overflow/underflow.
   /// </summary>
   [MethodImpl(MethodImplOptions.AggressiveInlining)]
   private static void BlendLogits(
@@ -215,10 +215,18 @@ public static class PolicyHeadProcessingHelper
 
     if (policy1Temperature != 1.0f || policy2Temperature != 1.0f)
     {
-      // Vectorized: output[i] = frac1 * (p1[i] * invT1) + frac2 * (p2[i] * invT2)
+      // Find max logits for each head to apply softmax trick before temperature scaling.
+      // This prevents numeric overflow/underflow when temperature < 1 (which amplifies logits).
+      float maxLogit1 = TensorPrimitives.Max(policy1Logits.Slice(0, numMoves));
+      float maxLogit2 = TensorPrimitives.Max(policy2Logits.Slice(0, numMoves));
+
+      // Apply temperature with max-subtraction: (logit - max) / temperature
+      // This keeps values in a numerically stable range.
       for (int i = 0; i < numMoves; i++)
       {
-        output[i] = frac1 * (policy1Logits[i] * invT1) + fractionPolicyHead2 * (policy2Logits[i] * invT2);
+        float centered1 = (policy1Logits[i] - maxLogit1) * invT1;
+        float centered2 = (policy2Logits[i] - maxLogit2) * invT2;
+        output[i] = frac1 * centered1 + fractionPolicyHead2 * centered2;
       }
     }
     else
@@ -331,6 +339,12 @@ public static class PolicyHeadProcessingHelper
 
     // Normalize
     float sum = TensorPrimitives.Sum(probabilities);
+
+    // Detect numeric underflow: if sum is 0 or NaN, softmax failed (likely due to extreme temperature scaling)
+    Debug.Assert(sum > 0 && !float.IsNaN(sum),
+      $"Softmax underflow detected: sum={sum}. This may indicate numeric instability from temperature scaling. " +
+      $"numMoves={numMoves}, temperature={temperature}, maxLogit={maxLogit}");
+
     if (sum > 0)
     {
       TensorPrimitives.Multiply(probabilities, 1.0f / sum, probabilities);
@@ -379,6 +393,15 @@ public static class PolicyHeadProcessingHelper
 
     // Normalize
     float sum = TensorPrimitives.Sum(slice);
-    TensorPrimitives.Multiply(slice, 1.0f / sum, slice);
+
+    // Detect numeric underflow: if sum is 0 or NaN, softmax failed (likely due to extreme temperature scaling)
+    Debug.Assert(sum > 0 && !float.IsNaN(sum),
+      $"Softmax underflow detected in SoftmaxInPlaceWithUncertainty: sum={sum}. " +
+      $"numMoves={numMoves}, effectiveTemperature={effectiveTemperature}, maxLogit={maxLogit}");
+
+    if (sum > 0)
+    {
+      TensorPrimitives.Multiply(slice, 1.0f / sum, slice);
+    }
   }
 }
