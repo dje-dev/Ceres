@@ -351,6 +351,7 @@ public partial class UCIManagerMCGS
           UCIWriteLine("dump-store {d}  - dumps full node store for tree from last search (optionally with max depth specifier)");
           UCIWriteLine("dump-trans-pos  - dumps transpositions list (standalone hash)");
           UCIWriteLine("dump-nvidia     - dumps information about NVIDIA CUDA devices detected in the system");
+          UCIWriteLine("forward <n>     - advances position by n ply along PV (e.g. \"forward 7\") for subsequent search with graph reuse");
           UCIWriteLine("show-graph-plot - shows a graphical representation of full search graph");
           UCIWriteLine("graph [1-10]    - invokes graph feature to show the principal variations from last search (requires configuration), e.g. graph 7");
           UCIWriteLine("gamecomp        - invokes the game comparison feature to graph the divergence points in one or more games (requires configuration)");
@@ -560,6 +561,10 @@ public partial class UCIManagerMCGS
           }
           else
             UCIWriteLine("info string No search manager created");
+          break;
+
+        case string c when c.StartsWith("forward"):
+          ProcessForward(c);
           break;
 
         case "dump-processor":
@@ -1025,6 +1030,84 @@ public partial class UCIManagerMCGS
 
     // Switch to the new position and moves
     curPositionAndMoves = newPositionAndMoves;
+  }
+
+
+  /// <summary>
+  /// Processes the forward command which advances position along the principal variation.
+  /// </summary>
+  /// <param name="command">The forward command with ply count argument (e.g., "forward 7")</param>
+  private void ProcessForward(string command)
+  {
+    // Verify search manager exists
+    if (CeresEngine?.Search?.Manager == null)
+    {
+      UCIWriteLine("info string No search manager created - run a search first");
+      return;
+    }
+
+    // Parse the ply count argument
+    string[] parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+    if (parts.Length != 2)
+    {
+      UCIWriteLine("info string forward command requires exactly one positive integer argument (number of ply)");
+      return;
+    }
+
+    if (!int.TryParse(parts[1], out int numPly) || numPly < 1)
+    {
+      UCIWriteLine("info string forward command requires a positive integer argument");
+      return;
+    }
+
+    // Get the principal variation from the current search
+    GNode searchRootNode = CeresEngine.Search.Manager.Engine.SearchRootNode;
+
+    // Minimum N for PV nodes (avoid noisy nodes)
+    int minN = (int)Math.Max(1, searchRootNode.N * 0.0001f);
+
+    SearchPrincipalVariationMCGS pv = new(CeresEngine.Search.Manager, searchRootNode, default, true, minN);
+
+    // Check if we have enough PV nodes to advance
+    if (pv.Nodes.Count <= numPly)
+    {
+      UCIWriteLine($"info string Cannot advance {numPly} ply - PV only has {pv.Nodes.Count - 1} moves");
+      return;
+    }
+
+    // Build the list of moves from the PV to advance by
+    List<string> movesToAdd = [];
+    for (int i = 0; i < numPly; i++)
+    {
+      GNodeAndOptionalEdge nodeEdge = pv.Nodes[i];
+      if (!nodeEdge.HasEdge || nodeEdge.Edge.IsNull)
+      {
+        UCIWriteLine($"info string Cannot advance {numPly} ply - PV terminates at ply {i}");
+        return;
+      }
+
+      string moveStr = nodeEdge.Edge.MoveMG.MoveStr(MGMoveNotationStyle.Coordinates, IsChess960OptionSet);
+      movesToAdd.Add(moveStr);
+    }
+
+    // Create a new position by cloning and applying the PV moves to the current position
+    PositionWithHistory newPosition = new(curPositionAndMoves);
+    foreach (string move in movesToAdd)
+    {
+      newPosition.AppendMove(move);
+    }
+
+    // Get the new search root node (the position after advancing)
+    GNode newRootNode = pv.Nodes[numPly].ParentNode;
+    string newFEN = newRootNode.CalcPosition().ToPosition.FEN;
+    double newRootQ = newRootNode.Q;
+
+    // Update the current position
+    curPositionAndMoves = newPosition;
+    curPositionIsContinuationOfPrior = true; // Signal that graph reuse should be attempted
+
+    // Output the info line
+    UCIWriteLine($"info string advanced {numPly} ply along the PV to {newFEN} with root Q = {newRootQ:F2}");
   }
 
 
