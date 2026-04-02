@@ -498,6 +498,12 @@ public record ParamsSearch
   /// 
   public bool EnableUncertaintyBoosting = false;
 
+  /// <summary>
+  /// If the policy uncertainty value should be used to 
+  /// adjust the per-position temperature on the policy.
+  /// </summary>
+  public bool EnablePolicyUncertaintyTemperatureBoosting = false;
+
 
   /// <summary>
   /// Amount of time subtracted from time allotments to 

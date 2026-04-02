@@ -629,7 +629,29 @@ public partial class MCGSEngine
 
     if (!nodeRef.Terminal.IsTerminal())
     {
-      node.SetPolicy(overridePolicySoftmax ?? Manager.ParamsSelect.PolicySoftmax, ParamsSelect.MinPolicyProbability,
+      // Determine effective policy softmax, possibly adjusted by uncertainty policy.
+      float effectivePolicySoftmax = overridePolicySoftmax ?? Manager.ParamsSelect.PolicySoftmax;
+
+      // If EnablePolicyUncertaintyTemperatureBoosting is enabled and UncertaintyP head is populated,
+      // apply supplemental temperature.
+      if (Manager.ParamsSearch.EnablePolicyUncertaintyTemperatureBoosting 
+       && !FP16.IsNaN(evalResult.UncertaintyP))
+      {
+        float up = evalResult.UncertaintyP.ToFloat;
+        const bool AGGRESSIVE = false;
+        float tempMultiplier = up switch
+        {
+          <= 0.031f => AGGRESSIVE ? 0.92f : 0.94f,
+          <= 0.076f => AGGRESSIVE ? 0.94f : 0.97f,
+          <= 0.168f => 1.00f,// no adjustment
+          <= 0.321f => AGGRESSIVE ? 1.06f :1.05f,
+          _         => AGGRESSIVE ? 1.13f : 1.09f
+        };
+
+        effectivePolicySoftmax *= tempMultiplier;
+      }
+
+      node.SetPolicy(effectivePolicySoftmax, ParamsSelect.MinPolicyProbability,
                      in position,
                      moves,
                      in policies.Span[policyActionIndex],
