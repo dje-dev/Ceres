@@ -55,11 +55,11 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 1 : 1;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 2 : 2;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
        {
-         var name when name.ToUpper().Contains("SUPER") => new int[] { 0 },
+         var name when name.ToUpper().Contains("SUPER") => new int[] { 0,1 },
          var name when name.ToUpper().Contains("DGX") => [0, 1, 2, 3],
          var name when name.ToUpper().Contains("HOP") => [0, 1, 2, 3],
          _ => new int[] { 0 }
@@ -973,7 +973,8 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
       }
 
       //baseName = "endingbook-10man-3181.pgn";
-//      baseName = "endingbook-16man-9609.pgn";
+      //baseName = "endingbook-16man-9609.pgn";
+      //baseName = @"endgames_cdb95105.epd";
       //  baseName = "endingbook-12man-4624.pgn";
 
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
