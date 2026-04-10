@@ -295,25 +295,25 @@ public struct GEdgeStruct
   #endregion
 
 
-  #region Dummy fields (currently no space for actual data)
+  #region Dummy fields (currently no space for actual data; values live in edge headers)
 
   /// <summary>
-  /// Returns action head value estimate.
+  /// Returns action head value estimate (no storage in edge struct; read from edge header instead).
   /// </summary>
   public FP16 ActionV
   {
     readonly get => FP16.NaN;
-    set { Debug.Assert(FP16.IsNaN(value)); }
+    set { }
   }
 
 
   /// <summary>
-  /// Returns action head value uncertainty estimate.
+  /// Returns action head uncertainty estimate (no storage in edge struct; read from edge header instead).
   /// </summary>
   public FP16 ActionU
   {
     readonly get => FP16.NaN;
-    set { Debug.Assert(FP16.IsNaN(value)); }
+    set { }
   }
 
   #endregion

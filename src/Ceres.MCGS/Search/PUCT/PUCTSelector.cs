@@ -42,6 +42,11 @@ public static class PUCTSelector
   /// </summary>
   [ThreadStatic] static GatheredChildStats gatherStats;
 
+  /// <summary>
+  /// Thread-local buffer for qWhenNoChildrenComposite to avoid per-call allocations.
+  /// </summary>
+  [ThreadStatic] static double[] qWhenNoChildrenBuffer;
+
 
   /// <summary>
   /// Returns the thread static variables, initializing if first time accessed by this thread.
@@ -176,12 +181,28 @@ public static class PUCTSelector
         Console.WriteLine(FormatRow("Policy:", i => stats.P.Span[i].ToString("0.00").PadLeft(5)));
         Console.WriteLine();
       }
-    }    
+    }
+    else if (numToProcess > 1
+          && paramsSelect.GetFPUMode(node.IsSearchRoot) == ParamsSelect.FPUType.ActionHead)
+    {
+      // Use per-move value from the neural network action head as FPU for unvisited children.
+      double fallbackFPU = paramsSelect.CalcQWhenNoChildren(node.IsSearchRoot, node.Q, stats.SumPVisited);
+      ReadOnlySpan<double> actionSpan = stats.A.Span;
+      qWhenNoChildrenComposite = qWhenNoChildrenBuffer ??= new double[PUCTScoreCalcVector.MAX_CHILDREN];
+      float fpu = node.IsSearchRoot? paramsSelect.FPUValueAtRoot : paramsSelect.FPUValue;
+      for (int i = 0; i < numToProcess; i++)
+      {
+        double actionV = actionSpan[i] + fpu;
+
+        // Negate because child Q values are stored from opponent's perspective
+        qWhenNoChildrenComposite[i] = double.IsNaN(actionV) ? fallbackFPU : -actionV;
+      }
+    }
 
     // Possibly apply supplemental temperature scaling.
     if (temperatureMultiplier != 1 && numToProcess > 1)
     {
-      TemperatureScaler.ApplyTemperature(node.NumPolicyMoves, stats.P.Span[..numToProcess], 
+      TemperatureScaler.ApplyTemperature(node.NumPolicyMoves, stats.P.Span[..numToProcess],
                                          stats.SumPVisited, temperatureMultiplier);
     }
 
@@ -298,10 +319,10 @@ public static class PUCTSelector
                                                               qWhenNoChildrenComposite,
                                                               numToProcess, numTargetVisits,
                                                               scores, childVisitCounts, cpuctMultiplier,
-                                                              paramsSearch.ActionHeadSelectionWeight,
                                                               thresholdPUCTSuboptimalityReject);      
-
-      if (numTargetVisits > 0 && MCGSParamsFixed.OUT_OF_ORDER_CHILDREN_ALLOWED)
+      
+      // In action head mode the selected children may want to fall out of order.
+      if (numTargetVisits > 0  && paramsSelect.FPUMode == ParamsSelect.FPUType.ActionHead)
       {
         FillInSequentialVisitHoles(childVisitCounts, ref node.NodeRef, numToProcess);
       }

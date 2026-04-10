@@ -323,8 +323,17 @@ As a workaround, EvaluatorSygyzy will just return as if no hit.
       maxNodes = Math.Min(maxNodes, maxNodesAllowedInMemory);
 
       int maxNodesInt = (int)Math.Min(maxNodes + 1000, MAX_NODES);
-      const bool HAS_ACTION = false;
-      graphToUse = new(maxNodesInt, HAS_ACTION,
+
+      bool hasAction = Manager.NNEvaluator0.HasAction;
+
+      if ((Manager.ParamsSelect.FPUMode == ParamsSelect.FPUType.ActionHead
+        || Manager.ParamsSelect.FPUModeAtRoot == ParamsSelect.FPUType.ActionHead)
+       && !hasAction)
+      {
+        throw new Exception("FPUType.ActionHead requires a neural network with an action head output.");
+      }
+
+      graphToUse = new(maxNodesInt, hasAction,
                        Manager.ParamsSearch.EnableState,
                        Manager.ParamsSearch.EnableGraph,
                        Manager.ParamsSearch.PathTranspositionMode == PathMode.PositionEquivalence,

@@ -763,7 +763,7 @@ public partial class MCGSManager : IDisposable
     foreach ((EncodedMove Move, float Probability) policyMove in rootResult.Policy.ProbabilitySummary())
     {
       (float w, float d, float l) zz = rootResult.ActionWDLForMove(policyMove.Move);
-      float actionV = zz.w - zz.l;
+      float actionV = -(zz.w - zz.l);
       if (actionV > bestActionV)
       {
         bestMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(policyMove.Move, thisPos);

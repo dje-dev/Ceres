@@ -94,78 +94,74 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
   /// <param name="node"></param>
   /// <param name="numTargetVisits"></param>
   /// <returns></returns>
-  internal override int NumChildrenToConsider(GNode node, int numTargetVisits) => node.NumEdgesExpanded + numTargetVisits;
+  internal override int NumChildrenToConsider(GNode node, int numTargetVisits) 
+    => node.NumEdgesExpanded + numTargetVisits;
 
 
-  void PossiblyRearrangeOrderUsingAction(GNode node, Graph graph, ParamsSearch paramsSearch, ParamsSelect paramsSelect)
+  void PossiblyRearrangeOrderUsingAction(GNode node, Graph graph, in ParamsSearch paramsSearch, in ParamsSelect paramsSelect)
   {
-    // ************* DISABLED ***********
-    return;
-    // **********************************
+    // ****************** HARDCODED CONSTANTS *****************
+    const float MIN_PROBABILITY_FOR_ACTION_BOOST = 0 * 0.03f;
+    const double DIFF_THRESHOLD = 0.02;// 0.05;
 
-    float actionHeadSelectionWeight = paramsSearch.ActionHeadSelectionWeight;
+    Debug.Assert(node.N == 1);
+    if (paramsSelect.FPUMode != ParamsSelect.FPUType.ActionHead
+      || node.NumPolicyMoves < 2)
+    {
+      return;
+    }
 
     ref readonly GNodeStruct nodeRef = ref node.NodeRef;
 
     // If using action head and this is the first visit,
     // resort the children using the scores computed inclusive of the action head influence.
-    if (nodeRef.N == 1
-      //       && nodeRef.NInFlight == 0
-      //       && nodeRef.NInFlight1 == 0
-      && nodeRef.NumPolicyMoves > 1
-      && actionHeadSelectionWeight > 0)
+
+    // Compute scores for all children so we can sort based on that.
+    Span<double> scores = stackalloc double[nodeRef.NumPolicyMoves];
+    PUCTSelector.ComputeTopChildScores(graph, node,
+                                       paramsSearch,
+                                       paramsSelect,
+                                       0,
+                                       false,
+                                       rootMovePruningStatus: null,
+                                       dualCollisionFraction: ParamsSearch.Execution.DualIteratorAlternateCollisionFraction,
+                                       minChildIndex: 0,
+                                       maxChildIndex: nodeRef.NumPolicyMoves - 1,
+                                       numTargetVisits: 0, // to indicate all
+                                       scores: scores,
+                                       childVisitCounts: default,// not needed
+                                       cpuctMultiplier: 1.0f,
+                                       temperatureMultiplier: 1.0f);
+
+
+    // Bubble sort to get items in same order as the scores.
+    Span<GEdgeHeaderStruct> moveInfosSpan = node.EdgeHeadersSpan;
+    int numSwapped;
+    do
     {
-      //        if (nodeRef.NInFlight > 0 || nodeRef.NInFlight1 > 0)
-      //        {
-      //          throw new Exception("Internal error, unexpected state.");
-      //        }
-
-      // Compute scores for all children so we can sort based on that.
-      Span<double> scores = stackalloc double[nodeRef.NumPolicyMoves];
-      PUCTSelector.ComputeTopChildScores(graph, node,
-                                         paramsSearch,
-                                         paramsSelect,
-                                         0,
-                                         false,
-                                         rootMovePruningStatus: null,
-                                         dualCollisionFraction: ParamsSearch.Execution.DualIteratorAlternateCollisionFraction,
-                                         minChildIndex: 0,
-                                         maxChildIndex: nodeRef.NumPolicyMoves - 1,
-                                         numTargetVisits: 0, // to indicate all
-                                         scores: scores,
-                                         childVisitCounts: default,// not needed
-                                         cpuctMultiplier: 1.0f,
-                                         temperatureMultiplier: 1.0f);
-
-
-      // Bubble sort to get items in same order as the scores.
-      const float MIN_PROBABILITY_FOR_ACTION_BOOST = 0.03f; // ****************** HARDCODED *****************
-
-      Span<GEdgeHeaderStruct> moveInfosSpan = node.EdgeHeadersSpan;
-      int numSwapped;
-      do
+      // First slot is fixed, consider rearranging thereafter.
+      numSwapped = 0;
+      for (int i = 1; i < nodeRef.NumPolicyMoves; i++)
       {
-        numSwapped = 0;
-        for (int i = 1; i < nodeRef.NumPolicyMoves; i++)
+        // Do not swap for low probability nodes.
+        if (moveInfosSpan[i].P < MIN_PROBABILITY_FOR_ACTION_BOOST)
         {
-          // Do not swap for low probability nodes.
-          if (moveInfosSpan[i].P < MIN_PROBABILITY_FOR_ACTION_BOOST)
-          {
-            break;
-          }
-
-          if (scores[i] > scores[i - 1])
-          {
-            numSwapped++;
-
-            // Swap scores, children and actions.
-            (scores[i - 1], scores[i]) = (scores[i], scores[i - 1]);
-            (moveInfosSpan[i - 1], moveInfosSpan[i]) = (moveInfosSpan[i], moveInfosSpan[i - 1]);
-          }
-
+          break;
         }
-      } while (numSwapped > 0);
-    }
+
+        double scoreDiff = scores[i] - scores[i - 1];
+        if (scoreDiff > DIFF_THRESHOLD)
+        {
+          numSwapped++;
+
+          // Swap scores, children and actions.
+          (scores[i - 1], scores[i]) = (scores[i], scores[i - 1]);
+          (moveInfosSpan[i - 1], moveInfosSpan[i]) = (moveInfosSpan[i], moveInfosSpan[i - 1]);
+        }
+
+      }
+    } while (numSwapped > 0);
+
   }
 
 
@@ -251,7 +247,12 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
   {
     CheckThreadStaticsInitialized();
 
-    PossiblyRearrangeOrderUsingAction(parentNode, Engine.Graph, ParamsSearch, ParamsSelect);
+    // Possibly rearrange univisited children based on PUCT
+    // (using both policy and action head values).
+    if (parentNode.NumEdgesExpanded == 0 && ParamsSelect.ActionHeadRearrangeUnvisitedChildren)
+    {
+      PossiblyRearrangeOrderUsingAction(parentNode, Engine.Graph, ParamsSearch, ParamsSelect);
+    }
 
     // Allocate space to hold visit counts/scores at this level (if not already allocated).
     if (childVisitCountsArray[depth] == null)

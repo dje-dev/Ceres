@@ -34,6 +34,7 @@ using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.PositionEvalCaching;
 using Ceres.Chess.Positions;
 using Ceres.MCGS.Graphs;
+using Ceres.MCGS.Graphs.GEdgeHeaders;
 using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Search.Coordination;
 using Ceres.MCGS.Search.Params;
@@ -408,6 +409,15 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
           lossP = (FP16)(lossPAdj / sum);
         }
 
+#if ACTION_ENABLED
+        // If ActionHeadWeightInV is nonzero, blend the action head value from the parent
+        // (if accessible) into the V that will be stored on this newly created node.
+        float actionHeadWeight = engine.Manager.ParamsSearch.ActionHeadWeightInV;
+        if (actionHeadWeight != 0 && !path.IsRootInitializationPath)
+        {
+          BlendActionHeadValue(path, actionHeadWeight, ref winP, ref lossP);
+        }
+#endif
 
         (Memory<CompressedPolicyVector> policies, int index) policyInfo;
         Memory<CompressedActionVector> actionArray = default;
@@ -519,6 +529,67 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
         paths[i].TerminationInfo = evalResult;
       });
   }
+
+
+#if ACTION_ENABLED
+  /// <summary>
+  /// Blends the action head value from the parent node into the value head evaluation.
+  /// </summary>
+  /// <param name="path">The path containing the leaf visit information.</param>
+  /// <param name="actionHeadWeight">The weight to apply to the action head value (0-1).</param>
+  /// <param name="winP">The win probability to be modified.</param>
+  /// <param name="lossP">The loss probability to be modified.</param>
+  static void BlendActionHeadValue(MCGSPath path, float actionHeadWeight, ref FP16 winP, ref FP16 lossP)
+  {
+    ref MCGSPathVisit leafVisit = ref path.LeafVisitRef;
+    GNode parentNode = leafVisit.ParentChildEdge.ParentNode;
+    int childIndexInParent = leafVisit.IndexOfChildInParent;
+
+    // Only proceed if parent is evaluated and has valid edge headers
+    if (parentNode.IsEvaluated && childIndexInParent >= 0 && childIndexInParent < parentNode.NumPolicyMoves)
+    {
+      Span<GEdgeHeaderStruct> parentEdgeHeaders = parentNode.EdgeHeadersSpan;
+      FP16 parentActionV = parentEdgeHeaders[childIndexInParent].ActionV;
+
+      // ActionV from the parent is the parent's prediction of the child's V.
+      // It is stored from the child's perspective (same as value head convention).
+      if (!FP16.IsNaN(parentActionV))
+      {
+        // Compute the current V from the value head: V = WinP - LossP
+        float valueHeadV = (float)winP - (float)lossP;
+
+        // Blend the action head value into the value head V
+        // The action head value is already in the same convention (W-L from child's perspective)
+        float blendedV = (1.0f - actionHeadWeight) * valueHeadV + actionHeadWeight * (float)parentActionV;
+
+        // Convert blended V back to WinP and LossP while preserving DrawP
+        // V = W - L, and W + D + L = 1, so D = 1 - W - L
+        float drawP = Math.Max(0, 1.0f - (float)winP - (float)lossP);
+        float deltaV = blendedV - valueHeadV;
+
+        // Adjust WinP and LossP symmetrically to achieve the new V
+        // New V = (W + delta/2) - (L - delta/2) = W - L + delta = old V + delta
+        float newWinP = (float)winP + deltaV / 2.0f;
+        float newLossP = (float)lossP - deltaV / 2.0f;
+
+        // Clamp to valid probability range
+        newWinP = Math.Clamp(newWinP, 0.0f, 1.0f);
+        newLossP = Math.Clamp(newLossP, 0.0f, 1.0f);
+
+        // Ensure probabilities sum to <= 1
+        if (newWinP + newLossP + drawP > 1.0f)
+        {
+          float scale = (1.0f - drawP) / (newWinP + newLossP);
+          newWinP *= scale;
+          newLossP *= scale;
+        }
+
+        winP = (FP16)newWinP;
+        lossP = (FP16)newLossP;
+      }
+    }
+  }
+#endif
 
 
   void RunLocal(MCGSEngine engine, ListBounded<MCGSPath> paths, bool deferRetrieveResults = false)

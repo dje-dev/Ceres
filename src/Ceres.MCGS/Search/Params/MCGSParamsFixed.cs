@@ -117,8 +117,6 @@ public static class MCGSParamsFixed
   /// </summary>
   public const bool REDESCENT_MUTIPLIER_ADJUST = true;
 
-  public const bool OUT_OF_ORDER_CHILDREN_ALLOWED = false;
-
 
   // In tests, perhaps especially as N gets larger (e.g. 10000+), numbers less than 0.7 are better (e.g. 0.6 or 0.5)
   public const float RPO_VISIT_COUNT_SHRINK_POWER = 0.6f;//  e.g. 0.5, smaller powers lead to less severe pull toward prior policy

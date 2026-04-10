@@ -54,6 +54,12 @@ public record ParamsSelect
     ///	Uses policy-based imputation to estimate Q values.
     /// </summary>
     ACPI,
+
+    /// <summary>
+    /// Use per-move value from the neural network action head.
+    /// Falls back to Reduction when action data is unavailable.
+    /// </summary>
+    ActionHead,
   };
 
   /// <summary>
@@ -61,6 +67,12 @@ public record ParamsSelect
   /// </summary>
   public const float MinPolicyProbability = 0.005f;
 
+  /// <summary>
+  /// If the univisited children should be reordered upon first visit
+  /// using not just policy but instead the PUCT scores inclusive of 
+  /// the effect of both policy and value (i.e. using the action head values as fill-in).
+  /// </summary>
+  public bool ActionHeadRearrangeUnvisitedChildren = false;
 
   public float UCTRootNumeratorExponent = 0.5f;
   public float UCTNonRootNumeratorExponent = 0.5f;
@@ -294,6 +306,7 @@ public record ParamsSelect
       FPUType.Reduction => parentQ + fpuValue * Math.Sqrt(parentSumPVisited),
       FPUType.Same => parentQ,        
       FPUType.ACPI => parentQ + fpuValue * Math.Sqrt(parentSumPVisited), // Will be overridden with per-child imputed values; fallback to reduction
+      FPUType.ActionHead => parentQ + fpuValue * Math.Sqrt(parentSumPVisited), // Scalar fallback; per-child values from action head override this in PUCTSelector
       _ => throw new NotImplementedException($"Unknown FPUType: {GetFPUMode(isRoot)}")
     };
   }
@@ -304,8 +317,11 @@ public record ParamsSelect
   /// </summary>
   internal void Validate()
   {
+    if (ActionHeadRearrangeUnvisitedChildren && FPUMode != FPUType.ActionHead)
+    {
+      throw new Exception("ActionHeadRearrangeUnvisitedChildren can only be true when FPUMode is ActionHead");
+    }
   }
 
   #endregion
-
   }

@@ -651,13 +651,17 @@ public partial class MCGSEngine
         effectivePolicySoftmax *= tempMultiplier;
       }
 
+      bool hasAction = actions.Span.Length > 0; //Manager.NNEvaluator0.HasAction ?
+      ref readonly CompressedActionVector actionVectorRef = ref (hasAction
+         ? ref actions.Span[policyActionIndex]
+         : ref EMPTY_ACTION_VECTOR);
       node.SetPolicy(effectivePolicySoftmax, ParamsSelect.MinPolicyProbability,
                      in position,
                      moves,
                      in policies.Span[policyActionIndex],
 #if ACTION_ENABLED
-                     NNEvaluator.HasAction,
-                     NNEvaluator.HasAction ? in actions.Span[policyActionIndex] : default,
+                     Manager.NNEvaluator0.HasAction,
+                     in actionVectorRef, // TODO: pass structs using in for performance
 #endif
                      Manager.NNEvaluator0.PolicyReturnedSameOrderMoveList);
 
@@ -675,6 +679,8 @@ public partial class MCGSEngine
       }
     }
   }
+
+  static CompressedActionVector EMPTY_ACTION_VECTOR;
 
   /// <summary>
   /// Depth of the deepest path seen so far.

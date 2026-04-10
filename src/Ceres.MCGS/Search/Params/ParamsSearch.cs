@@ -469,10 +469,12 @@ public record ParamsSearch
   public int PaddedExtraNodesBase = 5;
   public float PaddedExtraNodesMultiplier = 0.03f;
 
+
   /// <summary>
-  /// Fraction of weight given to action head when performing child expansion selection.
+  /// If nonzero, the V stored for the node is no longer the exact value from the value head,
+  /// but rather a partial blend with the action head value.
   /// </summary>
-  public float ActionHeadSelectionWeight = 0f;
+  public float ActionHeadWeightInV = 0f;
 
   /// <summary>
   /// Nonzero values cause greater exploration at nodes with high uncertainty

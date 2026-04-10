@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Numerics.Tensors;
@@ -106,6 +107,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
   private int punimOpponentTensorIndex = -1;
   private int qDevLowerTensorIndex = -1;
   private int qDevUpperTensorIndex = -1;
+  private int actionTensorIndex = -1;
 
   // Per-position sizes for ply-bin tensors
   private int pieceMoveSizePerPos;
@@ -121,6 +123,10 @@ public class NNEvaluatorTensorRT : NNEvaluator
   private int qDevLowerSize;
   private int qDevUpperSize;
   private bool hasQDeviation;
+
+  // Per-position size for action tensor (TPGRecord.MAX_MOVES * 3 elements per position)
+  private int actionSizePerPos;
+  private readonly bool hasAction;
 
   private readonly int inputElementsPerPosition;
   private readonly int outputElementsPerPosition;
@@ -162,6 +168,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
   private FP16[] extraStat1Buffer;
   private CompressedPolicyVector[] policiesBuffer;
   private CompressedPolicyVector[] policies2Buffer;
+  private CompressedActionVector[] actionsBuffer;
   private ParallelOptions cachedParallelOptions;
 
   // Network capabilities (determined from output tensors)
@@ -188,7 +195,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
   public override bool HasUncertaintyP => hasUncertaintyP;
 
   /// <inheritdoc/>
-  public override bool HasAction => false;
+  public override bool HasAction => hasAction;
 
   /// <inheritdoc/>
   public override bool HasValueSecondary => hasValueSecondary;
@@ -439,6 +446,10 @@ public class NNEvaluatorTensorRT : NNEvaluator
           qDevUpperTensorIndex = tensorIndex;
           qDevUpperSize = sizePerPos;
           break;
+        case "action":
+          actionTensorIndex = tensorIndex;
+          actionSizePerPos = sizePerPos;
+          break;
       }
       tensorIndex++;
     }
@@ -451,6 +462,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     hasPolicySecondary = policy2Size > 0;
     hasPlyBinOutputs = pieceMoveSizePerPos == 512 && pieceCaptureSizePerPos == 512;
     hasPunimOutputs = punimSelfSizePerPos == 8 && punimOpponentSizePerPos == 8;
+    hasAction = actionSizePerPos == EncodedPolicyVector.POLICY_VECTOR_LENGTH * 3; // [B, 1858, 3] - WDL logits for all possible moves
     hasQDeviation = qDevLowerSize > 0 && qDevUpperSize > 0;
 
     if (netType == ONNXNetExecutor.NetTypeEnum.TPG)
@@ -484,6 +496,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     extraStat1Buffer = hasQDeviation ? new FP16[maxBatchSize] : Array.Empty<FP16>();
     policiesBuffer = new CompressedPolicyVector[maxBatchSize];
     policies2Buffer = hasPolicySecondary ? new CompressedPolicyVector[maxBatchSize] : Array.Empty<CompressedPolicyVector>();
+    actionsBuffer = hasAction ? new CompressedActionVector[maxBatchSize] : null;
     plyBinMoveBuffer = hasPlyBinOutputs ? new Half[maxBatchSize * 512] : Array.Empty<Half>();
     plyBinCaptureBuffer = hasPlyBinOutputs ? new Half[maxBatchSize * 512] : Array.Empty<Half>();
     punimSelfBuffer = hasPunimOutputs ? new Half[maxBatchSize * 8] : Array.Empty<Half>();
@@ -679,7 +692,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     FP16[] extraStat1 = extraStat1Buffer;
     CompressedPolicyVector[] policies = policiesBuffer;
     CompressedPolicyVector[] pol2 = policies2Buffer;
-    CompressedActionVector[] actions = Array.Empty<CompressedActionVector>();
+    CompressedActionVector[] actions = hasAction ? actionsBuffer : Array.Empty<CompressedActionVector>();
     Half[] plyBinMove = plyBinMoveBuffer;
     Half[] plyBinCapture = plyBinCaptureBuffer;
     Half[] punimSelf = punimSelfBuffer;
@@ -717,7 +730,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
       ExtractSubBatchResultsNative(globalStartPosition, positionCount, engineBatchSize,
                                    threadLocalOutputFloatBuffer, w, l, w2, l2, m, uncV, uncP, policies,
-                                   pol2,
+                                   pol2, actions,
                                    plyBinMove, plyBinCapture, punimSelf, punimOpponent,
                                    extraStat0, extraStat1,
                                    valueHead1Temperature, valueHead2Temperature,
@@ -766,7 +779,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
       hasM: HasM,
       hasUncertaintyV: HasUncertaintyV,
       hasUncertaintyP: hasUncertaintyP,
-      hasAction: false,
+      hasAction: hasAction,
       hasValueSecondary: hasValueSecondary,
       hasState: false,
       numPos: numPos,
@@ -811,10 +824,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
     public readonly int PunimOpponent;
     public readonly int QDevLower;
     public readonly int QDevUpper;
+    public readonly int Action;
 
     public TensorOffsets(int value, int value2, int policy, int policy2, int mlh, int uncV, int uncP,
                          int pieceMove, int pieceCapture, int punimSelf, int punimOpponent,
-                         int qDevLower, int qDevUpper)
+                         int qDevLower, int qDevUpper, int action)
     {
       Value = value;
       Value2 = value2;
@@ -829,6 +843,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
       PunimOpponent = punimOpponent;
       QDevLower = qDevLower;
       QDevUpper = qDevUpper;
+      Action = action;
     }
   }
 
@@ -852,6 +867,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     int punimOpponentOffset = 0;
     int qDevLowerOffset = 0;
     int qDevUpperOffset = 0;
+    int actionOffset = 0;
 
     int currentOffset = 0;
     for (int t = 0; t < outputInfos.Length; t++)
@@ -915,6 +931,10 @@ public class NNEvaluatorTensorRT : NNEvaluator
       {
         qDevUpperOffset = currentOffset;
       }
+      else if (t == actionTensorIndex)
+      {
+        actionOffset = currentOffset;
+      }
 
       // Align to 256-byte boundary (128 fp16 elements)
       const int ALIGN = 128;
@@ -926,7 +946,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
     return new TensorOffsets(valueOffset, effectiveValue2Offset, policyOffset, policy2Offset, mlhOffset, uncVOffset, uncPOffset,
                              pieceMoveOffset, pieceCaptureOffset, punimSelfOffset, punimOpponentOffset,
-                             qDevLowerOffset, qDevUpperOffset);
+                             qDevLowerOffset, qDevUpperOffset, actionOffset);
   }
 
 
@@ -1000,6 +1020,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                             FP16[] w, FP16[] l, FP16[] w2, FP16[] l2, FP16[] m, FP16[] uncV, FP16[] uncP,
                                             CompressedPolicyVector[] policies,
                                             CompressedPolicyVector[] policies2,
+                                            CompressedActionVector[] actions,
                                             Half[] plyBinMove, Half[] plyBinCapture,
                                             Half[] punimSelf, Half[] punimOpponent,
                                             FP16[] extraStat0, FP16[] extraStat1,
@@ -1122,6 +1143,36 @@ public class NNEvaluatorTensorRT : NNEvaluator
       indices = indices.Slice(0, numMoves);
       logits = logits.Slice(0, numMoves);
 
+      // ===== Extract Action WDL (if present) =====
+      // IMPORTANT: Must extract actions BEFORE CompressedPolicyVector.Initialize,
+      // because Initialize sorts the indices span in-place (when alreadySorted: false).
+      if (hasAction)
+      {
+        int posActionOffset = offsets.Action + i * actionSizePerPos;
+        ReadOnlySpan<float> actionLogits = subBatchOutput.AsSpan().Slice(posActionOffset, actionSizePerPos);
+
+        // Extract action WDL for each legal move using nnIndex (analogous to policy)
+        for (int mv = 0; mv < numMoves; mv++)
+        {
+          int nnIndex = indices[mv]; // Use nnIndex to index into action tensor [1858, 3]
+          int baseActionIndex = 3 * nnIndex;
+
+          float a0 = actionLogits[baseActionIndex];     // W logit
+          float a1 = actionLogits[baseActionIndex + 1]; // D logit
+          float a2 = actionLogits[baseActionIndex + 2]; // L logit
+
+          // Numerically stable softmax
+          float actionLogitMax = MathF.Max(MathF.Max(a0, a1), a2);
+          float expW = MathF.Exp(a0 - actionLogitMax);
+          float expD = MathF.Exp(a1 - actionLogitMax);
+          float expL = MathF.Exp(a2 - actionLogitMax);
+          float actionSum = expW + expD + expL;
+
+          // Store (W_prob, L_prob) - D is derived as 1 - W - L
+          actions[resultIndex][mv] = ((Half)(expW / actionSum), (Half)(expL / actionSum));
+        }
+      }
+
       bool policyInitialized = false;
       if (hasPolicySecondary)
       {
@@ -1150,6 +1201,12 @@ public class NNEvaluatorTensorRT : NNEvaluator
         }
         TensorPrimitives.Exp(p2Probs, p2Probs);
         float sum2 = TensorPrimitives.Sum(p2Probs);
+
+        // Detect numeric underflow for unblended policy2
+        Debug.Assert(sum2 > 0 && !float.IsNaN(sum2),
+          $"Softmax underflow in unblended policy2 (Native): sum2={sum2}. " +
+          $"numMoves={numMoves}, policyTemperature={policyTemperature}, maxLogit2={maxLogit2}");
+
         if (sum2 > 0)
         {
           TensorPrimitives.Multiply(p2Probs, 1.0f / sum2, p2Probs);
@@ -1160,28 +1217,35 @@ public class NNEvaluatorTensorRT : NNEvaluator
         {
           if (policy2BlendLogits)
           {
-            // Apply per-head temperatures to logits before blending (in logit space)
-            // Temperature is applied by dividing logits: logits_tempered = logits / temperature
-            // Note: For logit-space blending, temperature is applied before blending.
+            // Apply per-head temperatures to logits before blending (in logit space).
+            // Temperature is applied by dividing logits: logits_tempered = (logits - max) / temperature.
+            // We subtract max BEFORE temperature scaling to prevent numeric overflow/underflow
+            // when temperature < 1 (which amplifies the logits).
             Span<float> temperedLogits1 = stackalloc float[numMoves];
             Span<float> temperedLogits2 = stackalloc float[numMoves];
 
             if (policy1Temperature != 1.0f)
             {
-              TensorPrimitives.Multiply(logits, 1.0f / policy1Temperature, temperedLogits1);
+              // Subtract max first, then apply temperature
+              TensorPrimitives.Subtract(logits, maxLogit, temperedLogits1);
+              TensorPrimitives.Multiply(temperedLogits1, 1.0f / policy1Temperature, temperedLogits1);
             }
             else
             {
-              logits.CopyTo(temperedLogits1);
+              // Still subtract max for consistency
+              TensorPrimitives.Subtract(logits, maxLogit, temperedLogits1);
             }
 
             if (policy2Temperature != 1.0f)
             {
-              TensorPrimitives.Multiply(logits2, 1.0f / policy2Temperature, temperedLogits2);
+              // Subtract max first, then apply temperature
+              TensorPrimitives.Subtract(logits2, maxLogit2, temperedLogits2);
+              TensorPrimitives.Multiply(temperedLogits2, 1.0f / policy2Temperature, temperedLogits2);
             }
             else
             {
-              logits2.CopyTo(temperedLogits2);
+              // Still subtract max for consistency
+              TensorPrimitives.Subtract(logits2, maxLogit2, temperedLogits2);
             }
 
             // Blend in logit space: weighted average of tempered logits, then softmax
@@ -1244,7 +1308,15 @@ public class NNEvaluatorTensorRT : NNEvaluator
                 logits[mv] = frac1 * logits[mv] + fractionPolicyHead2 * p2Probs[mv];
               }
             }
-            CompressedPolicyVector.Initialize(ref policies[resultIndex], SideType.White, indices, logits, alreadySorted: false);
+            if (hasAction)
+            {
+              CompressedPolicyVector.Initialize(ref policies[resultIndex], SideType.White, indices, logits, alreadySorted: false,
+                                                withActions: true, ref actions[resultIndex]);
+            }
+            else
+            {
+              CompressedPolicyVector.Initialize(ref policies[resultIndex], SideType.White, indices, logits, alreadySorted: false);
+            }
             policyInitialized = true;
           }
         }
@@ -1264,13 +1336,27 @@ public class NNEvaluatorTensorRT : NNEvaluator
         TensorPrimitives.Exp(logits, logits);
 
         float sum = TensorPrimitives.Sum(logits);
+
+        // Detect numeric underflow: if sum is 0 or NaN, softmax failed (likely due to extreme temperature scaling)
+        Debug.Assert(sum > 0 && !float.IsNaN(sum),
+          $"Softmax underflow in ExtractSubBatchResultsNative: sum={sum}. " +
+          $"numMoves={numMoves}, policyTemperature={policyTemperature}, maxLogit={maxLogit}");
+
         if (sum > 0)
         {
           float invSum = 1.0f / sum;
           TensorPrimitives.Multiply(logits, invSum, logits);
         }
 
-        CompressedPolicyVector.Initialize(ref policies[resultIndex], SideType.White, indices, logits, alreadySorted: false);
+        if (hasAction)
+        {
+          CompressedPolicyVector.Initialize(ref policies[resultIndex], SideType.White, indices, logits, alreadySorted: false,
+                                            withActions: true, ref actions[resultIndex]);
+        }
+        else
+        {
+          CompressedPolicyVector.Initialize(ref policies[resultIndex], SideType.White, indices, logits, alreadySorted: false);
+        }
       }
 
       // ===== Extract Ply-Bin Outputs (if present) =====
@@ -1359,7 +1445,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     FP16[] extraStat1 = extraStat1Buffer;
     CompressedPolicyVector[] policies = policiesBuffer;
     CompressedPolicyVector[] pol2 = policies2Buffer;
-    CompressedActionVector[] actions = Array.Empty<CompressedActionVector>();
+    CompressedActionVector[] actions = hasAction ? actionsBuffer : Array.Empty<CompressedActionVector>();
     Half[] plyBinMove = plyBinMoveBuffer;
     Half[] plyBinCapture = plyBinCaptureBuffer;
     Half[] punimSelf = punimSelfBuffer;
@@ -1405,7 +1491,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
       ExtractSubBatchResults(batch, globalStartPosition, positionCount, engineBatchSize,
                              threadLocalOutputFloatBuffer, w, l, w2, l2, m, uncV, uncP, policies,
-                             pol2,
+                             pol2, actions,
                              plyBinMove, plyBinCapture, punimSelf, punimOpponent,
                              extraStat0, extraStat1,
                              valueHead1Temperature, valueHead2Temperature,
@@ -1467,7 +1553,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
       hasM: HasM,
       hasUncertaintyV: HasUncertaintyV,
       hasUncertaintyP: hasUncertaintyP,
-      hasAction: false,
+      hasAction: hasAction,
       hasValueSecondary: hasValueSecondary,
       hasState: false,
       numPos: numPos,
@@ -1603,6 +1689,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                       FP16[] w, FP16[] l, FP16[] w2, FP16[] l2, FP16[] m, FP16[] uncV, FP16[] uncP,
                                       CompressedPolicyVector[] policies,
                                       CompressedPolicyVector[] policies2,
+                                      CompressedActionVector[] actions,
                                       Half[] plyBinMove, Half[] plyBinCapture,
                                       Half[] punimSelf, Half[] punimOpponent,
                                       FP16[] extraStat0, FP16[] extraStat1,
@@ -1735,6 +1822,36 @@ public class NNEvaluatorTensorRT : NNEvaluator
         }
       }
 
+      // ===== Extract Action WDL (if present) =====
+      // IMPORTANT: Must extract actions BEFORE CompressedPolicyVector.Initialize,
+      // because Initialize sorts the indices span in-place (when alreadySorted: false).
+      if (hasAction)
+      {
+        int posActionOffset = offsets.Action + i * actionSizePerPos;
+        ReadOnlySpan<float> actionLogits = subBatchOutput.AsSpan().Slice(posActionOffset, actionSizePerPos);
+
+        // Extract action WDL for each legal move using nnIndex (analogous to policy)
+        for (int mv = 0; mv < numMoves; mv++)
+        {
+          int nnIndex = indices[mv]; // Use nnIndex to index into action tensor [1858, 3]
+          int baseActionIndex = 3 * nnIndex;
+
+          float a0 = actionLogits[baseActionIndex];     // W logit
+          float a1 = actionLogits[baseActionIndex + 1]; // D logit
+          float a2 = actionLogits[baseActionIndex + 2]; // L logit
+
+          // Numerically stable softmax
+          float actionLogitMax = MathF.Max(MathF.Max(a0, a1), a2);
+          float expW = MathF.Exp(a0 - actionLogitMax);
+          float expD = MathF.Exp(a1 - actionLogitMax);
+          float expL = MathF.Exp(a2 - actionLogitMax);
+          float actionSum = expW + expD + expL;
+
+          // Store (W_prob, L_prob) - D is derived as 1 - W - L
+          actions[resultIndex][mv] = ((Half)(expW / actionSum), (Half)(expL / actionSum));
+        }
+      }
+
       SideType side = positions.Span[batchIndex].SideToMove;
 
       bool policyInitialized = false;
@@ -1766,6 +1883,12 @@ public class NNEvaluatorTensorRT : NNEvaluator
         }
         TensorPrimitives.Exp(p2Probs, p2Probs);
         float sum2 = TensorPrimitives.Sum(p2Probs);
+
+        // Detect numeric underflow for unblended policy2
+        Debug.Assert(sum2 > 0 && !float.IsNaN(sum2),
+          $"Softmax underflow in unblended policy2: sum2={sum2}. " +
+          $"numMoves={numMoves}, policyTemperature={policyTemperature}, maxLogit2={maxLogit2}");
+
         if (sum2 > 0)
         {
           TensorPrimitives.Multiply(p2Probs, 1.0f / sum2, p2Probs);
@@ -1776,27 +1899,35 @@ public class NNEvaluatorTensorRT : NNEvaluator
         {
           if (policy2BlendLogits)
           {
-            // Apply per-head temperatures to logits before blending (in logit space)
-            // Temperature is applied by dividing logits: logits_tempered = logits / temperature
+            // Apply per-head temperatures to logits before blending (in logit space).
+            // Temperature is applied by dividing logits: logits_tempered = (logits - max) / temperature.
+            // We subtract max BEFORE temperature scaling to prevent numeric overflow/underflow
+            // when temperature < 1 (which amplifies the logits).
             Span<float> temperedLogits1 = stackalloc float[numMoves];
             Span<float> temperedLogits2 = stackalloc float[numMoves];
 
             if (policy1Temperature != 1.0f)
             {
-              TensorPrimitives.Multiply(logits, 1.0f / policy1Temperature, temperedLogits1);
+              // Subtract max first, then apply temperature
+              TensorPrimitives.Subtract(logits, maxLogit, temperedLogits1);
+              TensorPrimitives.Multiply(temperedLogits1, 1.0f / policy1Temperature, temperedLogits1);
             }
             else
             {
-              logits.CopyTo(temperedLogits1);
+              // Still subtract max for consistency (will be added back by softmax logic)
+              TensorPrimitives.Subtract(logits, maxLogit, temperedLogits1);
             }
 
             if (policy2Temperature != 1.0f)
             {
-              TensorPrimitives.Multiply(logits2, 1.0f / policy2Temperature, temperedLogits2);
+              // Subtract max first, then apply temperature
+              TensorPrimitives.Subtract(logits2, maxLogit2, temperedLogits2);
+              TensorPrimitives.Multiply(temperedLogits2, 1.0f / policy2Temperature, temperedLogits2);
             }
             else
             {
-              logits2.CopyTo(temperedLogits2);
+              // Still subtract max for consistency
+              TensorPrimitives.Subtract(logits2, maxLogit2, temperedLogits2);
             }
 
             // Blend in logit space: weighted average of tempered logits, then softmax
@@ -1858,7 +1989,15 @@ public class NNEvaluatorTensorRT : NNEvaluator
                 logits[mv] = frac1 * logits[mv] + fractionPolicyHead2 * p2Probs[mv];
               }
             }
-            CompressedPolicyVector.Initialize(ref policies[resultIndex], side, indices, logits, alreadySorted: false);
+            if (hasAction)
+            {
+              CompressedPolicyVector.Initialize(ref policies[resultIndex], side, indices, logits, alreadySorted: false,
+                                                withActions: true, ref actions[resultIndex]);
+            }
+            else
+            {
+              CompressedPolicyVector.Initialize(ref policies[resultIndex], side, indices, logits, alreadySorted: false);
+            }
             policyInitialized = true;
           }
         }
@@ -1878,13 +2017,28 @@ public class NNEvaluatorTensorRT : NNEvaluator
         TensorPrimitives.Exp(logits, logits);
 
         float sum = TensorPrimitives.Sum(logits);
+
+        // Detect numeric underflow: if sum is 0 or NaN, softmax failed (likely due to extreme temperature scaling)
+        Debug.Assert(sum > 0 && !float.IsNaN(sum),
+          $"Softmax underflow in ExtractSubBatchResults: sum={sum}. " +
+          $"numMoves={numMoves}, policyTemperature={policyTemperature}, maxLogit={maxLogit}");
+
         if (sum > 0)
         {
           float invSum = 1.0f / sum;
           TensorPrimitives.Multiply(logits, invSum, logits);
         }
 
-        CompressedPolicyVector.Initialize(ref policies[resultIndex], side, indices, logits, alreadySorted: false);
+        if (hasAction)
+        {
+          CompressedPolicyVector.Initialize(ref policies[resultIndex], side, indices, logits, alreadySorted: false,
+                                            withActions: true, ref actions[resultIndex]);
+        }
+        else
+        {
+          CompressedPolicyVector.Initialize(ref policies[resultIndex], side, indices, logits, alreadySorted: false);
+        }
+        Debug.Assert(policies[resultIndex].SumProbabilities > 0.995);
       }
 
       // ===== Extract Ply-Bin Outputs (if present) =====

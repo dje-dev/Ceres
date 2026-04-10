@@ -407,7 +407,7 @@ public unsafe readonly struct GEdge : IEquatable<GEdge>
       else
       {
 #if ACTION_ENABLED
-    ret+= $" P={P * 100.0f,6:F2}% A={ActionV,6:F3} N={N,8:N0} Q={Q,6:F3} W={W,6:F3} UV={UncertaintyV,6:F3} UP={UncertaintyP,6:F3} "; 
+        ret += $" P={P * 100.0f,6:F2}% A={ActionV,6:F3} N={N,8:N0} Q={Q,6:F3} QC={QChild,6:F3} UV={UncertaintyV,6:F3} UP={UncertaintyP,6:F3} ";
 #else
         ret += $" P={P * 100.0f,6:F2}% N={N:N0} ND={NDrawByRepetition:N0} Q={Q,5:F3}{qPrefix} QC={QChild,5:F3} SD={edgeStructPtr->StdDevEstimate.RunningStdDev,5:F2} UV={UncertaintyV,3:F2} UP={UncertaintyP,3:F2} ";
 #endif

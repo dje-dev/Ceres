@@ -18,9 +18,9 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Numerics.Tensors;
 using System.Runtime.CompilerServices;
+
 using Ceres.Base.DataType;
 using Ceres.Base.Math;
-
 using Ceres.MCGS.Search.Params;
 
 #endregion
@@ -40,6 +40,10 @@ namespace Ceres.MCGS.Search.PUCT;
 public unsafe static class PUCTScoreCalcVector
 {
   public const int MAX_CHILDREN = 64;
+
+  // ThreadStatic buffer for SIMD-aligned per-child Q values (avoids stackalloc per call)
+  [ThreadStatic]
+  private static double[] t_simdQChildBuffer;
 
   /// <summary>
   /// Static variable available for debugging purposes to
@@ -70,7 +74,6 @@ public unsafe static class PUCTScoreCalcVector
   /// <param name="outputScores"></param>
   /// <param name="outputChildVisitCounts"></param>
   /// <param name="cpuctMultiplier"></param>
-  /// <param name="actionHeadSelectionWeight"></param>
   /// <param name="thresholdPUCTSuboptimalityReject"></param>
   /// <returns></returns>
   internal static int ScoreCalcMulti(ParamsSelect paramsSelect,
@@ -81,7 +84,6 @@ public unsafe static class PUCTScoreCalcVector
                                      int numChildren, int numVisitsToCompute,
                                      Span<double> outputScores, Span<short> outputChildVisitCounts,
                                      double cpuctMultiplier,
-                                     float actionHeadSelectionWeight,
                                      float thresholdPUCTSuboptimalityReject)
   {
     Debug.Assert(!double.IsNaN(qParent));
@@ -133,7 +135,7 @@ public unsafe static class PUCTScoreCalcVector
                                     parentIsRoot ? paramsSelect.UCTRootNumeratorExponent : paramsSelect.UCTNonRootNumeratorExponent,
                                     cpuctValue, qWhenNoChildren, qWhenNoChildrenPerChild,
                                     parentIsRoot ? paramsSelect.UCTRootDenominatorExponent : paramsSelect.UCTNonRootDenominatorExponent,
-                                    actionHeadSelectionWeight, thresholdPUCTSuboptimalityReject);
+                                    thresholdPUCTSuboptimalityReject);
     return numVisitsAccepted;
   }
 
@@ -169,7 +171,6 @@ public unsafe static class PUCTScoreCalcVector
                              double cpuctValue,
                              double qWhenNoChildren, double[] qWhenNoChildrenPerChild,
                              double uctDenominatorPower,
-                             float actionHeadSelectionWeight,
                              float thresholdPUCTSuboptimalityReject)
   {
     // Load the vectors that do not change
@@ -189,8 +190,7 @@ public unsafe static class PUCTScoreCalcVector
       double numVisitsByParentToChildren = parentNInFlight + (parentN < 2 ? 1 : parentN - 1);
       double cpuctSqrtParentN = cpuctValue * ParamsSelect.UCTParentMultiplier(numVisitsByParentToChildren, uctParentPower);
       ComputeChildScores(childStats, numChildren, qWhenNoChildren, qWhenNoChildrenPerChild, virtualLossMultiplier,
-                         childScores, cpuctSqrtParentN, uctDenominatorPower, 
-                         actionHeadSelectionWeight);
+                         childScores, cpuctSqrtParentN, uctDenominatorPower);
 
       // Assert that none of the scores were NaN.
 #if DEBUG
@@ -264,8 +264,7 @@ public unsafe static class PUCTScoreCalcVector
           numVisitsByParentToChildren = newNInFlight + parentNInFlight + (parentN < 2 ? 1 : parentN - 1);
           cpuctSqrtParentN = cpuctValue * ParamsSelect.UCTParentMultiplier(numVisitsByParentToChildren, uctParentPower);
           ComputeChildScores(childStats, numChildren, qWhenNoChildren, qWhenNoChildrenPerChild, virtualLossMultiplier,
-                             childScores, cpuctSqrtParentN, uctDenominatorPower, 
-                             actionHeadSelectionWeight);
+                             childScores, cpuctSqrtParentN, uctDenominatorPower);
 
           // Check if the best child was still the same
           if (maxIndex == ArrayUtils.IndexOfElementWithMaxValue(childScores, numChildren))
@@ -319,31 +318,35 @@ public unsafe static class PUCTScoreCalcVector
                                          int numChildren, 
                                          double qWhenNoChildren, double [] qWhenNoChildrenPerChild,
                                          double virtualLossMultiplier, Span<double> computedChildScores,
-                                         double cpuctSqrtParentN, double uctDenominatorPower,
-                                         float actionHeadSelectionWeight)
+                                         double cpuctSqrtParentN, double uctDenominatorPower)
   {
-#if ACTION_ENABLED
-Need to review/harmonize logic between these two methods (pick which one is intended).
-Findings comparing ComputeChildScoresSIMD vs ComputeChildScoresNonSIMD (ignoring commented-out code):
-�	Action-head logic not equivalent (High)
-�	SIMD path: Only blends action head into Q if ACTION_ENABLED is defined, 
-  using Q = (1-w)�Q + w�A for all items when weight != 0.
-�	Non-SIMD path: Always compiled and applies a different rule 
+    // Note: SIMD path blends action into Q globally via weight (Q = (1-w)*Q + w*A).
+    //       The new FPUType.ActionHead mode uses action values as per-child FPU instead,
+    //       which flows through qWhenNoChildrenPerChild and does not require the blending logic.
+
+#if OLD_ACTION_COMMENT
+    Need to review / harmonize logic between these two methods(pick which one is intended).
+Findings comparing ComputeChildScoresSIMD vs ComputeChildScoresNonSIMD(ignoring commented -out code):
+	Action - head logic not equivalent(High)
+	SIMD path: Only blends action head into Q if ACTION_ENABLED is defined, 
+  using Q = (1 - w)*Q + w*A for all items when weight != 0.
+	Non - SIMD path: Always compiled and applies a different rule
   only for unvisited moves (i > 0 && N[i] == 0 && weight != 0): 
-    Q = max(Q, A[i] + 0.10). No global blending. 
+    Q = max(Q, A[i] + 0.10).No global blending.
 This changes selection behavior even when ACTION_ENABLED is not defined and adds a fixed +0.10 offset floor.
 #endif
+
     if (ENABLE_SIMD_CALCS && Vector.IsHardwareAccelerated)
     {
       ComputeChildScoresSIMD(childStats, numChildren, qWhenNoChildren, qWhenNoChildrenPerChild,
                              virtualLossMultiplier, computedChildScores,
-                             cpuctSqrtParentN, uctDenominatorPower, actionHeadSelectionWeight);
+                             cpuctSqrtParentN, uctDenominatorPower);
     }
     else
     {
       ComputeChildScoresNonSIMD(childStats, numChildren, qWhenNoChildren, qWhenNoChildrenPerChild,
                                 virtualLossMultiplier, computedChildScores, 
-                                cpuctSqrtParentN, uctDenominatorPower, actionHeadSelectionWeight);
+                                cpuctSqrtParentN, uctDenominatorPower);
     }
   }
 
@@ -352,8 +355,7 @@ This changes selection behavior even when ACTION_ENABLED is not defined and adds
                                              int numChildren, 
                                              double qWhenNoChildren, double[] qWhenNoChildrenPerChild,
                                              double virtualLossMultiplier, Span<double> computedChildScores,
-                                             double cpuctSqrtParentN, double uctDenominatorPower,
-                                             double actionHeadSelectionWeight)
+                                             double cpuctSqrtParentN, double uctDenominatorPower)
   {
     int simdWidth = Vector<double>.Count;
     int numBlocks = numChildren / simdWidth + (numChildren % simdWidth == 0 ? 0 : 1);
@@ -378,8 +380,21 @@ This changes selection behavior even when ACTION_ENABLED is not defined and adds
 #if ACTION_ENABLED
       Vector<double> vA = new Vector<double>(a[startOffset..]);
 #endif
-      Vector<double> vQWhenNoChildren = qWhenNoChildrenPerChild != null ? new Vector<double>(qWhenNoChildrenPerChild[startOffset..]) 
-                                                                        : new Vector<double>(qWhenNoChildren);
+      Vector<double> vQWhenNoChildren;
+      if (qWhenNoChildrenPerChild != null)
+      {
+        double[] qPerChildPadded = t_simdQChildBuffer ??= new double[Vector<double>.Count];
+        int remaining = qWhenNoChildrenPerChild.Length - startOffset;
+        for (int i = 0; i < simdWidth; i++)
+        {
+          qPerChildPadded[i] = i < remaining ? qWhenNoChildrenPerChild[startOffset + i] : qWhenNoChildren;
+        }
+        vQWhenNoChildren = new Vector<double>(qPerChildPadded);
+      }
+      else
+      {
+        vQWhenNoChildren = new Vector<double>(qWhenNoChildren);
+      }
       Vector<double> vNInFlight = new(nInFlight[startOffset..]);
 
       Vector<double> vScore = ComputeScoresSIMD(vW, vN, vP,
@@ -387,7 +402,6 @@ This changes selection behavior even when ACTION_ENABLED is not defined and adds
                                                 vA,
 #endif
                                                 virtualLossMultiplier, cpuctSqrtParentN, uctDenominatorPower,
-                                                actionHeadSelectionWeight,
                                                 vQWhenNoChildren, vNInFlight);
 
       vScore.CopyTo(computedChildScores[startOffset..]);
@@ -445,15 +459,13 @@ This changes selection behavior even when ACTION_ENABLED is not defined and adds
                                                        int numChildren, 
                                                        double qWhenNoChildren, double[] qWhenNoChildrenPerChild,
                                                        double virtualLossMultiplier, Span<double> computedChildScores,
-                                                       double cpuctSqrtParentN, double uctDenominatorPower,
-                                                       float actionHeadSelectionWeight)
+                                                       double cpuctSqrtParentN, double uctDenominatorPower)
   {
     ComputeScoresNonSIMD(numChildren, childStats.W.Span, childStats.N.Span, 
                          childStats.P.Span, childStats.A.Span,
                          virtualLossMultiplier, cpuctSqrtParentN, uctDenominatorPower,
                          qWhenNoChildren, qWhenNoChildrenPerChild,
-                         childStats.NInFlightAdjusted.Span, computedChildScores, 
-                         actionHeadSelectionWeight);
+                         childStats.NInFlightAdjusted.Span, computedChildScores);
   }
 
 
@@ -463,13 +475,8 @@ This changes selection behavior even when ACTION_ENABLED is not defined and adds
                                            double uctDenominatorPower,
                                            double qWhenNoChildren, double[] qWhenNoChildrenPerChild, 
                                            Span<double> vNInFlight,
-                                           Span<double> outputVScore, float actionHeadSelectionWeight)
+                                           Span<double> outputVScore)
   {
-    if (qWhenNoChildrenPerChild != null)
-    {
-      throw new NotImplementedException();
-    }
-
     for (int i = 0; i < numScores; i++)
     {
       double nPlusNInFlight = vN[i] + vNInFlight[i];
@@ -495,38 +502,16 @@ This changes selection behavior even when ACTION_ENABLED is not defined and adds
       }
       else
       {
-        _vQ = qWhenNoChildren + _vLossContrib;
+        double thisQWhenNoChildren = qWhenNoChildrenPerChild != null ? qWhenNoChildrenPerChild[i] : qWhenNoChildren;
+        _vQ = thisQWhenNoChildren + _vLossContrib;
       }
 
-
-      if (i > 0 && vN[i] == 0 && actionHeadSelectionWeight != 0)
-      {
-        double pDiff = vP[i-1] - vP[i];
-        double aDiff = vA[i] - vA[0];
-//          if (pDiff < 0.05f)
-        {
-          //  if (vP[i] < 0.02) weight *= 0.333f; // <--------- TEST ----------
-          //            _vQ = actionHeadSelectionWeight * vA[i] + (1 - actionHeadSelectionWeight) * _vQ;
-          //            if (aDiff < -0.20) // +17 +/-27
-          //              _vQ -= 0.10f;
-
-          if (aDiff < -0.30)
-          {
-//              _vQ = _vQ + 0.12f + (aDiff * 0.5f); // 4 +/-16 @33
-          }
-
-          //            float min = _vQ;
-
-          //            _vQ = -0.12f 
-          //              + actionHeadSelectionWeight * vA[i] 
-          //              + (1 - actionHeadSelectionWeight) * _vQ;
-          //            _vQ = Math.Max(min, _vQ);
-          //            Console.WriteLine(min + "  " + _vQ);
-
-          //_vQ = vA[i]; // 
-          _vQ = Math.Max(_vQ - 0 * 0.10f, vA[i] + 0.10f); 
-        }
-      }
+      // [Experimental action blending, superseded by FPUType.ActionHead mode]
+      // if (i > 0 && vN[i] == 0 && actionHeadSelectionWeight != 0)
+      // {
+      //   double aDiff = vA[i] - vA[0];
+      //   _vQ = Math.Max(_vQ, vA[i] + 0.10f);
+      // }
 
       // U
       double _vUNumerator = vP[i] * cpuctSqrtParentN;
@@ -556,7 +541,6 @@ This changes selection behavior even when ACTION_ENABLED is not defined and adds
 #endif
                                                  double virtualLossMultiplier,
                                                  double cpuctSqrtParentN, double uctDenominatorPower,
-                                                 double actionHeadSelectionWeight,
                                                  Vector<double> vQWhenNoChildren, Vector<double> vNInFlight)
   {
     Vector<double> vNPlusNInFlight = vN + vNInFlight;
@@ -587,15 +571,6 @@ This changes selection behavior even when ACTION_ENABLED is not defined and adds
     Vector<double> vQWithoutChildren = vQWhenNoChildren + vLossContrib;
     Vector<long> maskNoChildren = Vector.GreaterThan(vNPlusNInFlight, Vector<double>.Zero);
     Vector<double> vQ = Vector.ConditionalSelect(maskNoChildren, vQWithChildren, vQWithoutChildren);
-
-#if ACTION_ENABLED
-    if (actionHeadSelectionWeight != 0)
-    {
-      Vector<double> vActionHeadWeight = new Vector<double>(actionHeadSelectionWeight);
-      Vector<double> vActionHeadWeightComplement = Vector<double>.One - vActionHeadWeight;
-      vQ = vQ * vActionHeadWeightComplement + vA * vActionHeadWeight;
-    }
-#endif
 
     Vector<double> vScore = vU + vQ;
     return vScore;

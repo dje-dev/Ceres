@@ -22,7 +22,6 @@ using System.Threading;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Misc;
 using Ceres.Base.OperatingSystem;
-
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.Positions;
@@ -31,7 +30,6 @@ using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Graphs.GParents;
 using Ceres.MCGS.Graphs.GraphStores;
-
 using Ceres.MCGS.Search.Params;
 using Ceres.MCGS.Search.PathEvaluators;
 using Ceres.MCGS.Search.Phases.Evaluation;
@@ -934,6 +932,13 @@ public unsafe partial class Graph : IDisposable
     Debug.Assert(indexOfChildInParent < parentNode.NumPolicyMoves);
 
     // Update number of expanded edges at the parent.
+    // N.B. A node may have NumEdgesExpanded > 0 with corresponding edge N values of 0,
+    //      yielding N = sumEdgeN + 1 where sumEdgeN = 0.
+    //      This occurs when an edge is created during selection but the visit is 
+    //      subsequently aborted (e.g.PiggybackPendingNNEval failure or transposition collision),
+    //      so BackupToEdge/ BackupToNode are never called.
+    //      The state is harmless — PUCT treats an expanded edge with N = 0 identically
+    //      to an unexpanded move — and self-corrects on the next visit.
     parentNode.NodeRef.NumEdgesExpanded++;
 
     Span<GEdgeHeaderStruct> edgeHeaderStructsSpan = parentNode.EdgeHeadersSpan;
@@ -1167,7 +1172,7 @@ public unsafe partial class Graph : IDisposable
         p[i] = refEdge.P;
         n[i] = refEdge.N;
 #if ACTION_ENABLED
-          a[i] = (double)refEdge.ActionV;
+        a[i] = (double)childEdgeHeaders[i].ActionV; // Read from header (survives expansion; edge struct has no storage)
 #endif
         // Extract value uncertainty with fill-in if missing
         const double DEFAULT_UNCERTAINTY = 0.10f;
@@ -1192,7 +1197,7 @@ public unsafe partial class Graph : IDisposable
         p[i] = (childEdgeHeaders[i].P);
         n[i] = 0;
 #if ACTION_ENABLED
-        a[i] = 0;
+        a[i] = (double)childEdgeHeaders[i].ActionV;
 #endif
         uv[i] = 0;
         w[i] = 0;
