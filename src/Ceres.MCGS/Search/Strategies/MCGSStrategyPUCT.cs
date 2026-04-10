@@ -98,11 +98,70 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     => node.NumEdgesExpanded + numTargetVisits;
 
 
+
+
+  /// <summary>
+  /// Reorders children (originally sorted by prior, index 0 = best prior)
+  /// by <paramref name="scores"/> descending, subject to the constraint that
+  /// no child moves more than <paramref name="d"/> positions from its prior rank.
+  /// Writes the resulting permutation (original indices) into <paramref name="result"/>.
+  /// </summary>
+  public static void SortDisplacementCapped(ReadOnlySpan<double> scores, int d, Span<int> result)
+  {
+    int n = scores.Length;
+    if (result.Length != n)
+      throw new ArgumentException("result must have same length as scores", nameof(result));
+    if (d < 0)
+      throw new ArgumentOutOfRangeException(nameof(d));
+
+    // For small N (typical MCTS branching), a stack-allocated bool array
+    // avoids any heap allocation.
+    Span<bool> placed = n <= 256 ? stackalloc bool[n] : new bool[n];
+    placed.Clear();
+
+    for (int slot = 0; slot < n; slot++)
+    {
+      int lo = Math.Max(0, slot - d);
+      int hi = Math.Min(n - 1, slot + d);
+
+      // Deadline rule: any unplaced child i with i + d == slot MUST go now,
+      // otherwise it would violate its upper displacement bound next iteration.
+      int pick = -1;
+      int forcedIdx = slot - d; // the only i where i + d == slot
+      if (forcedIdx >= 0 && forcedIdx <= hi && !placed[forcedIdx])
+      {
+        pick = forcedIdx;
+      }
+      else
+      {
+        // Otherwise: pick the eligible unplaced child with the highest score.
+        // Ties break toward the lower index (earlier prior rank).
+        double bestScore = double.NegativeInfinity;
+        for (int i = lo; i <= hi; i++)
+        {
+          if (placed[i]) continue;
+          double s = scores[i];
+          if (s > bestScore)
+          {
+            bestScore = s;
+            pick = i;
+          }
+        }
+      }
+
+      placed[pick] = true;
+      result[slot] = pick;
+    }
+  }
+
+
+
   void PossiblyRearrangeOrderUsingAction(GNode node, Graph graph, in ParamsSearch paramsSearch, in ParamsSelect paramsSelect)
   {
     // ****************** HARDCODED CONSTANTS *****************
     const float MIN_PROBABILITY_FOR_ACTION_BOOST = 0 * 0.03f;
     const double DIFF_THRESHOLD = 0.02;// 0.05;
+    const int MAX_SWAPS = 6;
 
     Debug.Assert(node.N == 1);
     if (paramsSelect.FPUMode != ParamsSelect.FPUType.ActionHead
@@ -133,35 +192,75 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
                                        cpuctMultiplier: 1.0f,
                                        temperatureMultiplier: 1.0f);
 
-
-    // Bubble sort to get items in same order as the scores.
     Span<GEdgeHeaderStruct> moveInfosSpan = node.EdgeHeadersSpan;
-    int numSwapped;
-    do
+
+    if (MAX_SWAPS > 0)
     {
-      // First slot is fixed, consider rearranging thereafter.
-      numSwapped = 0;
-      for (int i = 1; i < nodeRef.NumPolicyMoves; i++)
+      ApplyDisplacementCappedSort(scores, moveInfosSpan, MAX_SWAPS, MIN_PROBABILITY_FOR_ACTION_BOOST);
+    }
+    else
+    {
+      // Bubble sort to get items in same order as the scores.
+      int numSwapped;
+      do
       {
-        // Do not swap for low probability nodes.
-        if (moveInfosSpan[i].P < MIN_PROBABILITY_FOR_ACTION_BOOST)
+        // First slot is fixed, consider rearranging thereafter.
+        numSwapped = 0;
+        for (int i = 1; i < nodeRef.NumPolicyMoves; i++)
         {
-          break;
+          // Do not swap for low probability nodes.
+          if (moveInfosSpan[i].P < MIN_PROBABILITY_FOR_ACTION_BOOST)
+          {
+            break;
+          }
+
+          double scoreDiff = scores[i] - scores[i - 1];
+          if (scoreDiff > DIFF_THRESHOLD)
+          {
+            numSwapped++;
+
+            // Swap scores, children and actions.
+            (scores[i - 1], scores[i]) = (scores[i], scores[i - 1]);
+            (moveInfosSpan[i - 1], moveInfosSpan[i]) = (moveInfosSpan[i], moveInfosSpan[i - 1]);
+          }
         }
+      } while (numSwapped > 0);
+    }
+  }
 
-        double scoreDiff = scores[i] - scores[i - 1];
-        if (scoreDiff > DIFF_THRESHOLD)
-        {
-          numSwapped++;
 
-          // Swap scores, children and actions.
-          (scores[i - 1], scores[i]) = (scores[i], scores[i - 1]);
-          (moveInfosSpan[i - 1], moveInfosSpan[i]) = (moveInfosSpan[i], moveInfosSpan[i - 1]);
-        }
+  /// <summary>
+  /// Applies a displacement-capped sort to reorder moveInfosSpan based on scores,
+  /// ensuring no element moves more than maxDisplacement positions from its original index.
+  /// </summary>
+  private static void ApplyDisplacementCappedSort(Span<double> scores, Span<GEdgeHeaderStruct> moveInfosSpan,
+                                                  int maxDisplacement, float minProbabilityForBoost)
+  {
+    int n = scores.Length;
 
+    // Get the permutation from SortDisplacementCapped.
+    Span<int> permutation = n <= 256 ? stackalloc int[n] : new int[n];
+    SortDisplacementCapped(scores, maxDisplacement, permutation);
+
+    // Apply the permutation to moveInfosSpan.
+    // Use a temporary buffer to hold the reordered elements.
+    Span<GEdgeHeaderStruct> temp = n <= 64 ? stackalloc GEdgeHeaderStruct[n] : new GEdgeHeaderStruct[n];
+
+    for (int i = 0; i < n; i++)
+    {
+      temp[i] = moveInfosSpan[permutation[i]];
+    }
+
+    // Copy back to original span (only for elements with sufficient probability).
+    for (int i = 0; i < n; i++)
+    {
+      // Do not reorder low probability nodes.
+      if (temp[i].P < minProbabilityForBoost)
+      {
+        break;
       }
-    } while (numSwapped > 0);
-
+      moveInfosSpan[i] = temp[i];
+    }
   }
 
 
