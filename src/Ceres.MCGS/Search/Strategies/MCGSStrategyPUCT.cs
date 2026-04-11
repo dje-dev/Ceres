@@ -161,7 +161,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     // ****************** HARDCODED CONSTANTS *****************
     const float MIN_PROBABILITY_FOR_ACTION_BOOST = 0;
     const double DIFF_THRESHOLD = 0.02;
-    const int MAX_SWAPS = 5;
+    const int MAX_SWAPS = 3;
 
     Debug.Assert(node.N == 1);
     if (paramsSelect.FPUMode != ParamsSelect.FPUType.ActionHead
