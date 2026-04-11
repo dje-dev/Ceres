@@ -56,7 +56,7 @@ namespace Ceres.Chess.Textual
       }
       catch (Exception exc)
       {
-        throw new Exception($"Unable to parse the FEN: {fen}");
+        throw new Exception($"Unable to parse the FEN: {fen} -- {exc.Message}", exc);
       }
     }
 
@@ -210,44 +210,50 @@ namespace Ceres.Chess.Textual
 
         foreach (char c in castlingRights)
         {
-          //first check for normal castling rights
+          // KQkq notation: rook must be on rank 1 (white) / rank 8 (black) — the initial
+          // rook placement. Without the rank filter, a mid-game rook encountered earlier
+          // in FEN parse order could be mis-selected, corrupting WhiteKRInitPlacement.
           if (c == 'K' && whiteRookSquares.Count > 0)
           {
-            Square rook = whiteRookSquares.First(x => x.FileChar > whiteKingSquare.FileChar); //this is needed when KQkq castling rights is in use in chess960
+            Square rook = whiteRookSquares.First(x => x.FileChar > whiteKingSquare.FileChar && x.Rank == 0);
             whiteCanOO = true;
             rookInfo.WhiteKRInitPlacement = rook.SquareIndexStartH1;
           }
 
           else if (c == 'Q' && whiteRookSquares.Count > 0)
           {
-            Square rook = whiteRookSquares.First(x => x.FileChar < whiteKingSquare.FileChar);
+            Square rook = whiteRookSquares.First(x => x.FileChar < whiteKingSquare.FileChar && x.Rank == 0);
             whiteCanOOO = true;
             rookInfo.WhiteQRInitPlacement = rook.SquareIndexStartH1;
           }
-          
+
           else if (c == 'k' && blackRookSquares.Count > 0)
           {
-            Square rook = blackRookSquares.First(x => x.FileChar > blackKingSquare.FileChar);
+            Square rook = blackRookSquares.First(x => x.FileChar > blackKingSquare.FileChar && x.Rank == 7);
             blackCanOO = true;
             rookInfo.BlackKRInitPlacement = (byte)(rook.SquareIndexStartH1 - 56);
           }
-          
+
           else if (c == 'q' && blackRookSquares.Count > 0)
           {
-            Square rook = blackRookSquares.First(x => x.FileChar < blackKingSquare.FileChar);
+            Square rook = blackRookSquares.First(x => x.FileChar < blackKingSquare.FileChar && x.Rank == 7);
             blackCanOOO = true;
             rookInfo.BlackQRInitPlacement = (byte)(rook.SquareIndexStartH1 - 56);
           }
 
           else //next chess960 castling rights
           {
+            // As with KQkq, the castling rook must be on rank 1 / rank 8 — it is the
+            // initial rook placement. FindIndex is used instead of FirstOrDefault to
+            // avoid the ambiguity where default(Square) equals A1 (rank 0, file 0).
             if (char.IsUpper(c) && whiteRookSquares.Count > 0) // White's castling rights
             {
-              Square whiteRook = whiteRookSquares.FirstOrDefault(x => x.FileChar == c);
-              if (whiteRook == default)
+              int idx = whiteRookSquares.FindIndex(x => x.FileChar == c && x.Rank == 0);
+              if (idx < 0)
               {
-                throw new Exception($"Chess960 castling rights specify file '{c}' but no white rook found on that file");
+                throw new Exception($"Chess960 castling rights specify file '{c}' but no white rook found at {c}1");
               }
+              Square whiteRook = whiteRookSquares[idx];
               bool kingIsLowerChar = whiteKingSquare.FileChar < c;
               if (kingIsLowerChar)
               {
@@ -263,11 +269,12 @@ namespace Ceres.Chess.Textual
 
             if (char.IsLower(c) && blackRookSquares.Count > 0) // black's castling rights
             {
-              Square blackRook = blackRookSquares.FirstOrDefault(x => x.FileChar == Char.ToUpper(c));
-              if (blackRook == default)
+              int idx = blackRookSquares.FindIndex(x => x.FileChar == Char.ToUpper(c) && x.Rank == 7);
+              if (idx < 0)
               {
-                throw new Exception($"Chess960 castling rights specify file '{c}' but no black rook found on that file");
+                throw new Exception($"Chess960 castling rights specify file '{c}' but no black rook found at {Char.ToUpper(c)}8");
               }
+              Square blackRook = blackRookSquares[idx];
               bool kingIsLowerChar = blackKingSquare.FileChar < Char.ToUpper(c);
               if (kingIsLowerChar)
               {
