@@ -1151,10 +1151,22 @@ public class NNEvaluatorTensorRT : NNEvaluator
         int posActionOffset = offsets.Action + i * actionSizePerPos;
         ReadOnlySpan<float> actionLogits = subBatchOutput.AsSpan().Slice(posActionOffset, actionSizePerPos);
 
+        // Cap at NUM_MOVE_SLOTS to match CompressedActionVector's inline-array capacity
+        // (matches the truncation already performed by CompressedPolicyVector.Initialize).
+        int mvLimit = Math.Min(numMoves, CompressedPolicyVector.NUM_MOVE_SLOTS);
+
         // Extract action WDL for each legal move using nnIndex (analogous to policy)
-        for (int mv = 0; mv < numMoves; mv++)
+        for (int mv = 0; mv < mvLimit; mv++)
         {
           int nnIndex = indices[mv]; // Use nnIndex to index into action tensor [1858, 3]
+          // Defensive: policy loop already handles nnIndex < 0 by using NegativeInfinity logit,
+          // so write default here to keep the action slot index-aligned with the policy slot
+          // prior to SortWithActions inside CompressedPolicyVector.Initialize.
+          if (nnIndex < 0 || 3 * nnIndex + 2 >= actionSizePerPos)
+          {
+            actions[resultIndex][mv] = default;
+            continue;
+          }
           int baseActionIndex = 3 * nnIndex;
 
           float a0 = actionLogits[baseActionIndex];     // W logit
@@ -1830,10 +1842,23 @@ public class NNEvaluatorTensorRT : NNEvaluator
         int posActionOffset = offsets.Action + i * actionSizePerPos;
         ReadOnlySpan<float> actionLogits = subBatchOutput.AsSpan().Slice(posActionOffset, actionSizePerPos);
 
+        // Cap at NUM_MOVE_SLOTS to match CompressedActionVector's inline-array capacity
+        // (matches the truncation already performed by CompressedPolicyVector.Initialize).
+        int mvLimit = Math.Min(numMoves, CompressedPolicyVector.NUM_MOVE_SLOTS);
+
         // Extract action WDL for each legal move using nnIndex (analogous to policy)
-        for (int mv = 0; mv < numMoves; mv++)
+        for (int mv = 0; mv < mvLimit; mv++)
         {
           int nnIndex = indices[mv]; // Use nnIndex to index into action tensor [1858, 3]
+          // IndexNeuralNet can return -1 for moves that are not representable in the NN format;
+          // the adjacent policy loop already handles this via NegativeInfinity logit. Write
+          // default here to keep the action slot index-aligned with the policy slot prior to
+          // SortWithActions inside CompressedPolicyVector.Initialize.
+          if (nnIndex < 0 || 3 * nnIndex + 2 >= actionSizePerPos)
+          {
+            actions[resultIndex][mv] = default;
+            continue;
+          }
           int baseActionIndex = 3 * nnIndex;
 
           float a0 = actionLogits[baseActionIndex];     // W logit
