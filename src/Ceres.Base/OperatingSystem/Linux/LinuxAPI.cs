@@ -62,12 +62,8 @@ namespace Ceres.Base.OperatingSystem.Linux
     {
       get
       {
-        // API not reliable under Linux, so return 1TB.
-        // TODO: improve.
-        return (long)1024 * (long)1024 * (long)1024 * (long)1024;
-
-        const int _SC_PAGESIZE = 8;
-        const int _SC_PHYS_PAGES = 11;
+        const int _SC_PAGESIZE = 30;
+        const int _SC_PHYS_PAGES = 85;
         return sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
       }
     }
