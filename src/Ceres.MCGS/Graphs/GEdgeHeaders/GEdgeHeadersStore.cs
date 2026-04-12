@@ -56,7 +56,7 @@ public class GEdgeHeadersStore : MemoryBufferOSBlocked<GEdgeHeaderStruct>
   /// children, as constrained by the data structures.
   /// See comment above.
   /// </summary>
-  public const int MAX_NODES = GraphStoreConfig.ENABLE_MAX_SEARCH_GRAPH ? 2_100_000_000 : 1_050_000_000;
+  public const int MAX_NODES = GraphStoreConfig.ENABLE_MAX_SEARCH_GRAPH ? 2_100_000_000 : 1_100_000_000;
 
   /// <summary>
   /// Extra edge headers for oversizing.
