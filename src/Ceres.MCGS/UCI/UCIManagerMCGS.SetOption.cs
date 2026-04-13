@@ -224,12 +224,14 @@ public partial class UCIManagerMCGS
         break;
 
       case "loglivestats":
-        SetBool(value, ref logLiveStats);
+        // Purely controls output-formatting decisions in info lines; no engine state.
+        SetBool(value, ref logLiveStats, reinitializeEngine: false);
         break;
 
       case "uci_chess960":
-        SetBool(value, ref UCI_Chess960);
-        IsChess960OptionSet = UCI_Chess960;          
+        // Purely controls how castling moves are formatted in UCI output; no engine state.
+        SetBool(value, ref UCI_Chess960, reinitializeEngine: false);
+        IsChess960OptionSet = UCI_Chess960;
         break;
 
       case "mcgs":
@@ -281,7 +283,8 @@ public partial class UCIManagerMCGS
         break;
 
       case "verbosemovestats":
-        SetBool(value, ref verboseMoveStats);
+        // Purely controls whether verbose move stats lines are emitted; no engine state.
+        SetBool(value, ref verboseMoveStats, reinitializeEngine: false);
         break;
 
       case "scoretype":
@@ -317,11 +320,13 @@ public partial class UCIManagerMCGS
         break;
 
       case "perpvcounters":
-        SetBool(value, ref perPVCounters);
+        // Purely controls info-line formatting (useParentN); no engine state.
+        SetBool(value, ref perPVCounters, reinitializeEngine: false);
         break;
 
       case "uci_showwdl":
-        SetBool(value, ref showWDL);
+        // Purely controls whether WDL is emitted in info lines; no engine state.
+        SetBool(value, ref showWDL, reinitializeEngine: false);
         break;
 
       case "reducedmemorymode":
@@ -520,7 +525,7 @@ public partial class UCIManagerMCGS
       OutStream.WriteLine("Invalid value, expected true or false");
     }
 
-    if (CeresEngine != null)
+    if (reinitializeEngine && CeresEngine != null)
     {
       ReinitializeEngine();
     }
