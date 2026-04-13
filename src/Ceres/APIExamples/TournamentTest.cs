@@ -61,7 +61,7 @@ namespace Ceres.APIExamples
        {
          var name when name.ToUpper().Contains("SUPER") => new int[] { 0,1 },
          var name when name.ToUpper().Contains("DGX") => [0, 1, 2, 3],
-         var name when name.ToUpper().Contains("HOP") => [0, 1, 2, 3],
+         var name when name.ToUpper().Contains("HOP") => [2, 3],
          _ => new int[] { 0 }
        });
 
@@ -963,6 +963,8 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
 
       //baseName = "UHO_Lichess_4852_v1.epd"; // recommended by Kovax
       baseName = "UHO_Lichess_4852_v1_first.epd"; // approximately first 2500 positions for faster loading
+      //baseName = "DFRC_4852_v1.epd";
+      baseName = "DFRC_80_120.epd"; // lepned filtered (probably from DFRC_4852_v1)
       //baseName = "tcec_big";
       //baseName = "test1.epd";
       //baseName = "UHO_Lichess_4582_v1_last_10000.epd";
