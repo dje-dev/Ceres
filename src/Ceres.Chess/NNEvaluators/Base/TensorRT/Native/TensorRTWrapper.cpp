@@ -78,8 +78,19 @@ namespace
   std::mutex g_mutex;
   TRTLogger g_logger;
   nvinfer1::IRuntime* g_runtime = nullptr;
-  std::string g_lastError;
+  // When true, release g_mutex during buildSerializedNetwork to allow
+  // concurrent multi-GPU engine builds. Set to false to serialize all builds.
+  static constexpr bool ENABLE_CONCURRENT_BUILDS = true;
+
+  static constexpr size_t ERROR_BUF_SIZE = 4096;
+  static thread_local char g_lastError[ERROR_BUF_SIZE] = {};
+
   bool g_initialized = false;
+
+  // Global timing cache directory, set from cacheDir in the cached-load functions.
+  // When set, engine builds will load/save a persistent timing cache
+  // to avoid re-profiling kernel tactics across builds.
+  std::string g_timingCacheDir;
 
   // Thread-local cache for current CUDA device to avoid redundant cudaSetDevice() calls.
   // Value of -1 means no device has been set on this thread yet.
@@ -106,7 +117,8 @@ namespace
 
   void SetError(const std::string& error)
   {
-    g_lastError = error;
+    strncpy(g_lastError, error.c_str(), ERROR_BUF_SIZE - 1);
+    g_lastError[ERROR_BUF_SIZE - 1] = '\0';
   }
 
   // Get element size in bytes for a TensorRT data type
@@ -241,7 +253,7 @@ extern "C"
     }
 
     g_initialized = true;
-    g_lastError.clear();
+    g_lastError[0] = '\0';
     return 0;
   }
 
@@ -262,7 +274,6 @@ extern "C"
     }
 
     g_initialized = false;
-    g_lastError.clear();
     return 0;
   }
 
@@ -273,8 +284,8 @@ extern "C"
 
   TRT_API const char* TRT_GetLastError()
   {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    return g_lastError.empty() ? nullptr : g_lastError.c_str();
+    // g_lastError is thread-local, no mutex needed
+    return g_lastError[0] ? g_lastError : nullptr;
   }
 
   TRT_API void TRT_InitBuildOptions(TRT_BuildOptions* options)
@@ -315,6 +326,120 @@ static void PrintYellow(const char* message)
 static void PrintGreen(const char* message)
 {
   PrintColored("\033[32m", message);
+}
+
+// Construct the timing cache file path for a given GPU and TRT version.
+static std::string GetTimingCachePath(const std::string& cacheDir, int deviceId)
+{
+  cudaDeviceProp props;
+  cudaError_t err = cudaGetDeviceProperties(&props, deviceId);
+  char gpuId[64];
+  if (err == cudaSuccess)
+  {
+    snprintf(gpuId, sizeof(gpuId), "sm%d%d_%dsm",
+      props.major, props.minor, props.multiProcessorCount);
+  }
+  else
+  {
+    snprintf(gpuId, sizeof(gpuId), "unknown");
+  }
+  char filename[256];
+  snprintf(filename, sizeof(filename), "timing_cache_%s_trt%ld.bin",
+    gpuId, (long)NV_TENSORRT_VERSION);
+  return cacheDir + "/" + filename;
+}
+
+// Load an existing timing cache from disk, or create an empty one.
+// Attaches the cache to the builder config so the build can reuse
+// previously profiled kernel tactic timings.
+static void LoadOrCreateTimingCache(nvinfer1::IBuilderConfig* config,
+  const std::string& cacheDir, int deviceId)
+{
+  if (cacheDir.empty())
+    return;
+
+  std::string cachePath = GetTimingCachePath(cacheDir, deviceId);
+  std::vector<char> cacheData;
+
+  // Try to load existing timing cache file
+  std::ifstream file(cachePath, std::ios::binary | std::ios::ate);
+  if (file.is_open())
+  {
+    std::streamsize size = file.tellg();
+    if (size > 0)
+    {
+      file.seekg(0, std::ios::beg);
+      cacheData.resize(size);
+      file.read(cacheData.data(), size);
+    }
+    file.close();
+  }
+
+  // Only attach a timing cache when we have actual data from a prior build.
+  // Creating an empty cache and setting it can crash on some TRT versions.
+  // On first run (no cache file), the build runs without a timing cache,
+  // and SaveTimingCache writes one afterwards for subsequent builds to use.
+  if (!cacheData.empty())
+  {
+    nvinfer1::ITimingCache* cache = config->createTimingCache(
+      cacheData.data(), cacheData.size());
+    if (cache)
+    {
+      config->setTimingCache(*cache, false);
+      fprintf(stderr, "[TensorRT] Loaded timing cache (%zu bytes) from %s\n",
+        cacheData.size(), cachePath.c_str());
+      delete cache;
+    }
+  }
+}
+
+// Save the timing cache from a builder config to disk.
+// Uses atomic write (write to .tmp then rename) to avoid corruption.
+static void SaveTimingCache(nvinfer1::IBuilderConfig* config,
+  const std::string& cacheDir, int deviceId)
+{
+  if (cacheDir.empty())
+    return;
+
+  // getTimingCache returns a pointer owned by the config -- do NOT delete it
+  const nvinfer1::ITimingCache* cache = config->getTimingCache();
+  if (!cache)
+    return;
+
+  nvinfer1::IHostMemory* serialized = cache->serialize();
+  if (!serialized || serialized->size() == 0)
+  {
+    delete serialized;
+    return;
+  }
+
+  std::string cachePath = GetTimingCachePath(cacheDir, deviceId);
+  std::string tmpPath = cachePath + ".tmp";
+
+  std::ofstream file(tmpPath, std::ios::binary);
+  if (file.is_open())
+  {
+    file.write(static_cast<const char*>(serialized->data()), serialized->size());
+    file.close();
+    // Atomic rename
+    if (std::rename(tmpPath.c_str(), cachePath.c_str()) == 0)
+    {
+      fprintf(stderr, "[TensorRT] Saved timing cache (%zu bytes) to %s\n",
+        serialized->size(), cachePath.c_str());
+    }
+    else
+    {
+      fprintf(stderr, "[TensorRT WARNING] Failed to rename timing cache from %s to %s\n",
+        tmpPath.c_str(), cachePath.c_str());
+    }
+  }
+  else
+  {
+    fprintf(stderr, "[TensorRT WARNING] Failed to write timing cache to %s\n",
+      tmpPath.c_str());
+  }
+
+  delete serialized;
 }
 
 // Helper: check if a layer name matches any normalization naming convention.
@@ -777,19 +902,142 @@ static bool IsSmolgenNormLayer(const char* layerName)
   return name.find("/attention/ln1/") != std::string::npos;
 }
 
+// Apply workspace limit, precision flags, refit, and profiling verbosity to a builder config.
+static void ApplyBuildFlags(nvinfer1::IBuilderConfig* config,
+  const TRT_BuildOptions* opts, int32_t deviceId)
+{
+  // Set explicit workspace limit to allow more tactic exploration
+  size_t workspaceBytes = (4ULL << 30); // 4 GB 
+  config->setMemoryPoolLimit(nvinfer1::MemoryPoolType::kWORKSPACE, workspaceBytes);
+
+  if (opts->useBest) config->setFlag(nvinfer1::BuilderFlag::kPREFER_PRECISION_CONSTRAINTS);
+  if (opts->useFP16) config->setFlag(nvinfer1::BuilderFlag::kFP16);
+  if (opts->useBF16) config->setFlag(nvinfer1::BuilderFlag::kBF16);
+  if (opts->useFP8) config->setFlag(nvinfer1::BuilderFlag::kFP8);
+
+  if (opts->refittable)
+  {
+    config->setFlag(nvinfer1::BuilderFlag::kREFIT_IDENTICAL);
+    fprintf(stderr, "[TensorRT] Building with REFIT_IDENTICAL support enabled\n");
+  }
+
+  // Layer names only -- sufficient for engine inspector queries
+  config->setProfilingVerbosity(nvinfer1::ProfilingVerbosity::kLAYER_NAMES_ONLY);
+}
+
+// Apply FP32 precision overrides for normalization layers, softmax, and all-norms.
+static void ApplyPrecisionOverrides(nvinfer1::IBuilderConfig* config,
+  nvinfer1::INetworkDefinition* network, const TRT_BuildOptions* opts)
+{
+  // Force FP32 precision for normalization layers to prevent FP16 overflow.
+  // Three modes: broad (fp32PostAttentionNorm) = all normalization layers (recommended),
+  //              strict (fp32PostAttentionNormStrict) = only main encoder ln1 (LC0-specific),
+  //              smolgen (fp32SmolgenNorm) = only smolgen attention ln1 (LC0-specific).
+  if (opts->fp32PostAttentionNorm || opts->fp32PostAttentionNormStrict || opts->fp32SmolgenNorm)
+  {
+    config->setFlag(nvinfer1::BuilderFlag::kOBEY_PRECISION_CONSTRAINTS);
+
+    const char* modeName = "broad";
+    int layersMarked = 0;
+    int totalLayers = network->getNbLayers();
+
+    auto residualNormSet = FindResidualStreamNormLayers(network, totalLayers);
+
+    for (int32_t i = 0; i < totalLayers; ++i)
+    {
+      auto* layer = network->getLayer(i);
+      bool shouldMark = false;
+
+      if (opts->fp32SmolgenNorm)
+      {
+        shouldMark = IsSmolgenNormLayer(layer->getName());
+        modeName = "smolgen";
+      }
+      else if (opts->fp32PostAttentionNormStrict)
+      {
+        shouldMark = IsPostAttentionNormLayerStrict(layer->getName());
+        modeName = "strict";
+      }
+      else
+      {
+        shouldMark = residualNormSet.count(i) > 0;
+      }
+
+      if (shouldMark)
+      {
+        layer->setPrecision(nvinfer1::DataType::kFLOAT);
+        for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
+        {
+          layer->setOutputType(j, nvinfer1::DataType::kFLOAT);
+        }
+        layersMarked++;
+      }
+    }
+    fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for normalization (%s mode)\n",
+      layersMarked, totalLayers, modeName);
+  }
+
+  // Force FP32 for all Softmax layers (prevents exp() overflow in FP16)
+  if (opts->fp32Softmax)
+  {
+    config->setFlag(nvinfer1::BuilderFlag::kOBEY_PRECISION_CONSTRAINTS);
+    int totalLayers = network->getNbLayers();
+    int softmaxMarked = 0;
+    for (int32_t i = 0; i < totalLayers; ++i)
+    {
+      auto* layer = network->getLayer(i);
+      if (layer->getType() == nvinfer1::LayerType::kSOFTMAX)
+      {
+        layer->setPrecision(nvinfer1::DataType::kFLOAT);
+        for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
+        {
+          layer->setOutputType(j, nvinfer1::DataType::kFLOAT);
+        }
+        softmaxMarked++;
+      }
+    }
+    fprintf(stderr, "[TensorRT] Marked %d Softmax layers as FP32\n", softmaxMarked);
+  }
+
+  // Force FP32 for normalization chains (scope: 1=all, 2=QKV, 3=smolgen, 4=QKV+smolgen)
+  if (opts->fp32AllNorms)
+  {
+    config->setFlag(nvinfer1::BuilderFlag::kOBEY_PRECISION_CONSTRAINTS);
+    int totalLayers = network->getNbLayers();
+    auto allNormSet = FindAllNormLayers(network, totalLayers, opts->fp32AllNorms);
+    int normsMarked = 0;
+    for (int32_t i = 0; i < totalLayers; ++i)
+    {
+      if (allNormSet.count(i) > 0)
+      {
+        auto* layer = network->getLayer(i);
+        layer->setPrecision(nvinfer1::DataType::kFLOAT);
+        for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
+        {
+          layer->setOutputType(j, nvinfer1::DataType::kFLOAT);
+        }
+        normsMarked++;
+      }
+    }
+    fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for norms (scope=%d)\n",
+      normsMarked, totalLayers, opts->fp32AllNorms);
+  }
+}
+
 extern "C"
 {
 
   TRT_API TRT_EngineHandle TRT_LoadONNXWithOptions(const char* onnxPath, int32_t batchSize,
     const TRT_BuildOptions* options)
   {
-    std::lock_guard<std::mutex> lock(g_mutex);
-
+    std::unique_lock<std::mutex> lock(g_mutex);
     if (!g_initialized)
     {
       SetError("TensorRT not initialized");
       return nullptr;
     }
+    std::string timingCacheDir = g_timingCacheDir;
+    if (ENABLE_CONCURRENT_BUILDS) lock.unlock();
 
     // Use defaults if options is null
     TRT_BuildOptions defaultOptions;
@@ -852,128 +1100,10 @@ extern "C"
         static_cast<nvinfer1::TilingOptimizationLevel>(opts->tilingOptimizationLevel));
     }
 
-    // Precision flags
-    if (opts->useBest)
-    {
-      config->setFlag(nvinfer1::BuilderFlag::kPREFER_PRECISION_CONSTRAINTS);
-    }
-    if (opts->useFP16)
-    {
-      config->setFlag(nvinfer1::BuilderFlag::kFP16);
-    }
-    if (opts->useBF16)
-    {
-      config->setFlag(nvinfer1::BuilderFlag::kBF16);
-    }
-    if (opts->useFP8)
-    {
-      config->setFlag(nvinfer1::BuilderFlag::kFP8);
-    }
-
-    // Enable refit support if requested
-    if (opts->refittable)
-    {
-      config->setFlag(nvinfer1::BuilderFlag::kREFIT_IDENTICAL);
-      fprintf(stderr, "[TensorRT] Building with REFIT_IDENTICAL support enabled\n");
-    }
-
-    // Enable detailed profiling for layer precision inspection
-    config->setProfilingVerbosity(nvinfer1::ProfilingVerbosity::kDETAILED);
-
-    // Force FP32 precision for normalization layers to prevent FP16 overflow.
-    // Three modes: broad (fp32PostAttentionNorm) = all normalization layers (recommended),
-    //              strict (fp32PostAttentionNormStrict) = only main encoder ln1 (LC0-specific),
-    //              smolgen (fp32SmolgenNorm) = only smolgen attention ln1 (LC0-specific).
-    if (opts->fp32PostAttentionNorm || opts->fp32PostAttentionNormStrict || opts->fp32SmolgenNorm)
-    {
-      config->setFlag(nvinfer1::BuilderFlag::kOBEY_PRECISION_CONSTRAINTS);
-
-      const char* modeName = "broad";
-      int layersMarked = 0;
-      int totalLayers = network->getNbLayers();
-
-      // Compute residual-stream norm layer set for the broad mode
-      auto residualNormSet = FindResidualStreamNormLayers(network.get(), totalLayers);
-
-      for (int32_t i = 0; i < totalLayers; ++i)
-      {
-        auto* layer = network->getLayer(i);
-        bool shouldMark = false;
-
-        if (opts->fp32SmolgenNorm)
-        {
-          shouldMark = IsSmolgenNormLayer(layer->getName());
-          modeName = "smolgen";
-        }
-        else if (opts->fp32PostAttentionNormStrict)
-        {
-          shouldMark = IsPostAttentionNormLayerStrict(layer->getName());
-          modeName = "strict";
-        }
-        else
-        {
-          shouldMark = residualNormSet.count(i) > 0;
-        }
-
-        if (shouldMark)
-        {
-          layer->setPrecision(nvinfer1::DataType::kFLOAT);
-          for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
-          {
-            layer->setOutputType(j, nvinfer1::DataType::kFLOAT);
-          }
-          layersMarked++;
-        }
-      }
-      fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for normalization (%s mode)\n",
-        layersMarked, totalLayers, modeName);
-    }
-
-    // Force FP32 for all Softmax layers (prevents exp() overflow in FP16)
-    if (opts->fp32Softmax)
-    {
-      config->setFlag(nvinfer1::BuilderFlag::kOBEY_PRECISION_CONSTRAINTS);
-      int totalLayers = network->getNbLayers();
-      int softmaxMarked = 0;
-      for (int32_t i = 0; i < totalLayers; ++i)
-      {
-        auto* layer = network->getLayer(i);
-        if (layer->getType() == nvinfer1::LayerType::kSOFTMAX)
-        {
-          layer->setPrecision(nvinfer1::DataType::kFLOAT);
-          for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
-          {
-            layer->setOutputType(j, nvinfer1::DataType::kFLOAT);
-          }
-          softmaxMarked++;
-        }
-      }
-      fprintf(stderr, "[TensorRT] Marked %d Softmax layers as FP32\n", softmaxMarked);
-    }
-
-    // Force FP32 for normalization chains (scope: 1=all, 2=QKV, 3=smolgen, 4=QKV+smolgen)
-    if (opts->fp32AllNorms)
-    {
-      config->setFlag(nvinfer1::BuilderFlag::kOBEY_PRECISION_CONSTRAINTS);
-      int totalLayers = network->getNbLayers();
-      auto allNormSet = FindAllNormLayers(network.get(), totalLayers, opts->fp32AllNorms);
-      int normsMarked = 0;
-      for (int32_t i = 0; i < totalLayers; ++i)
-      {
-        if (allNormSet.count(i) > 0)
-        {
-          auto* layer = network->getLayer(i);
-          layer->setPrecision(nvinfer1::DataType::kFLOAT);
-          for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
-          {
-            layer->setOutputType(j, nvinfer1::DataType::kFLOAT);
-          }
-          normsMarked++;
-        }
-      }
-      fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for norms (scope=%d)\n",
-        normsMarked, totalLayers, opts->fp32AllNorms);
-    }
+    int32_t currentDevice;
+    cudaGetDevice(&currentDevice);
+    ApplyBuildFlags(config.get(), opts, currentDevice);
+    ApplyPrecisionOverrides(config.get(), network.get(), opts);
 
     // Determine batch sizes for optimization profile
     int32_t minBatch = (opts->minBatchSize > 0) ? opts->minBatchSize : batchSize;
@@ -1002,9 +1132,16 @@ extern "C"
     }
     config->addOptimizationProfile(profile);
 
+    // Load persistent timing cache to reuse kernel tactic profiling from prior builds
+    LoadOrCreateTimingCache(config.get(), timingCacheDir, currentDevice);
+
     // Build engine
     auto serializedEngine = std::unique_ptr<nvinfer1::IHostMemory>(
       builder->buildSerializedNetwork(*network, *config));
+
+    // Save updated timing cache after build (even if build failed, cache may have new entries)
+    SaveTimingCache(config.get(), timingCacheDir, currentDevice);
+
     if (!serializedEngine)
     {
       SetError("Failed to build engine");
@@ -1012,6 +1149,7 @@ extern "C"
     }
 
     // Deserialize engine
+    if (ENABLE_CONCURRENT_BUILDS) lock.lock();
     nvinfer1::ICudaEngine* engine = g_runtime->deserializeCudaEngine(
       serializedEngine->data(), serializedEngine->size());
     if (!engine)
@@ -1124,7 +1262,7 @@ extern "C"
       }
     }
 
-    g_lastError.clear();
+    g_lastError[0] = '\0';
     return ec;
   }
 
@@ -1146,7 +1284,6 @@ extern "C"
       cudaError_t err = cudaSetDevice(deviceId);
       if (err != cudaSuccess)
       {
-        std::lock_guard<std::mutex> lock(g_mutex);
         SetError("Failed to set CUDA device " + std::to_string(deviceId));
         return nullptr;
       }
@@ -1406,7 +1543,7 @@ extern "C"
       return nullptr;
     }
 
-    g_lastError.clear();
+    g_lastError[0] = '\0';
     return ec;
   }
 
@@ -1469,7 +1606,7 @@ extern "C"
       return nullptr;
     }
 
-    g_lastError.clear();
+    g_lastError[0] = '\0';
     return ec;
   }
 
@@ -1581,6 +1718,13 @@ extern "C"
     int32_t* outWasCached)
   {
     if (outWasCached) *outWasCached = 0;
+
+    // Set timing cache directory for the build function to use.
+    // The build function reads g_timingCacheDir under g_mutex.
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      g_timingCacheDir = (cacheDir && cacheDir[0]) ? cacheDir : "";
+    }
 
     TRT_BuildOptions defaultOpts;
     TRT_InitBuildOptions(&defaultOpts);
@@ -2975,13 +3119,14 @@ extern "C"
     const TRT_BuildOptions* options, int32_t deviceId,
     TRT_EngineHandle* outHandles)
   {
-    std::lock_guard<std::mutex> lock(g_mutex);
-
+    std::unique_lock<std::mutex> lock(g_mutex);
     if (!g_initialized)
     {
       SetError("TensorRT not initialized");
       return -1;
     }
+    std::string timingCacheDir = g_timingCacheDir;
+    if (ENABLE_CONCURRENT_BUILDS) lock.unlock();
 
     if (!batchSizes || numProfiles <= 0 || !outHandles)
     {
@@ -3075,110 +3220,8 @@ extern "C"
         static_cast<nvinfer1::TilingOptimizationLevel>(opts->tilingOptimizationLevel));
     }
 
-    if (opts->useBest) config->setFlag(nvinfer1::BuilderFlag::kPREFER_PRECISION_CONSTRAINTS);
-    if (opts->useFP16) config->setFlag(nvinfer1::BuilderFlag::kFP16);
-    if (opts->useBF16) config->setFlag(nvinfer1::BuilderFlag::kBF16);
-    if (opts->useFP8) config->setFlag(nvinfer1::BuilderFlag::kFP8);
-
-    if (opts->refittable)
-    {
-      config->setFlag(nvinfer1::BuilderFlag::kREFIT_IDENTICAL);
-      fprintf(stderr, "[TensorRT] Building multi-profile with REFIT_IDENTICAL support enabled\n");
-    }
-
-    config->setProfilingVerbosity(nvinfer1::ProfilingVerbosity::kDETAILED);
-
-    // Force FP32 precision for normalization layers to prevent FP16 overflow.
-    if (opts->fp32PostAttentionNorm || opts->fp32PostAttentionNormStrict || opts->fp32SmolgenNorm)
-    {
-      config->setFlag(nvinfer1::BuilderFlag::kOBEY_PRECISION_CONSTRAINTS);
-
-      const char* modeName = "broad";
-      int layersMarked = 0;
-      int totalLayers = network->getNbLayers();
-
-      // Compute residual-stream norm layer set for the broad mode
-      auto residualNormSet = FindResidualStreamNormLayers(network.get(), totalLayers);
-
-      for (int32_t i = 0; i < totalLayers; ++i)
-      {
-        auto* layer = network->getLayer(i);
-        bool shouldMark = false;
-
-        if (opts->fp32SmolgenNorm)
-        {
-          shouldMark = IsSmolgenNormLayer(layer->getName());
-          modeName = "smolgen";
-        }
-        else if (opts->fp32PostAttentionNormStrict)
-        {
-          shouldMark = IsPostAttentionNormLayerStrict(layer->getName());
-          modeName = "strict";
-        }
-        else
-        {
-          shouldMark = residualNormSet.count(i) > 0;
-        }
-
-        if (shouldMark)
-        {
-          layer->setPrecision(nvinfer1::DataType::kFLOAT);
-          for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
-          {
-            layer->setOutputType(j, nvinfer1::DataType::kFLOAT);
-          }
-          layersMarked++;
-        }
-      }
-      fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for normalization (%s mode)\n",
-        layersMarked, totalLayers, modeName);
-    }
-
-    // Force FP32 for all Softmax layers (prevents exp() overflow in FP16)
-    if (opts->fp32Softmax)
-    {
-      config->setFlag(nvinfer1::BuilderFlag::kOBEY_PRECISION_CONSTRAINTS);
-      int totalLayers = network->getNbLayers();
-      int softmaxMarked = 0;
-      for (int32_t i = 0; i < totalLayers; ++i)
-      {
-        auto* layer = network->getLayer(i);
-        if (layer->getType() == nvinfer1::LayerType::kSOFTMAX)
-        {
-          layer->setPrecision(nvinfer1::DataType::kFLOAT);
-          for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
-          {
-            layer->setOutputType(j, nvinfer1::DataType::kFLOAT);
-          }
-          softmaxMarked++;
-        }
-      }
-      fprintf(stderr, "[TensorRT] Marked %d Softmax layers as FP32\n", softmaxMarked);
-    }
-
-    // Force FP32 for normalization chains (scope: 1=all, 2=QKV, 3=smolgen, 4=QKV+smolgen)
-    if (opts->fp32AllNorms)
-    {
-      config->setFlag(nvinfer1::BuilderFlag::kOBEY_PRECISION_CONSTRAINTS);
-      int totalLayers = network->getNbLayers();
-      auto allNormSet = FindAllNormLayers(network.get(), totalLayers, opts->fp32AllNorms);
-      int normsMarked = 0;
-      for (int32_t i = 0; i < totalLayers; ++i)
-      {
-        if (allNormSet.count(i) > 0)
-        {
-          auto* layer = network->getLayer(i);
-          layer->setPrecision(nvinfer1::DataType::kFLOAT);
-          for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
-          {
-            layer->setOutputType(j, nvinfer1::DataType::kFLOAT);
-          }
-          normsMarked++;
-        }
-      }
-      fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for norms (scope=%d)\n",
-        normsMarked, totalLayers, opts->fp32AllNorms);
-    }
+    ApplyBuildFlags(config.get(), opts, deviceId);
+    ApplyPrecisionOverrides(config.get(), network.get(), opts);
 
     // Create N optimization profiles (one per batch size, Exact mode: min=opt=max)
     for (int32_t p = 0; p < numProfiles; ++p)
@@ -3218,9 +3261,16 @@ extern "C"
       basename.c_str(), batchDesc.c_str(), numProfiles);
     PrintYellow(msg);
 
+    // Load persistent timing cache to reuse kernel tactic profiling from prior builds
+    LoadOrCreateTimingCache(config.get(), timingCacheDir, deviceId);
+
     // Build serialized engine
     auto serializedEngine = std::unique_ptr<nvinfer1::IHostMemory>(
       builder->buildSerializedNetwork(*network, *config));
+
+    // Save updated timing cache after build (even if build failed, cache may have new entries)
+    SaveTimingCache(config.get(), timingCacheDir, deviceId);
+
     if (!serializedEngine)
     {
       SetError("Failed to build multi-profile engine");
@@ -3228,6 +3278,7 @@ extern "C"
     }
 
     // Deserialize engine
+    if (ENABLE_CONCURRENT_BUILDS) lock.lock();
     nvinfer1::ICudaEngine* engine = g_runtime->deserializeCudaEngine(
       serializedEngine->data(), serializedEngine->size());
     if (!engine)
@@ -3265,7 +3316,7 @@ extern "C"
       outHandles[p] = ec;
     }
 
-    g_lastError.clear();
+    g_lastError[0] = '\0';
     return 0;
   }
 
@@ -3339,6 +3390,12 @@ extern "C"
     int32_t* outWasCached, TRT_EngineHandle* outHandles)
   {
     if (outWasCached) *outWasCached = 0;
+
+    // Set timing cache directory for the build function to use.
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      g_timingCacheDir = (cacheDir && cacheDir[0]) ? cacheDir : "";
+    }
 
     TRT_BuildOptions defaultOpts;
     TRT_InitBuildOptions(&defaultOpts);
@@ -3420,7 +3477,7 @@ extern "C"
                 PrintGreen(msg);
 
                 if (outWasCached) *outWasCached = 1;
-                g_lastError.clear();
+                g_lastError[0] = '\0';
                 return 0;
               }
               // CreateContextsFromEngine deleted engine on failure
@@ -3550,7 +3607,7 @@ extern "C"
       basename.c_str(), batchDesc.c_str(), numProfiles);
     PrintGreen(msg);
 
-    g_lastError.clear();
+    g_lastError[0] = '\0';
     return 0;
   }
 
