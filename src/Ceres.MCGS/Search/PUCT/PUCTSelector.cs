@@ -24,6 +24,7 @@ using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
 using Ceres.Chess;
 using Ceres.MCGS.Graphs;
+using Ceres.MCGS.Graphs.GEdgeHeaders;
 using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Managers;
@@ -310,7 +311,7 @@ public static class PUCTSelector
       {
         thresholdPUCTSuboptimalityReject = paramsSearch.VisitSuboptimalityRejectThreshold.Value;
       }
-
+      
       numVisitsAccepted = PUCTScoreCalcVector.ScoreCalcMulti(paramsSelect,
                                                               node.IsSearchRoot, nodeRef.N,
                                                               parentNumInFlight,
@@ -319,8 +320,70 @@ public static class PUCTSelector
                                                               qWhenNoChildrenComposite,
                                                               numToProcess, numTargetVisits,
                                                               scores, childVisitCounts, cpuctMultiplier,
-                                                              thresholdPUCTSuboptimalityReject);      
-      
+                                                              thresholdPUCTSuboptimalityReject);
+
+      // Verbose output to compare ActionHead mode vs default mode
+      const bool VERBOSE_ACTION_HEAD = false;
+      if (VERBOSE_ACTION_HEAD && paramsSelect.FPUMode == ParamsSelect.FPUType.ActionHead)
+      {
+        int numExpanded = node.NumEdgesExpanded;
+        string FormatScoreRow(string label, Func<int, string> valueFunc)
+        {
+          IEnumerable<string> values = Enumerable.Range(0, numToProcess)
+            .Select(i => valueFunc(i) + (i == numExpanded - 1 ? " |" : ""));
+          return $"{label,-25} " + string.Join(" ", values);
+        }
+
+        // Get moves - copy to array to avoid span in lambda issue
+        string[] moveStrs = new string[numToProcess];
+        Span<GEdgeHeaderStruct> edgeHeaders = node.EdgeHeadersSpan;
+        for (int i = 0; i < numToProcess; i++)
+        {
+          if (i < numExpanded)
+          {
+            moveStrs[i] = node.ChildEdgeAtIndex(i).Move.ToString().PadLeft(6);
+          }
+          else
+          {
+            moveStrs[i] = edgeHeaders[i].Move.ToString().PadLeft(6);
+          }
+        }
+
+        // Compute scores WITHOUT ActionHead (default mode)
+        double[] scoresWithoutActionHead = new double[numToProcess];
+        PUCTScoreCalcVector.ScoreCalcMulti(paramsSelect,
+                                           node.IsSearchRoot, nodeRef.N,
+                                           parentNumInFlight,
+                                           nodeRef.Q, sumPVisited,
+                                           stats,
+                                           null, // qWhenNoChildrenComposite = null for default mode
+                                           numToProcess, 0, // numTargetVisits=0 to only compute scores
+                                           scoresWithoutActionHead, default, cpuctMultiplier,
+                                           thresholdPUCTSuboptimalityReject);
+
+        // Compute scores WITH ActionHead
+        double[] scoresWithActionHead = new double[numToProcess];
+        PUCTScoreCalcVector.ScoreCalcMulti(paramsSelect,
+                                           node.IsSearchRoot, nodeRef.N,
+                                           parentNumInFlight,
+                                           nodeRef.Q, sumPVisited,
+                                           stats,
+                                           qWhenNoChildrenComposite,
+                                           numToProcess, 0, // numTargetVisits=0 to only compute scores
+                                           scoresWithActionHead, default, cpuctMultiplier,
+                                           thresholdPUCTSuboptimalityReject);
+
+        string fen = node.CalcPosition().ToPosition.FEN;
+        Console.WriteLine();
+        Console.WriteLine($"NumEdgesExpanded = {numExpanded}, N = {nodeRef.N}, Q = {nodeRef.Q:0.00} {fen}");
+        Console.WriteLine(FormatScoreRow("Moves:", i => moveStrs[i]));
+        Console.WriteLine(FormatScoreRow("Policy:", i => (100 * stats.P.Span[i]).ToString("0.0").PadLeft(5) + "%"));
+        Console.WriteLine(FormatScoreRow("Scores (default):", i => scoresWithoutActionHead[i].ToString("0.00").PadLeft(6)));
+        Console.WriteLine(FormatScoreRow("Scores (ActionHead):", i => scoresWithActionHead[i].ToString("0.00").PadLeft(6)));
+        Console.WriteLine(FormatScoreRow("Action values:", i => stats.A.Span[i].ToString("0.00").PadLeft(6)));
+        Console.WriteLine();
+      }
+
       // In action head mode the selected children may want to fall out of order.
       if (numTargetVisits > 0  && paramsSelect.FPUMode == ParamsSelect.FPUType.ActionHead)
       {
