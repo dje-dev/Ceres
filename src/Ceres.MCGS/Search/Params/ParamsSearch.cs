@@ -346,7 +346,7 @@ public record ParamsSearch
   /// rather than rewriting entire graph. This can consume additional memory
   /// but reduce time spent preparing graph for reuse.
   /// </summary>
-  public bool GraphReuseRewriteEnabled = true;// !CeresUserSettingsManager.Settings.ReducedMemoryMode;
+  public bool GraphReuseRewriteEnabled = false;// !CeresUserSettingsManager.Settings.ReducedMemoryMode;
 
   /// <summary>
   /// If another search graph should be consulted to possibly reuse NN evaluations.
