@@ -68,11 +68,11 @@ public record ParamsSelect
   public const float MinPolicyProbability = 0.005f;
 
   /// <summary>
-  /// If the univisited children should be reordered upon first visit
+  /// When action head enabled, if the univisited children should be reordered upon first visit
   /// using not just policy but instead the PUCT scores inclusive of 
   /// the effect of both policy and value (i.e. using the action head values as fill-in).
   /// </summary>
-  public bool ActionHeadRearrangeUnvisitedChildren = false;
+  public bool ActionHeadRearrangeUnvisitedChildren = true;
 
   public float UCTRootNumeratorExponent = 0.5f;
   public float UCTNonRootNumeratorExponent = 0.5f;

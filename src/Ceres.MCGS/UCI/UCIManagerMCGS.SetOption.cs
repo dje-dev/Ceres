@@ -173,6 +173,11 @@ public partial class UCIManagerMCGS
   float fpuAtRoot = new ParamsSelect().FPUValueAtRoot;
 
   /// <summary>
+  /// If enabled, sets FPU mode to ActionHead with FPUValue=0.10 and FPUValueAtRoot=0.10.
+  /// </summary>
+  bool enableActionHead = false;
+
+  /// <summary>
   /// Set of batch sizes for which CUDA graphs are created.
   /// </summary>
   int[] cudaGraphSizes = [16, 32, 48, 64, 80];
@@ -377,6 +382,10 @@ public partial class UCIManagerMCGS
 
       case "fpuatroot":
         SetFloat(value, 0, float.MaxValue, ref fpuAtRoot, true);
+        break;
+
+      case "enableactionhead":
+        SetBool(value, ref enableActionHead);
         break;
 
       case "cudagraphsizes":
@@ -637,6 +646,7 @@ option name PolicyTemperature type string default {new ParamsSelect().PolicySoft
 option name ValueTemperature type string default {new ParamsSearch().ValueTemperature}
 option name FPU type string default {new ParamsSelect().FPUValue}
 option name FPUAtRoot type string default {new ParamsSelect().FPUValueAtRoot}
+option name EnableActionHead type check default false
 option name SearchLimitMultiplier type string default 1.00
 option name MaxTreeVisits type string default
 option name MaxTreeNodes type string default

@@ -273,6 +273,15 @@ public partial class UCIManagerMCGS
       parms.FPUValue = fpu;
       parms.FPUValueAtRoot = fpuAtRoot;
 
+      // Apply ActionHead settings if enabled
+      if (enableActionHead)
+      {
+        parms.FPUMode = ParamsSelect.FPUType.ActionHead;
+        parms.FPUModeAtRoot = ParamsSelect.FPUType.ActionHead;
+        parms.FPUValue = 0.10f;
+        parms.FPUValueAtRoot = 0.10f;
+      }
+
       SelectModifier?.Invoke(parms);
 
       return parms;
