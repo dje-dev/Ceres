@@ -59,7 +59,7 @@ namespace Ceres.MCGS.GameEngines;
 /// </summary>
 public class GameEngineCeresMCGSInProcess : GameEngine
 {
-  public const string CERES_MCGS_VERSION_STR = "2.20";
+  public const string CERES_MCGS_VERSION_STR = "2.30";
 
   /// <summary>
   /// Definition of neural network evaluator used for execution.
