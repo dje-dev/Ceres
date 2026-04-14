@@ -307,6 +307,26 @@ namespace Ceres.Chess.Positions
 
 
     /// <summary>
+    /// Returns the FEN followed by "moves" and the move list (if any),
+    /// using Chess960 king-captures-rook castling notation when isChess960 is true.
+    /// </summary>
+    public string GetFENAndMovesString(bool isChess960)
+    {
+      if (!isChess960)
+      {
+        return FENAndMovesString;
+      }
+
+      string ret = InitialPosition.FEN;
+      if (Moves != null && Moves.Count > 0)
+      {
+        ret += " moves " + GetMovesStr(isChess960);
+      }
+      return ret;
+    }
+
+
+    /// <summary>
     /// Constructs a new MGMoveSequence given a starting position (as a FEN) 
     /// and an optional string containing a sequence of subsequent moves (in coordinate notation).
     /// </summary>
@@ -614,6 +634,26 @@ namespace Ceres.Chess.Positions
         }
         return moveStr;
       }
+    }
+
+
+    /// <summary>
+    /// Returns space separated sequence of consecutive history moves (in coordinate style),
+    /// using Chess960 king-captures-rook castling notation when isChess960 is true.
+    /// </summary>
+    public string GetMovesStr(bool isChess960)
+    {
+      if (!isChess960)
+      {
+        return MovesStr;
+      }
+
+      string moveStr = "";
+      foreach (MGMove move in Moves)
+      {
+        moveStr += move.MoveStr(MGMoveNotationStyle.Coordinates, isChess960) + " ";
+      }
+      return moveStr;
     }
 
 

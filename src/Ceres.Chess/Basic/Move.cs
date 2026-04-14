@@ -119,6 +119,7 @@ namespace Ceres.Chess
       PieceType movePiece = pos.PieceOnSquare(startSquare).Type;
       if (movePiece == PieceType.King)
       {
+        // Standard castling notation.
         if (uciUpper == "E1G1" || uciUpper == "E8G8")
         {
           return new Move(MoveType.MoveCastleShort);
@@ -126,6 +127,15 @@ namespace Ceres.Chess
         else if (uciUpper == "E1C1" || uciUpper == "E8C8")
         {
           return new Move(MoveType.MoveCastleLong);
+        }
+
+        // Chess960 castling: king captures own rook.
+        Square destSquare = uciMoveStr.Substring(2, 2);
+        Piece destPiece = pos.PieceOnSquare(destSquare);
+        if (destPiece.Type == PieceType.Rook && destPiece.Side == pos.MiscInfo.SideToMove)
+        {
+          bool isKingSide = destSquare.FileChar > startSquare.FileChar;
+          return new Move(isKingSide ? MoveType.MoveCastleShort : MoveType.MoveCastleLong);
         }
       }
 

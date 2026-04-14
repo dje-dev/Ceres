@@ -118,6 +118,11 @@ public class GameEngineCeresInProcess : GameEngine
   /// </summary>
   public List<MGMove> ForcedMoves = null;
 
+  /// <summary>
+  /// If Chess960 mode is active (controls bestmove notation and internal Chess960 flag).
+  /// </summary>
+  public bool IsChess960 { get; set; }
+
 
   #region Internal data
 
@@ -377,7 +382,7 @@ public class GameEngineCeresInProcess : GameEngine
     // TODO is the RootNWhenSearchStarted correct because we may be following a continuation (BestMoveRoot)
 
     GameEngineSearchResultCeres result =
-      new GameEngineSearchResultCeres(bestMoveMG.MoveStr(MGMoveNotationStyle.Coordinates),
+      new GameEngineSearchResultCeres(bestMoveMG.MoveStr(MGMoveNotationStyle.Coordinates, IsChess960),
                                       bestMoveInfo.QOfBest, scoreCeresCP,
                                       searchResult.SearchRootNode.MAvg,
                                       searchResult.Manager.SearchLimit,
