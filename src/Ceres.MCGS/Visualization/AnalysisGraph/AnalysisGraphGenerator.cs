@@ -398,7 +398,7 @@ public class AnalysisGraphGenerator
     string specString = NNNetSpecificationString.ToSpecificationString(specNet.NetCombo, specNet.Nets);
     string posString = analysisPosition.FENAndMovesString.Replace(Position.StartPosition.FEN, "startpos");
     string searchNodesString = $" ({searchRoot.N:N0} visits)";
-    string title = $"Ceres MCGS ({GameEngineCeresMCGSInProcess.CERES_MCGS_VERSION_STR}) Search Visualization\r\n";
+    string title = $"Ceres MCGS ({CeresVersion.VersionString}) Search Visualization\r\n";
     title += $"{specString}";
     if (Options.RelativeTimeReferenceEngine > 0)
     {

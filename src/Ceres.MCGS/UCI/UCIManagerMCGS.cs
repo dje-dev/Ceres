@@ -337,7 +337,7 @@ public partial class UCIManagerMCGS
           break;
 
         case "uci":
-          UCIWriteLine($"id name Ceres {GameEngineCeresMCGSInProcess.CERES_MCGS_VERSION_STR}");
+          UCIWriteLine($"id name Ceres {CeresVersion.VersionString}");
           UCIWriteLine("id author David Elliott and the Ceres Authors");
           UCIWriteLine(SetOptionUCIDescriptions);
           UCIWriteLine("uciok");
