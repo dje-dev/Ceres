@@ -22,8 +22,6 @@ using System.Threading;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.UserSettings;
-using Ceres.Base.DataTypes;
-
 #endregion
 
 namespace Ceres.Features.Tournaments
@@ -100,36 +98,45 @@ namespace Ceres.Features.Tournaments
     int numGamePairsLaunched = 0;
     readonly object lockObj = new();
 
-    RandomDrawWithoutReplacement<int> openingsDraws = null;
     int[] shuffledOpeningIndices = null;
+    int[] randomizedOpeningIndices = null;
 
 
     /// <summary>
-    /// Method called by threads to get the next available game to be played.
+    /// Method called by threads to get the next available opening to be played.
+    /// Returns an opening index, or -1 when the requested number of game pairs has been reached.
+    /// Throws if NumGamePairs exceeds available openings (repeating openings is not supported).
     /// </summary>
-    /// <returns></returns>
     int GetNextOpeningIndexForLocalThread(int numOpeningsAvailable, int maxOpenings)
     {
-      if (numGamePairsLaunched >= maxOpenings)
+      if (numOpeningsAvailable <= 0)
       {
-        return -1;
+        throw new ArgumentException("No openings available.");
+      }
+
+      if (maxOpenings > numOpeningsAvailable)
+      {
+        throw new Exception($"NumGamePairs ({maxOpenings}) exceeds available openings ({numOpeningsAvailable}). "
+                          + "Reduce NumGamePairs or provide a larger opening book.");
       }
 
       lock (lockObj)
       {
+        if (numGamePairsLaunched >= maxOpenings)
+        {
+          return -1;
+        }
+
+        int pairIndex = numGamePairsLaunched++;
+
         switch (Def.OpeningRandomization)
         {
           case OpeningRandomizationEnum.None:
-            return numGamePairsLaunched++;
+            return pairIndex;
 
           case OpeningRandomizationEnum.ShuffleDeterministic:
             if (shuffledOpeningIndices == null)
             {
-              if (numOpeningsAvailable < maxOpenings)
-              {
-                throw new Exception($"Insufficient openings in opening book to play {maxOpenings} games.");
-              }
-
               shuffledOpeningIndices = new int[numOpeningsAvailable];
               for (int i = 0; i < numOpeningsAvailable; i++)
               {
@@ -145,32 +152,30 @@ namespace Ceres.Features.Tournaments
                 (shuffledOpeningIndices[k], shuffledOpeningIndices[n]) = (shuffledOpeningIndices[n], shuffledOpeningIndices[k]);
               }
             }
-            return shuffledOpeningIndices[numGamePairsLaunched++];
+            return shuffledOpeningIndices[pairIndex];
 
           case OpeningRandomizationEnum.Randomize:
-            if (openingsDraws == null)
+            if (randomizedOpeningIndices == null)
             {
-              if (numOpeningsAvailable < maxOpenings)
-              {
-                throw new Exception($"Insufficient openings in opening book to play {maxOpenings} games.");
-              }
-
-              // Create an array of indices of all possible openings.
-              int[] numbers = new int[numOpeningsAvailable];
+              randomizedOpeningIndices = new int[numOpeningsAvailable];
               for (int i = 0; i < numOpeningsAvailable; i++)
               {
-                numbers[i] = i;
+                randomizedOpeningIndices[i] = i;
               }
 
-              // Create a random chooser on top of that list.
-              openingsDraws = new RandomDrawWithoutReplacement<int>(numbers);
+              Random rng = new Random(); // Non-deterministic seed
+              int n = randomizedOpeningIndices.Length;
+              while (n > 1)
+              {
+                n--;
+                int k = rng.Next(n + 1);
+                (randomizedOpeningIndices[k], randomizedOpeningIndices[n]) = (randomizedOpeningIndices[n], randomizedOpeningIndices[k]);
+              }
             }
-
-            numGamePairsLaunched++;
-            return openingsDraws.TryDraw(out int openingIndex) ? openingIndex : -1;
+            return randomizedOpeningIndices[pairIndex];
 
           default:
-            throw new Exception($"Unknown RandomizeOpenings mode: {Def.OpeningRandomization}");
+            throw new Exception($"Unknown OpeningRandomization mode: {Def.OpeningRandomization}");
         }
       }
     }
@@ -333,23 +338,24 @@ namespace Ceres.Features.Tournaments
       // Second loop creates and launches tasks for each.
       for (int i = 0; i < numConcurrent; i++)
       {
+        int threadIndex = i; // Local copy to avoid closure-over-loop-variable bug.
         TournamentGameThread gameTest = gameThreads[i];
 
         Action action;
         if (QueueManager == null)
         {
           // Everything happens locally, data structures updated as part of processing.
-          action = () => ThreadProcLocalWorker(i, gameTest);
+          action = () => ThreadProcLocalWorker(threadIndex, gameTest);
         }
         else if (QueueManager.IsCoordinator)
         {
           // We are coordinator. Repeatedly enqueue request to play game pairs and retireve/show results.
-          action = () => ThreadProcCoordinator(i, gameTest);
+          action = () => ThreadProcCoordinator(threadIndex, gameTest);
         }
         else
         {
           // Worker method (which will forward result data structure back to coordinator).
-          action = () => ThreadProcDistributedWorker(i, gameTest);
+          action = () => ThreadProcDistributedWorker(threadIndex, gameTest);
         }
 
         Task thisTask = new Task(action, default, TaskCreationOptions.LongRunning);

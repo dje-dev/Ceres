@@ -91,31 +91,6 @@ namespace Ceres.Features.Tournaments
 
     public TournamentGameRunner Run;
 
-    int numGamePairsLaunched = 0;
-    readonly object lockObj = new();
-
-    /// <summary>
-    /// Method called by threads to get the next available game to be played.
-    /// </summary>
-    /// <returns></returns>
-    int GetNextOpeningIndexForLocalThread(int maxOpenings)
-    {
-      if (Def.OpeningRandomization != OpeningRandomizationEnum.None)
-      {
-        throw new NotImplementedException();
-      }
-
-      lock (lockObj)
-      {
-        if (numGamePairsLaunched < maxOpenings)
-        {
-          return numGamePairsLaunched++;
-        }
-        else
-          return -1;
-      }
-    }
-
     public void RunGameTests(int runnerIndex, Func<int, int> getGamePairToProcess,
                              Action<TournamentGameInfo, TournamentGameInfo> doneGamePairCallback = null)
     {
@@ -142,8 +117,6 @@ namespace Ceres.Features.Tournaments
       // Def.Logger.WriteLine($"Begin {def.NumGames} game test with limit {def.SearchLimitEngine1} {def.SearchLimitEngine2} ID { gameSequenceNum } ");
       int numPairsProcessed = 0;
 
-      int maxOpenings = Math.Min(Def.NumGamePairs ?? int.MaxValue, openings.Count);
-
       while (!Def.parentDef.ShouldShutDown)
       {
         int openingIndex = getGamePairToProcess(openings.Count);
@@ -159,31 +132,30 @@ namespace Ceres.Features.Tournaments
         bool clearHashTable = isFirstGameOfPossiblePair;
 #endif
 
-        int gameSequenceNum = openingIndex * 2;
-
-        // The engine going second could possibly benefit 
-        // if REUSE_POSITION_EVALUATIONS_FROM_OTHER_TREE is true.
-        // Therefore we alternate each pair which one goes first.
-        int roundNumber = 1 + gameSequenceNum / 2;
-
-        // Alternate which side gets white to avoid any clustered imbalance
-        // which could happen if multiple threads are active
-        // (possibly otherwise all first giving white to one particular side).
-        bool engine2White = (numPairsProcessed + runnerIndex) % 2 == 0;
+        int numEngines = Run.Engines.Length;
+        int pairsPerOpening = string.IsNullOrEmpty(Def.ReferenceEngineId)
+          ? (numEngines * (numEngines - 1)) / 2
+          : numEngines - 1;
+        int baseGameSequenceNum = openingIndex * pairsPerOpening * 2;
+        int roundNumber = 1 + openingIndex;
 
         if (string.IsNullOrEmpty(Def.ReferenceEngineId))
         {
           List<GameEngine> list = new List<GameEngine>(Run.Engines);
           int engine1Index = 0;
+          int pairCount = 0;
           while (list.Count > 1)
           {
             for (int i = 1; i < list.Count; i++)
             {
               Run.SetEnginePair(engine1Index, i + engine1Index);
 
-              TournamentGameInfo gameInfo = RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
-              TournamentGameInfo gameReverseInfo = RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
+              bool engine2White = (numPairsProcessed + runnerIndex + pairCount) % 2 == 0;
+              int pairSeqNum = baseGameSequenceNum + pairCount * 2;
+              TournamentGameInfo gameInfo = RunGame(pgnFileName, engine2White, openingIndex, pairSeqNum, roundNumber);
+              TournamentGameInfo gameReverseInfo = RunGame(pgnFileName, !engine2White, openingIndex, pairSeqNum + 1, roundNumber);
               doneGamePairCallback?.Invoke(gameInfo, gameReverseInfo);
+              pairCount++;
             }
             list.RemoveAt(0);
             engine1Index++;
@@ -200,17 +172,20 @@ namespace Ceres.Features.Tournaments
           }
 
           int index = Array.IndexOf(Run.Engines, refEngine);
+          int pairCount = 0;
           for (int i = 0; i < Run.Engines.Length; i++)
           {
             if (index == i)
             {
               continue;
             }
-            GameEngine engineToPair = Run.Engines[i];
             Run.SetEnginePair(index, i);
-            TournamentGameInfo gameInfo = RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
-            TournamentGameInfo gameReverseInfo = RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
+            bool engine2White = (numPairsProcessed + runnerIndex + pairCount) % 2 == 0;
+            int pairSeqNum = baseGameSequenceNum + pairCount * 2;
+            TournamentGameInfo gameInfo = RunGame(pgnFileName, engine2White, openingIndex, pairSeqNum, roundNumber);
+            TournamentGameInfo gameReverseInfo = RunGame(pgnFileName, !engine2White, openingIndex, pairSeqNum + 1, roundNumber);
             doneGamePairCallback?.Invoke(gameInfo, gameReverseInfo);
+            pairCount++;
           }
           numPairsProcessed++;
         }
