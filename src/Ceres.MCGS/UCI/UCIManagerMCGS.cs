@@ -278,6 +278,7 @@ public partial class UCIManagerMCGS
       {
         parms.FPUMode = ParamsSelect.FPUType.ActionHead;
         parms.FPUModeAtRoot = ParamsSelect.FPUType.ActionHead;
+        parms.ActionHeadRearrangeUnvisitedChildren = true;
         parms.FPUValue = 0.10f;
         parms.FPUValueAtRoot = 0.10f;
       }
