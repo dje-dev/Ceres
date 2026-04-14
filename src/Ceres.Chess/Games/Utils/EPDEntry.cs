@@ -221,7 +221,10 @@ namespace Ceres.Chess.Games.Utils
 
       if (posBMOrAM == -1)
       {
-        GetFENAndStartMovesFromFENStr(epdLine, out FEN, out StartMoves);
+        // Strip EPD annotations (everything after first semicolon).
+        int semiPos = epdLine.IndexOf(';');
+        string fenPart = semiPos >= 0 ? epdLine.Substring(0, semiPos).TrimEnd() : epdLine;
+        GetFENAndStartMovesFromFENStr(fenPart, out FEN, out StartMoves);
       }
       else
       {

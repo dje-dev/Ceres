@@ -100,6 +100,11 @@ namespace Ceres.Chess.GameEngines
     public virtual string OverrideLaunchExecutable => null;
 
     /// <summary>
+    /// If position communication should use Chess960 king-captures-rook castling notation.
+    /// </summary>
+    public bool IsChess960 { get; set; }
+
+    /// <summary>
     /// If this engine supports playing best value move.
     /// </summary>
     public virtual bool SupportsBestValueMoveMode => false;
@@ -238,11 +243,11 @@ namespace Ceres.Chess.GameEngines
       switch (searchLimit.Type)
       {
         case SearchLimitType.SecondsPerMove:
-          gameInfo = UCIRunner.EvalPositionToMovetime(curPositionAndMoves.FENAndMovesString, (int)(searchLimit.Value * 1000));
+          gameInfo = UCIRunner.EvalPositionToMovetime(curPositionAndMoves.GetFENAndMovesString(IsChess960), (int)(searchLimit.Value * 1000));
           break;
 
         case SearchLimitType.NodesPerMove:
-          gameInfo = UCIRunner.EvalPositionToNodes(curPositionAndMoves.FENAndMovesString, (int)(searchLimit.Value));
+          gameInfo = UCIRunner.EvalPositionToNodes(curPositionAndMoves.GetFENAndMovesString(IsChess960), (int)(searchLimit.Value));
           break;
 
         case SearchLimitType.NodesPerTree:
@@ -252,7 +257,7 @@ namespace Ceres.Chess.GameEngines
         case SearchLimitType.BestValueMove:
           if (SupportsBestValueMoveMode)
           {
-            gameInfo = UCIRunner.EvalPosition(curPositionAndMoves.FENAndMovesString, "value", 1, "go value");
+            gameInfo = UCIRunner.EvalPosition(curPositionAndMoves.GetFENAndMovesString(IsChess960), "value", 1, "go value");
             break;
           }
           else
@@ -263,7 +268,7 @@ namespace Ceres.Chess.GameEngines
         case SearchLimitType.BestActionMove:
           if (SupportsBestActionMoveMode)
           {
-            gameInfo = UCIRunner.EvalPosition(curPositionAndMoves.FENAndMovesString, "action", 1, "go action");
+            gameInfo = UCIRunner.EvalPosition(curPositionAndMoves.GetFENAndMovesString(IsChess960), "action", 1, "go action");
             break;
           }
           else
@@ -275,7 +280,7 @@ namespace Ceres.Chess.GameEngines
         case SearchLimitType.NodesForAllMoves:
            using (new TimingBlock(new TimingStats(), TimingBlock.LoggingType.None))
           {
-            gameInfo = UCIRunner.EvalPositionRemainingNodes(curPositionAndMoves.FENAndMovesString,
+            gameInfo = UCIRunner.EvalPositionRemainingNodes(curPositionAndMoves.GetFENAndMovesString(IsChess960),
                                                             weAreWhite,
                                                             searchLimit.MaxMovesToGo,
                                                             (int)(searchLimit.Value),
@@ -287,7 +292,7 @@ namespace Ceres.Chess.GameEngines
         case SearchLimitType.SecondsForAllMoves:
            using (new TimingBlock(new TimingStats(), TimingBlock.LoggingType.None))
           {
-            gameInfo = UCIRunner.EvalPositionRemainingTime(curPositionAndMoves.FENAndMovesString,
+            gameInfo = UCIRunner.EvalPositionRemainingTime(curPositionAndMoves.GetFENAndMovesString(IsChess960),
                                                            weAreWhite,
                                                            searchLimit.MaxMovesToGo,
                                                            (int)(searchLimit.Value * 1000),

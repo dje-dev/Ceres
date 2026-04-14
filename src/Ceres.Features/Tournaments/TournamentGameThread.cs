@@ -28,7 +28,9 @@ using Chess.Ceres.PlayEvaluation;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Iteration;
+using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
+using Ceres.MCTS.GameEngines;
 
 #endregion
 
@@ -280,6 +282,80 @@ namespace Ceres.Features.Tournaments
 
     Dictionary<int, TournamentGameInfo> GameInfoFirstFinishedForByOpening = new();
 
+    /// <summary>
+    /// Returns true if the given position has Chess960 characteristics
+    /// (non-standard rook placement or non-standard king file with castling rights).
+    /// </summary>
+    static bool PositionIsChess960(in Position pos)
+    {
+      if (!pos.MiscInfo.CastlingRightsAny)
+      {
+        return false;
+      }
+
+      // Non-standard rook placement detected by FENParser.
+      if (pos.MiscInfo.RookInfo.RawValue != 0)
+      {
+        return true;
+      }
+
+      // Standard rook placement but check if king is not on standard e-file.
+      // E-file = file index 4. Check both white and black kings.
+      if (pos.MiscInfo.WhiteCanOO || pos.MiscInfo.WhiteCanOOO)
+      {
+        Piece whiteKingPiece = pos.PieceOnSquare(new Square("e1"));
+        if (whiteKingPiece.Type != PieceType.King || whiteKingPiece.Side != SideType.White)
+        {
+          return true;
+        }
+      }
+
+      if (pos.MiscInfo.BlackCanOO || pos.MiscInfo.BlackCanOOO)
+      {
+        Piece blackKingPiece = pos.PieceOnSquare(new Square("e8"));
+        if (blackKingPiece.Type != PieceType.King || blackKingPiece.Side != SideType.Black)
+        {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+
+    bool? lastChess960Mode = null;
+
+    /// <summary>
+    /// Sets Chess960 mode on all engines if it has changed since last game.
+    /// For UCI engines, sends the UCI_Chess960 option.
+    /// For Ceres in-process engines, sets the IsChess960 property.
+    /// </summary>
+    void SetEnginesChess960Mode(bool isChess960)
+    {
+      if (lastChess960Mode == isChess960)
+      {
+        return;
+      }
+
+      lastChess960Mode = isChess960;
+      MGPositionConstants.IsChess960 = isChess960;
+
+      string valueStr = isChess960 ? "true" : "false";
+      foreach (GameEngine engine in Run.Engines)
+      {
+        if (engine is GameEngineUCI uciEngine)
+        {
+          uciEngine.IsChess960 = isChess960;
+          uciEngine.UCIRunner.SendCommand($"setoption name UCI_Chess960 value {valueStr}");
+        }
+        else if (engine is GameEngineCeresInProcess ceresEngine)
+        {
+          ceresEngine.IsChess960 = isChess960;
+        }
+      }
+    }
+
+
     private TournamentGameInfo RunGame(string pgnFileName, bool engine2White, int openingIndex, int gameSequenceNum, int roundNumber)
     {
       TournamentGameInfo thisResult;
@@ -293,6 +369,13 @@ namespace Ceres.Features.Tournaments
                                   engine2White ? Run.Engine1.ID : Run.Engine2.ID,
                                   extraTags.ToArray());
 
+      // Auto-detect Chess960 from current opening's initial position.
+      // Uses RookPlacementInfo populated by FENParser (RawValue == 0 for standard rook placement)
+      // and king square check for the case where rooks are on standard files but king is not on e-file.
+      PositionWithHistory opening = openings.GetAtIndex(openingIndex);
+      bool gameIsChess960 = PositionIsChess960(opening.InitialPosMG.ToPosition);
+      SetEnginesChess960Mode(gameIsChess960);
+      pgnWriter.IsChess960 = gameIsChess960;
 
       TimingStats gameTimingStats = new TimingStats();
       using (new TimingBlock(gameTimingStats, TimingBlock.LoggingType.None))

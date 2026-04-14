@@ -38,6 +38,11 @@ namespace Ceres.Chess.Games
     int numPlyWritten = 0;
     Position startingPos;
 
+    /// <summary>
+    /// If set, emits [Variant "Chess960"] and [SetUp "1"] tags and always writes the FEN.
+    /// </summary>
+    public bool IsChess960 { get; set; }
+
     StringBuilder header = new StringBuilder();
     StringBuilder body = new StringBuilder();
 
@@ -78,13 +83,20 @@ namespace Ceres.Chess.Games
 
     public void WriteStartPosition(string startingFEN)
     {
-      if (startingFEN != Position.StartPosition.FEN)
+      if (IsChess960)
+      {
+        WriteTag("Variant", "Chess960");
+        WriteTag("SetUp", "1");
+        FENParseResult parsedFEN = FENParser.ParseFEN(startingFEN);
+        startingPos = parsedFEN.AsPosition;
+        WriteTag("FEN", startingFEN);
+      }
+      else if (startingFEN != Position.StartPosition.FEN)
       {
         FENParseResult parsedFEN = FENParser.ParseFEN(startingFEN);
         startingPos = parsedFEN.AsPosition;
         WriteTag("FEN", startingFEN);
       }
-
     }
 
 
