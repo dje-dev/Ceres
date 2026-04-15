@@ -16,6 +16,7 @@
 using System;
 using System.Diagnostics;
 using Ceres.Base.DataTypes;
+using Ceres.MCGS.Graphs;
 using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Managers;
@@ -111,4 +112,12 @@ public abstract class MCGSSelectBackupStrategyBase
   /// <param name="numTargetVisits"></param>
   /// <returns></returns>
   internal abstract int NumChildrenToConsider(GNode node, int numTargetVisits);
+
+
+  /// <summary>
+  /// Possibly reorders unvisited children by PUCT scores (blending policy and action head values)
+  /// on the node's second visit, before any child selection occurs.
+  /// Default implementation is a no-op; overridden by strategies that support action head rearrangement.
+  /// </summary>
+  internal virtual void PossiblyActionResortUnvisitedChildren(GNode node, Graph graph) { }
 }

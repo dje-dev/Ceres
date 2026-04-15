@@ -15,19 +15,16 @@
 
 using System;
 using System.Diagnostics;
-
-using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
 
+using Ceres.MCGS.Graphs;
+using Ceres.MCGS.Graphs.GEdgeHeaders;
+using Ceres.MCGS.Graphs.GEdges;
+using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Managers;
+using Ceres.MCGS.Search.Coordination;
 using Ceres.MCGS.Search.Params;
 using Ceres.MCGS.Search.PUCT;
-using Ceres.MCGS.Search.Coordination;
-
-using Ceres.MCGS.Graphs.GEdges;
-using Ceres.MCGS.Graphs.GEdgeHeaders;
-using Ceres.MCGS.Graphs.GNodes;
-using Ceres.MCGS.Graphs;
 
 #endregion
 
@@ -156,12 +153,25 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
 
 
 
-  void PossiblyRearrangeOrderUsingAction(GNode node, Graph graph, in ParamsSearch paramsSearch, in ParamsSelect paramsSelect)
+  /// <inheritdoc/>
+  internal override void PossiblyActionResortUnvisitedChildren(GNode node, Graph graph)
+  {
+    if (ParamsSelect.ActionResortUnvisitedChildren)
+    {
+      PossiblyActionResortUsingAction(node, graph, ParamsSearch, ParamsSelect);
+    }
+  }
+
+
+  void PossiblyActionResortUsingAction(GNode node, Graph graph, in ParamsSearch paramsSearch, in ParamsSelect paramsSelect)
   {
     // ****************** HARDCODED CONSTANTS *****************
+    const bool CONSERVATIVE_ACTION_RESORT_MODE = true;
+
+    const bool ACTION_REARRANGE_PIN_TOP_POLICY_MOVE = CONSERVATIVE_ACTION_RESORT_MODE; // if the top policy move is conservatively ineligible for rearrangement
+    const int MAX_SWAPS = CONSERVATIVE_ACTION_RESORT_MODE ? 3 : 7;
     const float MIN_PROBABILITY_FOR_ACTION_BOOST = 0;
     const double DIFF_THRESHOLD = 0.02;
-    const int MAX_SWAPS = 7;
 
     Debug.Assert(node.N == 1);
     if (paramsSelect.FPUMode != ParamsSelect.FPUType.ActionHead
@@ -196,7 +206,14 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
 
     if (MAX_SWAPS > 0)
     {
-      ApplyDisplacementCappedSort(scores, moveInfosSpan, MAX_SWAPS, MIN_PROBABILITY_FOR_ACTION_BOOST);
+      if (ACTION_REARRANGE_PIN_TOP_POLICY_MOVE)
+      {
+        ApplyDisplacementCappedSort(scores[1..], moveInfosSpan[1..], MAX_SWAPS, MIN_PROBABILITY_FOR_ACTION_BOOST);
+      }
+      else
+      {
+        ApplyDisplacementCappedSort(scores, moveInfosSpan, MAX_SWAPS, MIN_PROBABILITY_FOR_ACTION_BOOST);
+      }
     }
     else
     {
@@ -345,13 +362,6 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
                                                        out Span<double> childScores)
   {
     CheckThreadStaticsInitialized();
-
-    // Possibly rearrange univisited children based on PUCT
-    // (using both policy and action head values).
-    if (parentNode.NumEdgesExpanded == 0 && ParamsSelect.ActionHeadRearrangeUnvisitedChildren)
-    {
-      PossiblyRearrangeOrderUsingAction(parentNode, Engine.Graph, ParamsSearch, ParamsSelect);
-    }
 
     // Allocate space to hold visit counts/scores at this level (if not already allocated).
     if (childVisitCountsArray[depth] == null)

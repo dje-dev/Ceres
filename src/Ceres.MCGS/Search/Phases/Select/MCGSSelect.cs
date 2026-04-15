@@ -194,6 +194,14 @@ public class MCGSSelect
     Debug.Assert(parentPosMG != default);
 
     MCGSSelectBackupStrategyBase strategy = path.Strategy;
+
+    // Reorder unvisited children by PUCT scores (blending policy and action head)
+    // on second visit, before any child selection (fast path or full PUCT).
+    if (parentNode.NumEdgesExpanded == 0 && parentNode.N >= 1)
+    {
+      strategy.PossiblyActionResortUnvisitedChildren(parentNode, Engine.Graph);
+    }
+
     int numChildrenToConsider = strategy.NumChildrenToConsider(parentNode, numAttemptedVisits);
     numChildrenToConsider = Math.Min(parentNode.NumPolicyMoves, numChildrenToConsider);
 
