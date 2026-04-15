@@ -50,10 +50,17 @@ public static class GraphReuseManager
 
   /// <summary>
   /// Ratio of search root N to total nodes below which rewrite is triggered.
-  /// This is done because typically this indicates that much of the 
+  /// This is done because typically this indicates that much of the
   /// graph is not relevant to the current search root.
   /// </summary>
-  public const float REWRITE_RATIO_THRESHOLD = 0.10f;
+  public const float REWRITE_RATIO_THRESHOLD = 0.05f;
+
+  /// <summary>
+  /// Estimated reachability fraction (from sampling) below which the graph
+  /// is abandoned outright, even if rewrite is enabled. The estimate is an
+  /// upper bound, so the true reachable fraction is at most this value.
+  /// </summary>
+  public const float LOW_REACHABILITY_ABANDON_THRESHOLD = 0.15f;
 
   /// <summary>
   /// Maximum retention fraction for full rewrite.
@@ -367,7 +374,12 @@ public static class GraphReuseManager
       return graph;
     }
 
-    // Check rewrite triggers
+    // --- Graph rewrite/abandon decision logic ---
+    // Three standard triggers: memory pressure, node capacity, low search-root ratio.
+    // Additionally, a sampled reachability estimate is always computed for large graphs.
+    // If estimated reachable fraction < LOW_REACHABILITY_ABANDON_THRESHOLD (upper bound),
+    // the graph is abandoned outright even if rewrite is enabled, since rewriting a
+    // nearly-unreachable graph is not worth the overhead.
     GC.Collect(0);
     HardwareManager.ProcessMemoryInfo memInfo = HardwareManager.GetProcessMemoryInfo();
     float memFraction = (float)(memInfo.PrivateBytes / (double)paramsSearch.MaxMemoryBytes);
@@ -376,21 +388,41 @@ public static class GraphReuseManager
     bool lowRatio = ratioSearchRootToTotal < REWRITE_RATIO_THRESHOLD;
     float nodeCapacityFraction = (float)numNodesUsed / graph.Store.MaxNodes;
     bool nodeCapacityPressure = nodeCapacityFraction >= NODE_CAPACITY_PRESSURE_THRESHOLD;
+    bool standardTrigger = memoryPressure || nodeCapacityPressure || lowRatio;
+
     string rewriteReason = memoryPressure ? "memory pressure"
                          : nodeCapacityPressure ? "node capacity pressure"
                          : lowRatio ? "low ratio"
                          : null;
 
-    if (!memoryPressure && !nodeCapacityPressure && !lowRatio)
+    // Always estimate reachability when graph is large enough to consider.
+    float reachabilityFraction = EstimateReachability(graph, searchRootNodeInfo, priorMoves);
+    bool lowReachability = reachabilityFraction < LOW_REACHABILITY_ABANDON_THRESHOLD;
+
+    if (lowReachability)
+    {
+      // Low reachability forces abandonment regardless of rewrite setting.
+      string reason = standardTrigger
+        ? $"{rewriteReason} + low reachability ({reachabilityFraction:P1})"
+        : $"low reachability ({reachabilityFraction:P1})";
+
+      LogGraphAbandonment(graph, searchRootNodeInfo, searchRootN, numNodesUsed,
+                          ratioSearchRootToTotal, memFraction, reason, priorMoves);
+
+      graph.Dispose();
+      searchRootPathFromGraphRoot = null;
+      return null;
+    }
+
+    if (!standardTrigger)
     {
       return graph;
     }
 
-    // Rewrite triggered
+    // Standard trigger fired with sufficient reachability.
     if (!paramsSearch.GraphReuseRewriteEnabled)
     {
       // Rewrite would have been triggered but feature is disabled.
-      // Must abandon graph and start fresh.
       LogGraphAbandonment(graph, searchRootNodeInfo, searchRootN, numNodesUsed,
                           ratioSearchRootToTotal, memFraction, rewriteReason, priorMoves);
 
@@ -503,6 +535,22 @@ public static class GraphReuseManager
   }
 
   /// <summary>
+  /// Estimates the fraction of graph nodes reachable from the search root
+  /// using a fast sampling approach. Returns an upper bound.
+  /// </summary>
+  private static float EstimateReachability(Graph graph,
+                                            GraphRootToSearchRootNodeInfo searchRootNodeInfo,
+                                            PositionWithHistory priorMoves)
+  {
+    NodeIndex newRootIndex = searchRootNodeInfo.ChildNode.Index;
+    GraphRewriter.RewriteResult estimateResult = GraphRewriter.MakeChildNewRoot(
+      graph, newRootIndex, priorMoves,
+      maxRetentionFraction: 0.001f,
+      maxSampledReachabilityFraction: 0.001f);
+    return estimateResult.RetentionFraction;
+  }
+
+  /// <summary>
   /// Logs graph abandonment information.
   /// </summary>
   private static void LogGraphAbandonment(Graph graph,
@@ -514,25 +562,9 @@ public static class GraphReuseManager
                                           string rewriteReason,
                                           PositionWithHistory priorMoves)
   {
-    // Estimate how many nodes would survive if we did rewrite (only if logging enabled).
-    string estimatedSurvivalStr = "";
-    if (MCGSParamsFixed.GRAPH_REWRITE_DUMP_REUSE_DIAGNOSTICS)
-    {
-      NodeIndex newRootIndex = searchRootNodeInfo.ChildNode.Index;
-
-      // Call with very low thresholds to get just the sampling estimate without doing actual rewrite.
-      GraphRewriter.RewriteResult estimateResult = GraphRewriter.MakeChildNewRoot(
-        graph, newRootIndex, priorMoves,
-        maxRetentionFraction: 0.001f,
-        maxSampledReachabilityFraction: 0.001f);
-
-      int estimatedSurvivors = (int)(estimateResult.RetentionFraction * numNodesUsed);
-      estimatedSurvivalStr = $", estimatedSurvivors={estimatedSurvivors:N0} ({estimateResult.RetentionFraction:P1})";
-    }
-
     Log($"ABANDONING GRAPH: searchRootN={searchRootN:N0}, " +
         $"reason={rewriteReason}, numNodesUsed={numNodesUsed:N0}, " +
-        $"ratio={ratioSearchRootToTotal:P1}, memFraction={memFraction:P1}{estimatedSurvivalStr}", red: true);
+        $"ratio={ratioSearchRootToTotal:P1}, memFraction={memFraction:P1}", red: true);
   }
 
   /// <summary>
