@@ -36,6 +36,8 @@ namespace Ceres.MCGS.Search.Strategies;
 /// </summary>
 public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
 {
+  internal const bool VERBOSE_ACTION_HEAD = false;
+
   internal const bool ACTION_HEAD_CONSERVATIVE_RESORT_MODE = false;
   // if the top policy move is conservatively ineligible for rearrangement
   const bool ACTION_REARRANGE_PIN_TOP_POLICY_MOVE = ACTION_HEAD_CONSERVATIVE_RESORT_MODE;
@@ -259,12 +261,12 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     int n = scores.Length;
 
     // Get the permutation from SortDisplacementCapped.
-    Span<int> permutation = n <= 256 ? stackalloc int[n] : new int[n];
+    Span<int> permutation = stackalloc int[n];
     SortDisplacementCapped(scores, maxDisplacement, permutation);
 
     // Apply the permutation to moveInfosSpan.
     // Use a temporary buffer to hold the reordered elements.
-    Span<GEdgeHeaderStruct> temp = n <= 64 ? stackalloc GEdgeHeaderStruct[n] : new GEdgeHeaderStruct[n];
+    Span<GEdgeHeaderStruct> temp = stackalloc GEdgeHeaderStruct[n];
 
     for (int i = 0; i < n; i++)
     {

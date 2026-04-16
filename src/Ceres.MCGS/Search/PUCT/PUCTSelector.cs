@@ -322,8 +322,7 @@ public static class PUCTSelector
                                                               thresholdPUCTSuboptimalityReject);
 
       // Verbose output to compare ActionHead mode vs default mode
-      const bool VERBOSE_ACTION_HEAD = false;
-      if (VERBOSE_ACTION_HEAD && paramsSelect.FPUMode == ParamsSelect.FPUType.ActionHead)
+      if (MCGSStrategyPUCT.VERBOSE_ACTION_HEAD && paramsSelect.FPUMode == ParamsSelect.FPUType.ActionHead)
       {
         int numExpanded = node.NumEdgesExpanded;
         string FormatScoreRow(string label, Func<int, string> valueFunc)
