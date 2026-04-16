@@ -15,6 +15,7 @@
 
 using System;
 using System.Diagnostics;
+using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
 
 using Ceres.MCGS.Graphs;
@@ -35,6 +36,12 @@ namespace Ceres.MCGS.Search.Strategies;
 /// </summary>
 public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
 {
+  internal const bool ACTION_HEAD_CONSERVATIVE_RESORT_MODE = false;
+  // if the top policy move is conservatively ineligible for rearrangement
+  const bool ACTION_REARRANGE_PIN_TOP_POLICY_MOVE = ACTION_HEAD_CONSERVATIVE_RESORT_MODE;
+  const int MAX_SWAPS = ACTION_HEAD_CONSERVATIVE_RESORT_MODE ? 3 : 8;
+  internal const float ACTION_HEAD_FPU_VALUE = 0.10f;
+
   public ParamsSearch ParamsSearch => Engine.Manager.ParamsSearch;
   public ParamsSelect ParamsSelect => Engine.Manager.ParamsSelect;
 
@@ -165,13 +172,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
 
   void PossiblyActionResortUsingAction(GNode node, Graph graph, in ParamsSearch paramsSearch, in ParamsSelect paramsSelect)
   {
-    // ****************** HARDCODED CONSTANTS *****************
-    const bool CONSERVATIVE_ACTION_RESORT_MODE = true;
-
-    const bool ACTION_REARRANGE_PIN_TOP_POLICY_MOVE = CONSERVATIVE_ACTION_RESORT_MODE; // if the top policy move is conservatively ineligible for rearrangement
-    const int MAX_SWAPS = CONSERVATIVE_ACTION_RESORT_MODE ? 3 : 7;
     const float MIN_PROBABILITY_FOR_ACTION_BOOST = 0;
-    const double DIFF_THRESHOLD = 0.02;
 
     Debug.Assert(node.N == 1);
     if (paramsSelect.FPUMode != ParamsSelect.FPUType.ActionHead
@@ -217,6 +218,8 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     }
     else
     {
+      const double DIFF_THRESHOLD = 0.02;
+
       // Bubble sort to get items in same order as the scores.
       int numSwapped;
       do
@@ -497,7 +500,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     {
       count += node.ChildEdgeAtIndex(i).N;
     }
-    Debug.Assert(node.N == count + (node.Terminal.IsTerminal() ? node.N : 1));
+    Debug.Assert(node.N == count + (node.NodeRef.Terminal.IsTerminal() ? node.N : 1));
 #endif
   }
 

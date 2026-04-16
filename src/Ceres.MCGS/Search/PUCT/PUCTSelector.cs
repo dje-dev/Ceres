@@ -190,10 +190,9 @@ public static class PUCTSelector
       double fallbackFPU = paramsSelect.CalcQWhenNoChildren(node.IsSearchRoot, node.Q, stats.SumPVisited);
       ReadOnlySpan<double> actionSpan = stats.A.Span;
       qWhenNoChildrenComposite = qWhenNoChildrenBuffer ??= new double[PUCTScoreCalcVector.MAX_CHILDREN];
-      float fpu = node.IsSearchRoot? paramsSelect.FPUValueAtRoot : paramsSelect.FPUValue;
       for (int i = 0; i < numToProcess; i++)
       {
-        double actionV = actionSpan[i] + fpu;
+        double actionV = actionSpan[i] + MCGSStrategyPUCT.ACTION_HEAD_FPU_VALUE;
 
         // Negate because child Q values are stored from opponent's perspective
         qWhenNoChildrenComposite[i] = double.IsNaN(actionV) ? fallbackFPU : -actionV;

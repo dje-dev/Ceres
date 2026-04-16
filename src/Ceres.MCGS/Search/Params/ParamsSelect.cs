@@ -72,7 +72,7 @@ public record ParamsSelect
   /// using not just policy but instead the PUCT scores inclusive of 
   /// the effect of both policy and value (i.e. using the action head values as fill-in).
   /// </summary>
-  public bool ActionResortUnvisitedChildren = false;
+  public bool ActionResortUnvisitedChildren = true;
 
   public float UCTRootNumeratorExponent = 0.5f;
   public float UCTNonRootNumeratorExponent = 0.5f;
@@ -317,9 +317,9 @@ public record ParamsSelect
   /// </summary>
   internal void Validate()
   {
-    if (ActionResortUnvisitedChildren && FPUMode != FPUType.ActionHead)
+    if (FPUMode != FPUType.ActionHead)
     {
-      throw new Exception("ActionHeadRearrangeUnvisitedChildren can only be true when FPUMode is ActionHead");
+      ActionResortUnvisitedChildren = false;
     }
   }
 
