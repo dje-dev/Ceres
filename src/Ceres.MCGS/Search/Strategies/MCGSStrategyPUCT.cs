@@ -15,6 +15,8 @@
 
 using System;
 using System.Diagnostics;
+using System.Linq;
+
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
 
@@ -41,7 +43,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
   internal const bool ACTION_HEAD_CONSERVATIVE_RESORT_MODE = false;
   // if the top policy move is conservatively ineligible for rearrangement
   const bool ACTION_REARRANGE_PIN_TOP_POLICY_MOVE = ACTION_HEAD_CONSERVATIVE_RESORT_MODE;
-  const int MAX_SWAPS = ACTION_HEAD_CONSERVATIVE_RESORT_MODE ? 3 : 8;
+  const int MAX_SWAPS = ACTION_HEAD_CONSERVATIVE_RESORT_MODE ? 2 : 5;
   internal const float ACTION_HEAD_FPU_VALUE = 0.10f;
 
   public ParamsSearch ParamsSearch => Engine.Manager.ParamsSearch;
@@ -205,17 +207,46 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
                                        cpuctMultiplier: 1.0f,
                                        temperatureMultiplier: 1.0f);
 
+    // Compute baseline scores (without ActionHead, using default FPU settings)
+    double[] baselineScores = null;
+    if (VERBOSE_ACTION_HEAD)
+    {
+      baselineScores = new double[nodeRef.NumPolicyMoves];
+      ParamsSelect defaultParams = new ParamsSelect();
+      PUCTSelector.ComputeTopChildScores(graph, node,
+                                         paramsSearch,
+                                         defaultParams,
+                                         0,
+                                         false,
+                                         rootMovePruningStatus: null,
+                                         dualCollisionFraction: ParamsSearch.Execution.DualIteratorAlternateCollisionFraction,
+                                         minChildIndex: 0,
+                                         maxChildIndex: nodeRef.NumPolicyMoves - 1,
+                                         numTargetVisits: 0,
+                                         scores: baselineScores,
+                                         childVisitCounts: default,
+                                         cpuctMultiplier: 1.0f,
+                                         temperatureMultiplier: 1.0f);
+    }
+
     Span<GEdgeHeaderStruct> moveInfosSpan = node.EdgeHeadersSpan;
+
+    // Compute FEN for verbose output
+    string fen = VERBOSE_ACTION_HEAD ? node.CalcPosition().ToPosition.FEN : null;
 
     if (MAX_SWAPS > 0)
     {
       if (ACTION_REARRANGE_PIN_TOP_POLICY_MOVE)
       {
-        ApplyDisplacementCappedSort(scores[1..], moveInfosSpan[1..], MAX_SWAPS, MIN_PROBABILITY_FOR_ACTION_BOOST);
+        ApplyDisplacementCappedSort(scores[1..], moveInfosSpan[1..], MAX_SWAPS, MIN_PROBABILITY_FOR_ACTION_BOOST,
+                                    baselineScores != null ? baselineScores.AsSpan(1) : default,
+                                    nodeRef.V, nodeRef.UncertaintyValue, nodeRef.UncertaintyPolicy, fen);
       }
       else
       {
-        ApplyDisplacementCappedSort(scores, moveInfosSpan, MAX_SWAPS, MIN_PROBABILITY_FOR_ACTION_BOOST);
+        ApplyDisplacementCappedSort(scores, moveInfosSpan, MAX_SWAPS, MIN_PROBABILITY_FOR_ACTION_BOOST,
+                                    baselineScores,
+                                    nodeRef.V, nodeRef.UncertaintyValue, nodeRef.UncertaintyPolicy, fen);
       }
     }
     else
@@ -256,13 +287,21 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
   /// ensuring no element moves more than maxDisplacement positions from its original index.
   /// </summary>
   private static void ApplyDisplacementCappedSort(Span<double> scores, Span<GEdgeHeaderStruct> moveInfosSpan,
-                                                  int maxDisplacement, float minProbabilityForBoost)
+                                                  int maxDisplacement, float minProbabilityForBoost,
+                                                  ReadOnlySpan<double> baselineScores,
+                                                  float nodeV, float nodeUV, float nodeUP,
+                                                  string fen)
   {
     int n = scores.Length;
 
     // Get the permutation from SortDisplacementCapped.
     Span<int> permutation = stackalloc int[n];
     SortDisplacementCapped(scores, maxDisplacement, permutation);
+
+    if (VERBOSE_ACTION_HEAD)
+    {
+      DumpActionHeadResortInfo(scores, moveInfosSpan, permutation, baselineScores, nodeV, nodeUV, nodeUP, fen);
+    }
 
     // Apply the permutation to moveInfosSpan.
     // Use a temporary buffer to hold the reordered elements.
@@ -283,6 +322,79 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
       }
       moveInfosSpan[i] = temp[i];
     }
+  }
+
+
+  /// <summary>
+  /// Dumps verbose information about action head resorting including:
+  /// - Baseline scores (default FPU mode, as from default ParamsSelect())
+  /// - Action head V values (raw neural network action head output)
+  /// - Action head scores (used for sorting)
+  /// - New positions after displacement-capped sort
+  /// </summary>
+  private static void DumpActionHeadResortInfo(ReadOnlySpan<double> scores,
+                                               ReadOnlySpan<GEdgeHeaderStruct> moveInfosSpan,
+                                               ReadOnlySpan<int> permutation,
+                                               ReadOnlySpan<double> baselineScores,
+                                               float nodeV, float nodeUV, float nodeUP,
+                                               string fen)
+  {
+    int n = scores.Length;
+
+    // Build reverse mapping: for each original index, what's its new position?
+    Span<int> newPositions = stackalloc int[n];
+    for (int newPos = 0; newPos < n; newPos++)
+    {
+      int origIdx = permutation[newPos];
+      newPositions[origIdx] = newPos;
+    }
+
+    // Copy data to arrays to avoid span-in-lambda issues
+    string[] moveStrs = new string[n];
+    double[] policies = new double[n];
+    double[] actionVValues = new double[n];
+    double[] actionHeadScores = new double[n];
+    double[] baselineScoresArray = new double[n];
+    int[] newPosArray = new int[n];
+
+    for (int i = 0; i < n; i++)
+    {
+      moveStrs[i] = moveInfosSpan[i].Move.ToString();
+      policies[i] = moveInfosSpan[i].P;
+#if ACTION_ENABLED
+      actionVValues[i] = moveInfosSpan[i].ActionV;
+#endif
+      actionHeadScores[i] = scores[i];
+      baselineScoresArray[i] = baselineScores.IsEmpty ? double.NaN : baselineScores[i];
+      newPosArray[i] = newPositions[i];
+    }
+
+    string FormatRow(string label, Func<int, string> valueFunc)
+    {
+      var values = Enumerable.Range(0, n).Select(i => valueFunc(i));
+      return $"{label,-25} " + string.Join(" ", values);
+    }
+
+    Console.WriteLine();
+    Console.WriteLine($"=== Action Head Resort (n={n}, V={nodeV:0.00}, UV={nodeUV:0.00}, UP={nodeUP:0.00}) {fen} ===");
+    Console.WriteLine(FormatRow("Moves:", i => moveStrs[i].PadLeft(6)));
+    Console.WriteLine(FormatRow("Policy:", i => (100 * policies[i]).ToString("0.0").PadLeft(5) + "%"));
+#if ACTION_ENABLED
+    Console.WriteLine(FormatRow("Action V:", i => actionVValues[i].ToString("0.00").PadLeft(6)));
+#endif
+    if (!baselineScores.IsEmpty)
+    {
+      Console.WriteLine(FormatRow("Scores (baseline):", i => baselineScoresArray[i].ToString("0.00").PadLeft(6)));
+    }
+    Console.WriteLine(FormatRow("Scores (ActionHead):", i => actionHeadScores[i].ToString("0.00").PadLeft(6)));
+//    Console.WriteLine(FormatRow("Original position:", i => i.ToString().PadLeft(6)));
+    Console.WriteLine(FormatRow("New position:", i =>
+    {
+      int delta = newPosArray[i] - i;
+      if (delta == 0) return "      ";
+      return (delta > 0 ? $"+{delta}" : delta.ToString()).PadLeft(6);
+    }));
+    Console.WriteLine();
   }
 
 
