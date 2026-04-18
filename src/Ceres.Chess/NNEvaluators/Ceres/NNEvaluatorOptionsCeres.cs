@@ -24,6 +24,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres
   /// <summary>
   /// Subclass of NNEvaluatorOptions specialized for Ceres nets.
   /// </summary>
+  [Serializable]
   public record NNEvaluatorOptionsCeres : NNEvaluatorOptions
   {
     public enum PlySinceLastMoveModeEnum
