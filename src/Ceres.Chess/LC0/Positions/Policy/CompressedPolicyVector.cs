@@ -281,13 +281,15 @@ namespace Ceres.Chess.EncodedPositions
             moveIndices[numMovesUsed] = SPECIAL_VALUE_SENTINEL_TERMINATOR;
           }
 
-          // Normalize to sum to 1.0
+          // Normalize to sum to 1.0. Decode each stored value back to a float in [0,1]
+          // before applying the scale -- multiplying the raw ushort encoding would yield
+          // values >> 1.0 and clobber every entry to ushort.MaxValue (uniform policy).
           if (Math.Abs(1 - probabilityAcc) > 0.002)
           {
             float adj = 1.0f / probabilityAcc;
             for (int i = 0; i < numMovesUsed; i++)
             {
-              moveProbabilitiesEncoded[i] = EncodedProbability(moveProbabilitiesEncoded[i] * adj);
+              moveProbabilitiesEncoded[i] = EncodedProbability(DecodedProbability(moveProbabilitiesEncoded[i]) * adj);
             }
           }
         }
