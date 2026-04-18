@@ -49,11 +49,26 @@ public static class GraphReuseManager
   public const float MEMORY_PRESSURE_THRESHOLD = 0.90f;
 
   /// <summary>
-  /// Ratio of search root N to total nodes below which rewrite is triggered.
-  /// This is done because typically this indicates that much of the
-  /// graph is not relevant to the current search root.
+  /// Minimum value of the memory-scaled low-ratio threshold (applied when memory
+  /// usage is at or below <see cref="REWRITE_RATIO_MEM_FRACTION_LOW"/>).
   /// </summary>
-  public const float REWRITE_RATIO_THRESHOLD = 0.05f;
+  public const float REWRITE_RATIO_THRESHOLD_MIN = 0.01f;
+
+  /// <summary>
+  /// Maximum value of the memory-scaled low-ratio threshold (applied when memory
+  /// usage is at or above <see cref="REWRITE_RATIO_MEM_FRACTION_HIGH"/>).
+  /// </summary>
+  public const float REWRITE_RATIO_THRESHOLD_MAX = 0.08f;
+
+  /// <summary>
+  /// Memory usage fraction at or below which the low-ratio threshold sits at its minimum.
+  /// </summary>
+  public const float REWRITE_RATIO_MEM_FRACTION_LOW = 0.20f;
+
+  /// <summary>
+  /// Memory usage fraction at or above which the low-ratio threshold sits at its maximum.
+  /// </summary>
+  public const float REWRITE_RATIO_MEM_FRACTION_HIGH = 0.80f;
 
   /// <summary>
   /// Estimated reachability fraction (from sampling) below which the graph
@@ -320,7 +335,7 @@ public static class GraphReuseManager
     if (searchRootPathFromGraphRoot == null || searchRootPathFromGraphRoot.Count < 2)
     {
       graphToPossiblyReuse.Dispose();
-      searchRootPathFromGraphRoot = null; 
+      searchRootPathFromGraphRoot = null;
       return null;
     }
 
@@ -385,7 +400,17 @@ public static class GraphReuseManager
     float memFraction = (float)(memInfo.PrivateBytes / (double)paramsSearch.MaxMemoryBytes);
 
     bool memoryPressure = memFraction >= MEMORY_PRESSURE_THRESHOLD;
-    bool lowRatio = ratioSearchRootToTotal < REWRITE_RATIO_THRESHOLD;
+
+    // Scale the low-ratio trigger linearly with memory usage: when little of the
+    // Ceres memory budget is in use we tolerate very sparse graphs (down to 1%
+    // reuse ratio), but as memory fills up we demand a healthier ratio (rising
+    // to 8%) so that unreachable subtrees are reclaimed sooner.
+    float memFracClamped = Math.Clamp(memFraction, REWRITE_RATIO_MEM_FRACTION_LOW, REWRITE_RATIO_MEM_FRACTION_HIGH);
+    float memFracT = (memFracClamped - REWRITE_RATIO_MEM_FRACTION_LOW)
+                   / (REWRITE_RATIO_MEM_FRACTION_HIGH - REWRITE_RATIO_MEM_FRACTION_LOW);
+    float rewriteRatioThreshold = REWRITE_RATIO_THRESHOLD_MIN
+                                + memFracT * (REWRITE_RATIO_THRESHOLD_MAX - REWRITE_RATIO_THRESHOLD_MIN);
+    bool lowRatio = ratioSearchRootToTotal < rewriteRatioThreshold;
     float nodeCapacityFraction = (float)numNodesUsed / graph.Store.MaxNodes;
     bool nodeCapacityPressure = nodeCapacityFraction >= NODE_CAPACITY_PRESSURE_THRESHOLD;
     bool standardTrigger = memoryPressure || nodeCapacityPressure || lowRatio;
