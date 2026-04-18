@@ -144,7 +144,6 @@ public static class MCGSPosGraphNodeDumper
 
     // Action V: read from the edge header (action data lives there, not on the edge struct).
     // Blank if NN evaluator doesn't expose action head, no parent edge, or value is NaN.
-    // Negate so value is shown from parent's (mover's) perspective.
     float actionVDisplay = float.NaN;
     if (manager.NNEvaluator0.HasAction && hasParent && indexInParent >= 0)
     {
@@ -154,7 +153,7 @@ public static class MCGSPosGraphNodeDumper
         float a = (float)headers[indexInParent].ActionV;
         if (!float.IsNaN(a))
         {
-          actionVDisplay = -a;
+          actionVDisplay = a;
         }
       }
     }
