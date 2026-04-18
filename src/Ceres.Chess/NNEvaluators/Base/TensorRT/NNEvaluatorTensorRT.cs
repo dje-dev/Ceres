@@ -53,6 +53,13 @@ public class NNEvaluatorTensorRT : NNEvaluator
   const bool USE_HISTORY = true;
   const bool SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND = false;
 
+  // NaN-in-output handling: count every occurrence but only log to Console
+  // at most once every NAN_LOG_MIN_INTERVAL_SECONDS (cumulative total included).
+  const int NAN_LOG_MIN_INTERVAL_SECONDS = 5 * 60;
+  static long nanOccurrenceCount;
+  static long nanLastLoggedTicks;
+  static readonly object nanLogLock = new();
+
   /// <summary>
   /// If true, loads TensorRT engines in parallel across GPUs.
   /// </summary>
@@ -1493,12 +1500,25 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
         // Check for NaNs on raw Half data (half the bandwidth vs checking floats)
         int usedOutputElements = positionCount * outputElementsPerPosition;
-        if (MathUtils.ContainsNaN(rawSpan.Slice(0, usedOutputElements)))
-        {
-          throw new Exception($"NaN detected in TensorRT output (batch {positionCount} positions, {usedOutputElements} elements)");
-        }
+        bool hasNaN = MathUtils.ContainsNaN(rawSpan.Slice(0, usedOutputElements));
 
         TensorPrimitives.ConvertToSingle(rawSpan, threadLocalOutputFloatBuffer.AsSpan(0, outputElementCount));
+
+        if (hasNaN)
+        {
+          // Substitute NaN with 0 in the converted float buffer so downstream
+          // consumers see sane values, then emit a rate-limited warning.
+          Span<float> usedFloats = threadLocalOutputFloatBuffer.AsSpan(0, usedOutputElements);
+          for (int i = 0; i < usedFloats.Length; i++)
+          {
+            if (float.IsNaN(usedFloats[i]))
+            {
+              usedFloats[i] = 0;
+            }
+          }
+
+          ReportNaNOccurrence(positionCount, usedOutputElements);
+        }
       }
 
       ExtractSubBatchResults(batch, globalStartPosition, positionCount, engineBatchSize,
@@ -1589,6 +1609,46 @@ public class NNEvaluatorTensorRT : NNEvaluator
       extraStat1: hasQDeviation ? extraStat1 : default,
       hasPolicySecondary: hasPolicySecondary,
       policies2: hasPolicySecondary ? pol2 : default);
+  }
+
+
+  /// <summary>
+  /// Records a NaN occurrence in TensorRT output and emits a red Console warning,
+  /// rate-limited to once every NAN_LOG_MIN_INTERVAL_SECONDS. Cumulative count
+  /// since process start is included in each emitted warning.
+  /// </summary>
+  private static void ReportNaNOccurrence(int positionCount, int elementCount)
+  {
+    long total = System.Threading.Interlocked.Increment(ref nanOccurrenceCount);
+
+    long nowTicks = Environment.TickCount64;
+    long lastTicks = System.Threading.Interlocked.Read(ref nanLastLoggedTicks);
+    if (lastTicks != 0 && (nowTicks - lastTicks) < NAN_LOG_MIN_INTERVAL_SECONDS * 1000L)
+    {
+      return;
+    }
+
+    lock (nanLogLock)
+    {
+      long lastTicks2 = System.Threading.Interlocked.Read(ref nanLastLoggedTicks);
+      if (lastTicks2 != 0 && (nowTicks - lastTicks2) < NAN_LOG_MIN_INTERVAL_SECONDS * 1000L)
+      {
+        return;
+      }
+      System.Threading.Interlocked.Exchange(ref nanLastLoggedTicks, nowTicks);
+
+      ConsoleColor prev = Console.ForegroundColor;
+      try
+      {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"WARNING: NaN detected in TensorRT output (batch {positionCount} positions, "
+                        + $"{elementCount} elements); substituting 0. Cumulative occurrences: {total}.");
+      }
+      finally
+      {
+        Console.ForegroundColor = prev;
+      }
+    }
   }
 
 
