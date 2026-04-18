@@ -123,65 +123,8 @@ public static class PUCTSelector
      && paramsSelect.FPUMode == ParamsSelect.FPUType.ACPI
      )
     {
-      int numExpanded = node.NumEdgesExpanded;
-      string FormatRow(string label, Func<int, string> valueFunc)
-      {
-        IEnumerable<string> values = Enumerable.Range(0, numToProcess)
-          .Select(i => valueFunc(i) + (i == numExpanded - 1 ? " |" : ""));
-        return $"{label,-20} " + string.Join(" ", values);
-      }
-
-      // Compute what the default FPU value would be without imputation
-      double defaultFPU = paramsSelect.CalcQWhenNoChildren(node.IsSearchRoot, node.Q, stats.SumPVisited);
-
-      const bool VERBOSE = false;
-      if (VERBOSE)
-      {
-        Console.WriteLine();
-        Console.WriteLine($"NumEdgesExpanded = {numExpanded}, Q = {node.Q:0.00}, DefaultFPU = {defaultFPU:0.00}");
-        Console.WriteLine(FormatRow("Before imputation:", i =>
-          i < numExpanded && stats.N.Span[i] > 0
-            ? (-stats.W.Span[i] / stats.N.Span[i]).ToString("0.00").PadLeft(5)
-            : " N/A "));
-      }
-
-      qWhenNoChildrenComposite = ImputeQForUnvisitedChildren(node, stats, numToProcess);
-
-      // Cap Q values for unexpanded children to not exceed defaultFPU + 0.30.
-      double maxQ = 0.30 + defaultFPU;
-      for (int i = numExpanded; i <= maxChildIndex; i++)
-      {
-        if (qWhenNoChildrenComposite[i] > maxQ)
-        {
-          qWhenNoChildrenComposite[i] = maxQ;
-        }
-      }
-
-      Debug.Assert(!double.IsNaN(qWhenNoChildrenComposite[0]));
-
-#if DEBUG
-        // Validate no NaNs in the array
-        for (int i = 0; i < numToProcess; i++)
-        {
-          Debug.Assert(!double.IsNaN(qWhenNoChildrenComposite[i]), 
-                       $"qWhenNoChildrenComposite[{i}] is NaN");
-        }
-
-        // Validate values to the right of numExpanded are strictly descending
-        for (int i = numExpanded + 1; i < numToProcess; i++)
-        {
-          Debug.Assert(qWhenNoChildrenComposite[i] < qWhenNoChildrenComposite[i - 1],
-                       $"qWhenNoChildrenComposite not strictly descending at index {i}: " +
-                       $"{qWhenNoChildrenComposite[i - 1]:F4} >= {qWhenNoChildrenComposite[i]:F4}");
-        }
-#endif
-
-      if (VERBOSE)
-      {
-        Console.WriteLine(FormatRow("After imputation:", i => qWhenNoChildrenComposite[i].ToString("0.00").PadLeft(5)));
-        Console.WriteLine(FormatRow("Policy:", i => stats.P.Span[i].ToString("0.00").PadLeft(5)));
-        Console.WriteLine();
-      }
+      // TODO: Experimental.
+      qWhenNoChildrenComposite = ApplyACPIFPU(node, paramsSelect, maxChildIndex, stats, numToProcess);
     }
     else if (numToProcess > 1
           && paramsSelect.GetFPUMode(node.IsSearchRoot) == ParamsSelect.FPUType.ActionHead)
@@ -334,6 +277,72 @@ public static class PUCTSelector
                                      (nToUse * (double)nodeRef.V) + -gatherStats.SumWVisited,
                                      (nToUse * (double)nodeRef.DrawP) + gatherStats.SumDVisited,
                                      numVisitsAccepted);
+  }
+
+  private static double[] ApplyACPIFPU(GNode node, ParamsSelect paramsSelect, int maxChildIndex, GatheredChildStats stats, int numToProcess)
+  {
+    double[] qWhenNoChildrenComposite;
+    int numExpanded = node.NumEdgesExpanded;
+    string FormatRow(string label, Func<int, string> valueFunc)
+    {
+      IEnumerable<string> values = Enumerable.Range(0, numToProcess)
+        .Select(i => valueFunc(i) + (i == numExpanded - 1 ? " |" : ""));
+      return $"{label,-20} " + string.Join(" ", values);
+    }
+
+    // Compute what the default FPU value would be without imputation
+    double defaultFPU = paramsSelect.CalcQWhenNoChildren(node.IsSearchRoot, node.Q, stats.SumPVisited);
+
+    const bool VERBOSE = false;
+    if (VERBOSE)
+    {
+      Console.WriteLine();
+      Console.WriteLine($"NumEdgesExpanded = {numExpanded}, Q = {node.Q:0.00}, DefaultFPU = {defaultFPU:0.00}");
+      Console.WriteLine(FormatRow("Before imputation:", i =>
+        i < numExpanded && stats.N.Span[i] > 0
+          ? (-stats.W.Span[i] / stats.N.Span[i]).ToString("0.00").PadLeft(5)
+          : " N/A "));
+    }
+
+    qWhenNoChildrenComposite = ImputeQForUnvisitedChildren(node, stats, numToProcess);
+
+    // Cap Q values for unexpanded children to not exceed defaultFPU + 0.30.
+    double maxQ = 0.30 + defaultFPU;
+    for (int i = numExpanded; i <= maxChildIndex; i++)
+    {
+      if (qWhenNoChildrenComposite[i] > maxQ)
+      {
+        qWhenNoChildrenComposite[i] = maxQ;
+      }
+    }
+
+    Debug.Assert(!double.IsNaN(qWhenNoChildrenComposite[0]));
+
+#if DEBUG
+        // Validate no NaNs in the array
+        for (int i = 0; i < numToProcess; i++)
+        {
+          Debug.Assert(!double.IsNaN(qWhenNoChildrenComposite[i]), 
+                       $"qWhenNoChildrenComposite[{i}] is NaN");
+        }
+
+        // Validate values to the right of numExpanded are strictly descending
+        for (int i = numExpanded + 1; i < numToProcess; i++)
+        {
+          Debug.Assert(qWhenNoChildrenComposite[i] < qWhenNoChildrenComposite[i - 1],
+                       $"qWhenNoChildrenComposite not strictly descending at index {i}: " +
+                       $"{qWhenNoChildrenComposite[i - 1]:F4} >= {qWhenNoChildrenComposite[i]:F4}");
+        }
+#endif
+
+    if (VERBOSE)
+    {
+      Console.WriteLine(FormatRow("After imputation:", i => qWhenNoChildrenComposite[i].ToString("0.00").PadLeft(5)));
+      Console.WriteLine(FormatRow("Policy:", i => stats.P.Span[i].ToString("0.00").PadLeft(5)));
+      Console.WriteLine();
+    }
+
+    return qWhenNoChildrenComposite;
   }
 
 
