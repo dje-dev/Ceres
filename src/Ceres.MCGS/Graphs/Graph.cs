@@ -1061,10 +1061,13 @@ public unsafe partial class Graph : IDisposable
 
     // Copy the expanded edges one at a time
     // (since the source node headers are now just pointers we need to follow to get header info).
+    // GEdgeStruct.ActionV is currently a stub, not ActionV only available on head headers.
+    ReadOnlySpan<GEdgeHeaderStruct> copyFromHeadersForExpanded = copyFrom.EdgeHeadersSpan;
     foreach ((GEdge edge, int childIndex) in copyFrom.ChildEdgesExpandedWithIndex)
     {
 #if ACTION_ENABLED
-        copyToHeaders[childIndex].SetUnexpandedValues(edge.Move, edge.P, edge.ActionV, edge.ActionU);
+      ref readonly GEdgeHeaderStruct srcHdr = ref copyFromHeadersForExpanded[childIndex];
+      copyToHeaders[childIndex].SetUnexpandedValues(edge.Move, edge.P, srcHdr.ActionV, srcHdr.ActionU);
 #else
       copyToHeaders[childIndex].SetUnexpandedValues(edge.Move, edge.P, FP16.NaN, FP16.NaN);
 #endif

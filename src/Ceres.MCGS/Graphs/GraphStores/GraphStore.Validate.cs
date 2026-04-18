@@ -14,20 +14,20 @@
 #region Using directives
 
 using System;
-using System.Linq;
 using System.Collections.Generic;
-using Ceres.Base.DataTypes;
-using Ceres.Base.Math;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-
+using Ceres.Base.DataTypes;
+using Ceres.Base.Math;
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
+using Ceres.MCGS.Graphs.GEdgeHeaders;
+using Ceres.MCGS.Graphs.GEdges;
+using Ceres.MCGS.Graphs.GNodes;
+using Ceres.MCGS.Search.Params;
 using Ceres.MCGS.Search.PathEvaluators;
 using Ceres.MCGS.Search.Phases.Evaluation;
-using Ceres.MCGS.Graphs.GNodes;
-using Ceres.MCGS.Graphs.GEdges;
-using Ceres.MCGS.Graphs.GEdgeHeaders;
 
 #endregion
 
@@ -398,11 +398,14 @@ internal class GraphStoreValidator
         AssertNode(nExpectedFromChild <= childEdge.ChildNode.N, () => $"Edge N exceeded child N ({childEdge.N} vs {childEdge.ChildNode.N})", childEdge.ChildNode.Index.Index);
 
 #if ACTION_ENABLED
-        // Do not apply this test if terminal edge, since the action V will have been overwritten in the edge
-        // but currently that overwriting is not replicated at the GEdgeHeaderStruct level
-        AssertNode(MathUtils.EqualsOrBothNaN(childEdge.ActionV, edgeHeaderStruct.ActionV), 
-                                             () => $"Chlid/MoveInfo disagreement on ActionV of {childEdge.ActionV} vs {edgeHeaderStruct.ActionV} at move index {childIndexInParent}", i);
+        if (MCGSParamsFixed.GEDGE_HAS_ACTIONV)
+        { 
+          // Do not apply this test if terminal edge, since the action V will have been overwritten in the edge
+          // but currently that overwriting is not replicated at the GEdgeHeaderStruct level
+          AssertNode(MathUtils.EqualsOrBothNaN(childEdge.ActionV, edgeHeaderStruct.ActionV),
+                                               () => $"Chlid/MoveInfo disagreement on ActionV of {childEdge.ActionV} vs {edgeHeaderStruct.ActionV} at move index {childIndexInParent}", i);
         // TODO: if/when we also copy over ActionU, then enable this    AssertNode(MathUtils.EqualsOrBothNaN(child.ActionU, moveInfo.ActionU), $"Chlid/MoveInfo disagreement on ActionU of {child.ActionU} vs {moveInfo.ActionU} at move index {visitToChildIndex}", i, in nodeR);
+        }
 #endif
       }
 
@@ -636,7 +639,10 @@ internal class GraphStoreValidator
           // Do not apply this test if terminal edge, since the action V will have been overwritten in the edge
           // but currently that overwriting is not replicated at the GEdgeHeaderStruct level
 #if ACTION_ENABLED
-          AssertNode(MathUtils.EqualsOrBothNaN(childEdge.ActionV, gEdgeHeaderStruct.ActionV), $"ActionV of child specified in edge does not match", i, in nodeR);
+          if (MCGSParamsFixed.GEDGE_HAS_ACTIONV)
+          {
+            AssertNode(MathUtils.EqualsOrBothNaN(childEdge.ActionV, gEdgeHeaderStruct.ActionV), $"ActionV of child specified in edge does not match", i, in nodeR);
+          }
 #endif
           AssertNodeQuiescent(Math.Abs(childEdge.Q) < 1.50, () => $"Child edge's Q was unreasonable {childEdge.Q}", i);
           
@@ -671,8 +677,10 @@ internal class GraphStoreValidator
         // Verify policy non-negative.
         AssertNode(gEdgeHeaderStruct.P >= 0, () => $"MoveInfo policy was negative: {gEdgeHeaderStruct.P}", i);
 
-        // Verify unexpanded edges appear in non-ascending order by prior probability.
+        // Verify unexpanded edges appear in non-ascending order by prior probability (unless action head enabled).
+#if !ACTION_ENABLED
         AssertNode(gEdgeHeaderStruct.P <= lastP, () => $"Unexpanded children were not in non-ascending order by prior probability: {gEdgeHeaderStruct.P} vs. {lastP}", i);
+#endif
         lastP = gEdgeHeaderStruct.P;
       }
 

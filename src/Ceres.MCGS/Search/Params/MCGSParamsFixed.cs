@@ -98,6 +98,11 @@ public static class MCGSParamsFixed
 
   public const float MOVE_ORDERING_MIN_RATIO_POLICY = 0.15f;
 
+  /// <summary>
+  ///  Someday we might also store ActionV at edges (but would grow size of edges).
+  /// </summary>
+  public const bool GEDGE_HAS_ACTIONV = false;
+
   /// If the DrawKnownToExistAmongChildren field is updated
   /// and used to adjust backed-up values so that 
   /// any "worse than draw" results are converted to draw results
