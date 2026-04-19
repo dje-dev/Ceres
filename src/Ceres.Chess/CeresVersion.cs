@@ -20,5 +20,5 @@ namespace Ceres.Chess;
 
 public static class CeresVersion
 {
-  public const string VersionString = "2.30";
+  public const string VersionString = "2.31";
 }
