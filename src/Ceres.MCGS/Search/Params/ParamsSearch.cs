@@ -198,7 +198,15 @@ public record ParamsSearch
   //   3.0 --> -42 Elo
   //   5.0 --> -50 Elo
   //  20.0 --> -52 Elo
-  public float TranspositionStopMinSupportRatio = 3f;
+  public float TranspositionStopMinSupportRatioPositionAndHistoryMode = 3f;
+
+
+  /// <summary>
+  /// MinSupportRatio when running in Position mode.
+  /// Because visits are coalesced across all transposition paths,
+  /// the expectation for subgraph size is typically higher than with PositionAndHistory mode.
+  /// </summary>
+  public float TranspositionStopMinSupportRatioPositionMode = 5f;
 
 
   /// <summary>

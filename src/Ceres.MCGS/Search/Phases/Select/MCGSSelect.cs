@@ -457,7 +457,9 @@ public class MCGSSelect
     ParamsSearch paramsSearch = iterator.Engine.Manager.ParamsSearch;
     int minRepetitionCountForDraw = paramsSearch.TwofoldDrawEnabled ? 1 : 2;
     bool graphEnabled = paramsSearch.EnableGraph;
-    float transpositionStopMinSupportRatio = paramsSearch.TranspositionStopMinSupportRatio;
+    float transpositionStopMinSupportRatio = paramsSearch.PathTranspositionMode == PathMode.PositionAndHistoryEquivalence 
+                                           ? paramsSearch.TranspositionStopMinSupportRatioPositionAndHistoryMode 
+                                           : paramsSearch.TranspositionStopMinSupportRatioPositionMode;
     bool parallelEnabled = paramsSearch.Execution.SelectOperationParallelThresholdNumVisits < int.MaxValue;
     int THRESHOLD_PARALLEL = ParallelThresholdToUse;
 
