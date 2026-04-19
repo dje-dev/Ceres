@@ -135,7 +135,7 @@ public partial class MCGSBackup
             }
             else
             {
-              if (strategy.Engine.Manager.ParamsSearch.TestFlag)
+              if (false && strategy.Engine.Manager.ParamsSearch.TestFlag)
               {
                 // Passing initialBackupValue.V (=0) as newQChild on a rep-draw would clobber
                 // edge.QChild and make edge.Q = 0 until the next non-rep visit, spuriously
