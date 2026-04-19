@@ -135,12 +135,31 @@ public partial class MCGSBackup
             }
             else
             {
-              strategy.BackupToEdge(visitEdge, numVisitsAccepted, initialBackupValue.V, initialBackupValue.D, false);
-              if (path.TerminationReason == MCGSPathTerminationReason.DrawByRepetitionInCoalesceMode)
+              if (strategy.Engine.Manager.ParamsSearch.TestFlag)
               {
-                // The NDrawByRepeition for the edge immediately leading to the draw 
-                // is incremented in tandem with the primary (but is not backed up).
-                visitEdge.IncrementNDrawRepetition(numVisitsAccepted);
+                // Passing initialBackupValue.V (=0) as newQChild on a rep-draw would clobber
+                // edge.QChild and make edge.Q = 0 until the next non-rep visit, spuriously
+                // inflating the Δ sent to the parent. Use ChildNode.Q instead (matching the
+                // internal-edge branch above).
+                bool isRepDraw = path.TerminationReason == MCGSPathTerminationReason.DrawByRepetitionInCoalesceMode;
+                double newQChildForLeaf = isRepDraw ? visitEdge.ChildNode.Q : initialBackupValue.V;
+                strategy.BackupToEdge(visitEdge, numVisitsAccepted, newQChildForLeaf, initialBackupValue.D, false);
+                if (isRepDraw)
+                {
+                  // The NDrawByRepeition for the edge immediately leading to the draw
+                  // is incremented in tandem with the primary (but is not backed up).
+                  visitEdge.IncrementNDrawRepetition(numVisitsAccepted);
+                }
+              }
+              else
+              {
+                strategy.BackupToEdge(visitEdge, numVisitsAccepted, initialBackupValue.V, initialBackupValue.D, false);
+                if (path.TerminationReason == MCGSPathTerminationReason.DrawByRepetitionInCoalesceMode)
+                {
+                  // The NDrawByRepeition for the edge immediately leading to the draw
+                  // is incremented in tandem with the primary (but is not backed up).
+                  visitEdge.IncrementNDrawRepetition(numVisitsAccepted);
+                }
               }
             }
           }
