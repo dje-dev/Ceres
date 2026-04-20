@@ -120,6 +120,22 @@ public record ParamsSelect
   public float PolicyDecayExponent = 0.38f;
 
   /// <summary>
+  /// Multiplicative reduction of CPUCT at low parent-N, decaying smoothly to zero as N grows.
+  /// Effective CPUCT is scaled by (1 - CPUCTEarlyReductionAmount * exp(-parentN / CPUCTEarlyReductionNHalf)).
+  /// Motivates more focused early search (closer to the policy prior) than vanilla PUCT.
+  /// Zero to disable; typical exploratory value 0.4.
+  /// </summary>
+  [CeresOption(Name = "cpuct-early-reduction-amount", Desc = "Multiplicative reduction of CPUCT at low parent-N (0 to disable, typical 0.4)", Default = "0")]
+  public float CPUCTEarlyReductionAmount = 0;
+
+  /// <summary>
+  /// Characteristic parent-N (in visits) over which CPUCTEarlyReductionAmount decays by 1/e.
+  /// Smaller values make the reduction vanish sooner; larger values keep the reduction active longer.
+  /// </summary>
+  [CeresOption(Name = "cpuct-early-reduction-n-half", Desc = "Characteristic parent-N for exponential decay of CPUCT early reduction (typical 32)", Default = "32")]
+  public float CPUCTEarlyReductionNHalf = 32f;
+
+  /// <summary>
   /// Amount of relative virtual loss to apply in leaf selection to discourage collisions.
   /// Values closer to zero yield less distortion in choosing leafes (thus higher quality play)
   /// but slow down search speed because of excess collisions. 
@@ -197,7 +213,7 @@ public record ParamsSelect
 
   #region Helper methods
 
-   // Using a virtual relative loss (a negative offset versus the Q of the parent node)
+  // Using a virtual relative loss (a negative offset versus the Q of the parent node)
   // is found to be greatly superior to traditional fixed values such as -1
   internal const bool VLossRelative = true;
 
@@ -277,7 +293,15 @@ public record ParamsSelect
       CPUCT_EXTRA = CPUCTFactor == 0 ? 0 : CPUCTFactor * MathUtils.FastLog((parentN + CPUCTBase + 1.0f) / CPUCTBase);
     }
 
-    return CPUCT + CPUCT_EXTRA;
+    double cpuct = CPUCT + CPUCT_EXTRA;
+
+    if (CPUCTEarlyReductionAmount > 0 && CPUCTEarlyReductionNHalf > 0)
+    {
+      double suppression = 1.0 - CPUCTEarlyReductionAmount * Math.Exp(-parentN / CPUCTEarlyReductionNHalf);
+      cpuct *= suppression;
+    }
+
+    return cpuct;
   }
 
 
@@ -304,7 +328,7 @@ public record ParamsSelect
     {
       FPUType.Absolute => fpuValue,
       FPUType.Reduction => parentQ + fpuValue * Math.Sqrt(parentSumPVisited),
-      FPUType.Same => parentQ,        
+      FPUType.Same => parentQ,
       FPUType.ACPI => parentQ + fpuValue * Math.Sqrt(parentSumPVisited), // Will be overridden with per-child imputed values; fallback to reduction
       FPUType.ActionHead => parentQ + fpuValue * Math.Sqrt(parentSumPVisited), // Scalar fallback; per-child values from action head override this in PUCTSelector
       _ => throw new NotImplementedException($"Unknown FPUType: {GetFPUMode(isRoot)}")
@@ -324,4 +348,4 @@ public record ParamsSelect
   }
 
   #endregion
-  }
+}
