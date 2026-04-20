@@ -181,7 +181,15 @@ namespace Ceres.Base.Misc
     string DownloadAndUnpackFile(string downloadID, string targetDirectory, string fileUrl, string directoryPath, IAnsiConsole console)
     {
       string localFilePath = Path.Combine(directoryPath, Path.GetFileName(fileUrl));
-      HttpResponseMessage response = client.GetAsync(fileUrl, HttpCompletionOption.ResponseHeadersRead).Result;
+      using HttpResponseMessage response = client.GetAsync(fileUrl, HttpCompletionOption.ResponseHeadersRead).Result;
+
+      // Surface HTTP errors (e.g. 404 from a wrong/case-mismatched release tag) before they
+      // get written to disk and re-emerge as a confusing "Central Directory corrupt" zip error.
+      if (!response.IsSuccessStatusCode)
+      {
+        throw new IOException($"HTTP {(int)response.StatusCode} {response.ReasonPhrase} downloading {fileUrl}");
+      }
+
       long totalBytes = response.Content.Headers.ContentLength ?? 0;
 
       void DoDownload(string localFilePath, HttpResponseMessage response, ProgressTask task)
@@ -218,10 +226,42 @@ namespace Ceres.Base.Misc
 
       if (!shouldCancel)
       {
+        VerifyDownloadedZip(localFilePath, totalBytes, fileUrl);
         ZipFile.ExtractToDirectory(localFilePath, directoryPath);
       }
 
       return directoryPath;
+    }
+
+
+    /// <summary>
+    /// Confirms the file on disk is a plausible zip: matches Content-Length (when known)
+    /// and starts with the PK\x03\x04 local-file-header signature. Catches the case where
+    /// a redirect/proxy/error page was silently written to disk in place of the real asset.
+    /// </summary>
+    static void VerifyDownloadedZip(string localFilePath, long expectedBytes, string fileUrl)
+    {
+      long actualBytes = new FileInfo(localFilePath).Length;
+      if (expectedBytes > 0 && actualBytes != expectedBytes)
+      {
+        throw new IOException($"Truncated download of {fileUrl}: expected {expectedBytes} bytes, got {actualBytes}");
+      }
+
+      // Smallest legal zip is 22 bytes (empty archive's End-of-Central-Directory record);
+      // a real asset will be much larger, so anything tiny here is an error page or redirect body.
+      if (actualBytes < 22)
+      {
+        throw new IOException($"Download of {fileUrl} produced a {actualBytes}-byte file (not a zip)");
+      }
+
+      Span<byte> magic = stackalloc byte[4];
+      using (FileStream fs = new FileStream(localFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+      {
+        if (fs.Read(magic) != 4 || magic[0] != 0x50 || magic[1] != 0x4B || magic[2] != 0x03 || magic[3] != 0x04)
+        {
+          throw new IOException($"Download of {fileUrl} is not a zip file (missing PK\\x03\\x04 header)");
+        }
+      }
     }
 
     async Task<string> DownloadInfoFile(string infoUrl, IAnsiConsole console)
@@ -233,58 +273,3 @@ namespace Ceres.Base.Misc
     }
   }
 }
-
-
-
-#if NOT
-  public static class GuidedSearch
-  {
-    public static void Test()
-    {
-      string ceresJSONPath = @"c:\dev\ceres\artifacts\release\net8.0\Ceres.json";
-      Console.WriteLine("Loading " + ceresJSONPath);
-      CeresUserSettingsManager.LoadFromFile(ceresJSONPath);
-
-
-      //      NNEvaluator def = NNEvaluatorDef.FromSpecification("703810", "GPU:0").ToEvaluator();
-      NNEvaluatorDef spec = NNEvaluatorDef.FromSpecification("703810", "GPU:0");
-
-
-      GameEngineCeresInProcess engineCeres = new GameEngineCeresInProcess("Ceres-ZZ", spec, null,
-        new ParamsSearch()
-        {
-        },
-        new ParamsSelect()
-        {
-        });
-
-
-      const string FN = @"c:\temp\ceres\match_TOURN_Ceres1_Ceres2_638425960050089404.pgn";
-      PGNFileEnumerator pgn = new(FN);
-      int count = 0;
-      foreach (PositionWithHistory pp in pgn.EnumeratePositionWithHistory())
-      {
-        engineCeres.ResetGame();
-        count++;
-
-        GameEngineSearchResultCeres search = engineCeres.SearchCeres(pp, SearchLimit.NodesPerMove(1_000));
-
-
-        MCTSTree tree = search.Search.Manager.Context.Tree;
-        for (int i = 2; i <= 9; i += 2)
-        {
-          //          MCTSCheckPV.PVCheckResult checkResult = MCTSCheckPVAll.Check(search.Search, null, i);
-
-        }
-
-
-        {
-          if (count % 1000 == 0)
-          {
-            //            Console.WriteLine("**** " + count + "  " + (float)MCTSCheckPVAll.numSearchExtended / MCTSCheckPVAll.numBaseSearched +
-            //              " " + MCTSCheckPVAll.numBlundersFound + " " + MCTSCheckPVAll.sumBlunders);
-          }
-          if (count > 5_000) System.Environment.Exit(3);
-        }
-
-#endif
