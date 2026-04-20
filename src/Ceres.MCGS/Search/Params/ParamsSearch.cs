@@ -263,6 +263,8 @@ public record ParamsSearch
   /// beyond those directly on the visit path that gave rise to a leaf visit
   /// (recursively upward to specified number of levels).
   /// Value of 0 disables the feature.
+  /// Value of 1 propagates only to immediate parents and is known threadsafe (but does not seem to gain Elo).
+  /// Values greater than 1 should not be used due to threadsafety concerns.
   /// </summary>
   public int OffPathBackupNumAdditionalLevelsToPropagate = 0;
 
