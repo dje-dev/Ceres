@@ -135,7 +135,8 @@ public partial class MCGSBackup
             }
             else
             {
-              const bool BUGFIX_INITIAL_BACKUP = true; // TODO: this is believed required, remove alternate code when further tested.
+              // TODO: enable this fix after more testing, likely appropriate (but testing was not clearly positive).
+              const bool BUGFIX_INITIAL_BACKUP = false; 
               if (BUGFIX_INITIAL_BACKUP)
               {
                 // Passing initialBackupValue.V (=0) as newQChild on a rep-draw would clobber
