@@ -14,6 +14,8 @@
 #region Using directives
 
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Ceres.MCGS.Graphs.GNodes;
 
 #endregion
@@ -30,9 +32,9 @@ public unsafe partial class Graph
   /// For each node, entropy is computed over the distribution of visits to children,
   /// where the distribution includes all policy moves (including unexpanded moves which count as 0 visits).
   /// </summary>
-  /// <param name="maxSamples">Maximum number of nodes to sample (default 2000)</param>
+  /// <param name="maxSamples">Maximum number of nodes to sample</param>
   /// <returns>Average entropy across sampled nodes, or 0 if no valid samples</returns>
-  public float CalcAvgVisitEntropy(int maxSamples = 2000)
+  public float CalcAvgVisitEntropy(int maxSamples = 1500)
   {
     int numUsedNodes = NodesStore.NumUsedNodes;
 
@@ -42,33 +44,47 @@ public unsafe partial class Graph
       return 0;
     }
 
-    Random random = new();
     double totalEntropy = 0;
     int validSamples = 0;
+    Lock aggregateLock = new();
 
     int samplesToTake = Math.Min(maxSamples, numUsedNodes);
 
-    for (int i = 0; i < samplesToTake; i++)
-    {
-      // Pick a random node index in range [1, numUsedNodes]
-      // Index 0 is reserved (null node), so start from 1
-      int nodeIndex = random.Next(1, numUsedNodes + 1);
+    Parallel.For(0, samplesToTake,
+                 new ParallelOptions { MaxDegreeOfParallelism = 8 },
+                 () => (Random.Shared, totalEntropy: 0d, validSamples: 0),
+                 (i, _, state) =>
+                 {
+                   // Pick a random node index in range [1, numUsedNodes]
+                   // Index 0 is reserved (null node), so start from 1
+                   int nodeIndex = state.Shared.Next(1, numUsedNodes + 1);
 
-      GNode node = this[nodeIndex];
+                   GNode node = this[nodeIndex];
 
-      // Skip nodes that are old generation (orphaned)
-      if (node.NodeRef.IsOldGeneration)
-      {
-        continue;
-      }
+                   // Skip nodes that are old generation (orphaned)
+                   if (node.NodeRef.IsOldGeneration)
+                   {
+                     return state;
+                   }
 
-      double entropy = CalcNodeVisitEntropy(node);
-      if (!double.IsNaN(entropy))
-      {
-        totalEntropy += entropy;
-        validSamples++;
-      }
-    }
+                   double entropy = CalcNodeVisitEntropy(node);
+                   if (!double.IsNaN(entropy))
+                   {
+                     state.totalEntropy += entropy;
+                     state.validSamples++;
+                   }
+
+                   return state;
+                 },
+                 state =>
+                 {
+                   lock (aggregateLock)
+                   {
+                     totalEntropy += state.totalEntropy;
+                   }
+
+                   Interlocked.Add(ref validSamples, state.validSamples);
+                 });
 
     return validSamples > 0 ? (float)(totalEntropy / validSamples) : 0;
   }
@@ -88,15 +104,19 @@ public unsafe partial class Graph
       return double.NaN;
     }
 
-    // Total visits to children is N - 1 (excluding the root visit to this node itself)
-    int totalVisits = node.N - 1;
+    double entropy = 0;
+    int numExpandedEdges = node.NumEdgesExpanded;
+    int totalVisits = 0;
+
+    for (int i = 0; i < numExpandedEdges; i++)
+    {
+      totalVisits += node.ChildEdgeAtIndex(i).N;
+    }
+
     if (totalVisits <= 0)
     {
       return double.NaN;
     }
-
-    double entropy = 0;
-    int numExpandedEdges = node.NumEdgesExpanded;
 
     // Process expanded edges (which have actual visit counts)
     for (int i = 0; i < numExpandedEdges; i++)
