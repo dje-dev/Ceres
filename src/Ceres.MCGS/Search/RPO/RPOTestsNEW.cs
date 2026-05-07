@@ -587,6 +587,12 @@ public static class ReverseKlPosteriorPolicy
     double aLo = low;
     double aHi = high;
 
+    // Early-termination tolerance on residual |sum - 1|. With AVX-vectorized
+    // SumCoeffOverAlphaMinusQ each iteration is cheap, but most positions
+    // converge well before the iteration cap. The cap remains an upper bound
+    // for pathological brackets where convergence is slow.
+    const double ResidualTol = 1e-6;
+
     for (int it = 0; it < iterations; it++)
     {
       double mid = 0.5 * (aLo + aHi);
@@ -597,6 +603,14 @@ public static class ReverseKlPosteriorPolicy
         // If numerical trouble, push alpha upward.
         aLo = mid;
         continue;
+      }
+
+      if (Math.Abs(s - 1.0) < ResidualTol)
+      {
+        // Residual within tolerance: mid is the best estimate (downstream
+        // sumPi renormalization in ComputePosterior absorbs any tiny excess).
+        alpha = mid;
+        return alpha > maxQEff && IsFinite(alpha);
       }
 
       if (s > 1.0)
