@@ -594,6 +594,49 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
       // Q should have already been set and will not change.
       Debug.Assert(node.Q >= 0.995);
     }
+    else if (ParamsSelect.CBGPUCTBackupActive)
+    {
+      // CB-GPUCT regularized backup: store V_bar (Grill reverse-KL) directly as Q.
+      // The existing edge.QChild refresh path then propagates it upward unchanged.
+      // deltaW is intentionally ignored: V_bar is recomputed from current child stats.
+      double vBar = CBGPUCTScoreCalc.ComputeVBar(node, ParamsSelect);
+
+      if (MCGSParamsFixed.DEBUG_CBGPUCT)
+      {
+        // Fair vanilla comparison: visit-weighted child Q (parent perspective) plus self V.
+        int nc = node.NumEdgesExpanded;
+        double sumChildN = 0;
+        double sumChildW = 0;
+        for (int i = 0; i < nc; i++)
+        {
+          GEdge edge = node.ChildEdgeAtIndex(i);
+          sumChildN += edge.N;
+          sumChildW += -edge.Q * edge.N;
+        }
+        double vanillaQ = (sumChildW + node.NodeRef.V) / (sumChildN + 1);
+
+        // Suppress trace when V_bar essentially matches the vanilla visit-weighted Q
+        // (most backups when the regularization isn't shifting Q meaningfully).
+        const double MIN_DELTA_TO_LOG = 0.25;
+        if (Math.Abs(vBar - vanillaQ) > MIN_DELTA_TO_LOG)
+        {
+          double lambdaN = (nc == 0 || sumChildN == 0)
+            ? 0
+            : CBGPUCTScoreCalc.ComputeLambdaNForBackup(ParamsSelect, sumChildN, nc);
+          Console.WriteLine($"[CBGPUCT] V_bar node=#{node.Index.Index} N={node.N} expanded={nc} "
+                          + $"sumChildN={sumChildN:F0} lambda_N={lambdaN:F4} "
+                          + $"V_bar={vBar:+0.0000;-0.0000} vanilla_Q={vanillaQ:+0.0000;-0.0000} "
+                          + $"delta={(vBar - vanillaQ):+0.0000;-0.0000}");
+        }
+      }
+
+      node.NodeRef.Q = vBar;
+
+      // Update D using running average (unchanged from standard backup).
+      double oldDSum = node.D * startN;
+      double newDSum = oldDSum + deltaD;
+      node.NodeRef.D = newDSum / (startN + deltaN);
+    }
     else
     {
       double oldWPure = node.ComputeQPure() * startN;
@@ -609,12 +652,17 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     }
 
 #if DEBUG
-    int count = 0;
-    for (int i=0;i<node.NumEdgesExpanded;i++)
+    // Skip in CB-GPUCT graph-aware mode: edge.N there caches child.N (cross-parent),
+    // not the per-edge visit count, so this invariant intentionally no longer holds.
+    if (!ParamsSelect.CBGPUCTSelectActive || !ParamsSelect.CBGPUCT_GraphAwareDeficit)
     {
-      count += node.ChildEdgeAtIndex(i).N;
+      int count = 0;
+      for (int i=0;i<node.NumEdgesExpanded;i++)
+      {
+        count += node.ChildEdgeAtIndex(i).N;
+      }
+      Debug.Assert(node.N == count + (node.NodeRef.Terminal.IsTerminal() ? node.N : 1));
     }
-    Debug.Assert(node.N == count + (node.NodeRef.Terminal.IsTerminal() ? node.N : 1));
 #endif
   }
 
@@ -650,10 +698,24 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
       edge.AddUpdateSample(priorMean, newQChild);
     }
 
-    // The N on edges represents the number of visits along this path to the child node,
-    // independent of total visits to the child (some of which may have arisen via other parents).
-    // (see: https://github.com/lightvector/KataGo/blob/master/docs/GraphSearch.md).
-    edge.N += deltaN;
+    // Default: edge.N is per-edge visit count (visits along this path to the child).
+    // CB-GPUCT graph-aware mode: edge.N caches the destination node's total N (a slightly
+    // stale snapshot taken at this parent's most recent backup; cross-parent visits to
+    // the same child between this parent's backups are not reflected). This avoids the
+    // per-child node deref during gather. childNode.N has already been updated by the
+    // BackupToNode call earlier in the backup chain, so the snapshot is fresh here.
+    // Terminal edges have no destination node (childNode is null), so fall back to
+    // the increment semantic for those - matches the guard pattern used by
+    // PropagateQChangesUpward below.
+    if (ParamsSelect.CBGPUCTSelectActive && ParamsSelect.CBGPUCT_GraphAwareDeficit
+        && edge.Type == GEdgeStruct.EdgeType.ChildEdge)
+    {
+      edge.N = edge.ChildNode.NodeRef.N;
+    }
+    else
+    {
+      edge.N += deltaN;
+    }
     edge.QChild = newQChild;
 
     // Note that the assertion on edge N and child N

@@ -51,6 +51,13 @@ public static class MCGSParamsFixed
 
   public const bool VALIDATE_GRAPH_EACH_BATCH = false;
 
+  /// <summary>
+  /// If true, CB-GPUCT (Confidence-Bound Graph PUCT) major operations
+  /// emit console traces: activation banner, V_bar recomputation
+  /// (with vanilla-Q comparison), and root-level selection summaries.
+  /// </summary>
+  public const bool DEBUG_CBGPUCT = false;
+
   public const int LOGGING_EXCLUDE_ITERATOR_NUM = -1;
 
   public const int MIN_N_START_OVERLAP = 1500;

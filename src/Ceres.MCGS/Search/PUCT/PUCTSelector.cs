@@ -262,7 +262,8 @@ public static class PUCTSelector
                                                               qWhenNoChildrenComposite,
                                                               numToProcess, numTargetVisits,
                                                               scores, childVisitCounts, cpuctMultiplier,
-                                                              thresholdPUCTSuboptimalityReject);
+                                                              thresholdPUCTSuboptimalityReject,
+                                                              parentNode: node);
 
       // In action head mode the selected children may want to fall out of order.
       if (numTargetVisits > 0  && paramsSelect.FPUMode == ParamsSelect.FPUType.ActionHead)

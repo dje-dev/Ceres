@@ -28,7 +28,8 @@ namespace Ceres.MCGS.Search.RPO;
 
 public static class RPOTestsNEW
 {
-  public static double CalcRPOQ(GNode node, double qWhenNoChildren, int numChildrenToConsider, double rpoLambdaP)
+  public static double CalcRPOQ(GNode node, double qWhenNoChildren, 
+                                int numChildrenToConsider, double rpoLambdaP)
   {
     const double BASE_U = 2.5;
     const double LAMBDA_U = 0.3f; // 0.5 was worse
@@ -36,7 +37,7 @@ public static class RPOTestsNEW
     double lambdaPScaled = rpoLambdaP / Math.Sqrt(node.N);
     int numExpanded = node.NumEdgesExpanded;
 
-    Span<(double Q, double P, double U)> actions = stackalloc (double Q, double P, double U)[numExpanded];
+    Span<(double Q, double P, int N, double U)> actions = stackalloc (double Q, double P, int N, double U)[numExpanded];
 
     for (int i = 0; i < numExpanded; i++)
     {
@@ -47,6 +48,7 @@ public static class RPOTestsNEW
         actions[i].P = edge.P;
 
         int n = edge.N;
+        actions[i].N = n;
         if (n == 0)
         {
           actions[i].Q = node.Q; // fill-in for the case where this edge is still in flight and empty
@@ -73,10 +75,8 @@ public static class RPOTestsNEW
     ReverseKlPosteriorPolicy.ComputePosterior(actions,
                                               lambdaPScaled,
                                               LAMBDA_U,
-
                                               0.15, 1,
-                                              posteriorP, posteriorQ,
-                                              options);
+                                              posteriorP, posteriorQ, options);
 
     // compute dot product of posteriorP and posteriorQ 
     throw new NotImplementedException("Needs remediation, next line disabled out for TCEC compile failure");
@@ -171,15 +171,18 @@ public static class ReverseKlPosteriorPolicy
     VariancePenalty = 5
   }
 
+
   public class Options
   {
-    public Options(UncertaintyMode uncertaintyMode = UncertaintyMode.LowerConfidenceBound,
+    public Options(UncertaintyMode uncertaintyMode = UncertaintyMode.None,
+                   double numUncertaintyPseudovisits = 0,
                    double minPriorProbability = 0.0,
-                    bool clampQToUnitInterval = true,
-                    bool clampEffectiveQToUnitInterval = false,
-                    int bisectionIterations = 20)
+                   bool clampQToUnitInterval = true,
+                   bool clampEffectiveQToUnitInterval = false,
+                   int bisectionIterations = 20)
     {
       UncertaintyMode = uncertaintyMode;
+      NumUncertaintyPseudovisits = numUncertaintyPseudovisits;
       MinPriorProbability = minPriorProbability;
       ClampQToUnitInterval = clampQToUnitInterval;
       ClampEffectiveQToUnitInterval = clampEffectiveQToUnitInterval;
@@ -187,6 +190,11 @@ public static class ReverseKlPosteriorPolicy
     }
 
     public UncertaintyMode UncertaintyMode { get; }
+
+    /// <summary>
+    /// Number of "pseudo-visits" used for Bayesian shrinkage of Q toward rootQ based on uncertainty U.
+    /// </summary>
+    public double NumUncertaintyPseudovisits { get; } 
 
     /// <summary>
     /// Optional epsilon-smoothing floor applied to priorP before renormalization.
@@ -223,7 +231,7 @@ public static class ReverseKlPosteriorPolicy
   ///   - This method performs no heap allocations for typical chess branching factors (uses stackalloc).
   ///   - Caller may treat qImputed as ReadOnlySpan<double> after the call.
   /// </summary>
-  public static void ComputePosterior(ReadOnlySpan<(double Q, double PriorP, double U)> actions,
+  public static void ComputePosterior(ReadOnlySpan<(double Q, double PriorP, int N, double U)> actions,
                                                     double lambdaP,
                                                     double lambdaQ,
                                                     double rootQ,
@@ -348,7 +356,16 @@ public static class ReverseKlPosteriorPolicy
 
       qEff[i] = qEffective;
 
-      double c = lambdaP * pNorm * weightFactor;
+      double precision = 1;
+      if (options.NumUncertaintyPseudovisits > 0)
+      {
+        // Precision shrinkage: multiply the per-action coefficient by N/(N+K) so actions whose q
+        // estimate rests on few samples (low N) contribute proportionally less to the posterior.
+        // K = NumUncertaintyPseudovisits is the shrinkage scale - precision = 0.5 at N=K, asymptotes to 1 as N >> K.
+        precision = actions[i].N / (actions[i].N + options.NumUncertaintyPseudovisits);
+      } 
+      double c = lambdaP * pNorm * weightFactor * precision;
+
       if (c < 0.0 || !IsFinite(c))
       {
         c = 0.0;
@@ -379,6 +396,16 @@ public static class ReverseKlPosteriorPolicy
       GreedyOnQ(qEff, posteriorPi.Slice(0, n));
       return;
     }
+
+#if NOT
+    int SHRNKAGE_NUM_PSEUDVISITS = (actions.Length == 1 || actions[0].N <= 1) ? 0 : 1;
+    double anchor = rootQ;  // e.g., prior-weighted Q
+    for (int i = 0; i < n; i++)
+    {
+      double w = (double)actions[i].N / (actions[i].N + SHRNKAGE_NUM_PSEUDVISITS);// options.ShrinkagePseudoVisits
+      qEff[i] = w * qEff[i] + (1.0 - w) * anchor;
+    }
+#endif
 
     // Solve for alpha: sum_i coeff_i / (alpha - qEff_i) = 1, alpha > maxQEff.
     double alpha;
@@ -693,7 +720,7 @@ public static class ReverseKlPosteriorPolicy
   }
 
   private static void WriteNormalizedPrior(
-      ReadOnlySpan<(double Q, double PriorP, double U)> actions,
+      ReadOnlySpan<(double Q, double PriorP, int N, double U)> actions,
       double minPrior,
       Span<double> posteriorPi)
   {
@@ -744,8 +771,7 @@ public static class ReverseKlPosteriorPolicy
     }
   }
 
-  private static double DetermineFallbackQ(
-      ReadOnlySpan<(double Q, double PriorP, double U)> actions,
+  private static double DetermineFallbackQ(ReadOnlySpan<(double Q, double PriorP, int N, double U)> actions,
       double rootQ,
       bool clampToUnit)
   {
@@ -776,7 +802,7 @@ public static class ReverseKlPosteriorPolicy
     return 0.0;
   }
 
-  private static double DetermineFallbackU(ReadOnlySpan<(double Q, double PriorP, double U)> actions, double rootU)
+  private static double DetermineFallbackU(ReadOnlySpan<(double Q, double PriorP, int N, double U)> actions, double rootU)
   {
     if (IsFinite(rootU))
     {

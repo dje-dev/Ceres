@@ -161,6 +161,140 @@ public record ParamsSelect
   public float RPOSelectLambda = 0; // e.g. 1.0
   public float RPOLambdaPower = 0.5f; // e.g. 0.5 or 0.45, KL divergence is divided by MathF.Pow(N, RPOLambdaPower)
 
+
+  #region CB-GPUCT (visit-target regularized-policy graph MCTS) parameters
+
+  /// <summary>
+  /// Selects which CB-GPUCT components are active
+  /// (potentially regularized select/backup according to
+  /// "Monte-Carlo tree search as regularized policy optimization" (Grill et al 2022).
+  /// </summary>
+  public enum CBGPUCTModeType
+  {
+    /// <summary>
+    /// CB-GPUCT off; standard PUCT selection and standard Q-pure backup.
+    /// </summary>
+    None,
+
+    /// <summary>
+    /// Visit-target pi_bar selection (replaces PUCT scoring); standard backup.
+    /// </summary>
+    SelectOnly,
+
+    /// <summary>
+    /// Standard PUCT selection; V_bar regularized backup (overwrites node.Q).
+    /// </summary>
+    BackupOnly,
+
+    /// <summary>
+    /// Both: pi_bar selection AND V_bar regularized backup.
+    /// </summary>
+    SelectAndBackup
+  }
+
+  /// <summary>
+  /// CB-GPUCT mode (see CBGPUCTModeType). Default None disables CB-GPUCT entirely.
+  /// </summary>
+  public CBGPUCTModeType CBGPUCT_Mode = CBGPUCTModeType.None;
+
+  /// <summary>
+  /// Convenience predicate: visit-target pi_bar selection is active.
+  /// </summary>
+  public bool CBGPUCTSelectActive => CBGPUCT_Mode == CBGPUCTModeType.SelectOnly
+                                  || CBGPUCT_Mode == CBGPUCTModeType.SelectAndBackup;
+
+  /// <summary>
+  /// Convenience predicate: V_bar regularized backup is active.
+  /// </summary>
+  public bool CBGPUCTBackupActive => CBGPUCT_Mode == CBGPUCTModeType.BackupOnly
+                                  || CBGPUCT_Mode == CBGPUCTModeType.SelectAndBackup;
+
+  /// <summary>
+  /// Schedule used to compute lambda_N (the regularization strength) from sum N_a:
+  /// |A| = actual number of children (numChildren) in both schedules.
+  /// LambdaExp is ignored when schedule is UCT.
+  /// Phase-specific instances (CBGPUCT_SelectLambda* and CBGPUCT_BackupLambda*) below.
+  /// </summary>
+  public enum CBGPUCTLambdaScheduleType
+  {
+    /// <summary>
+    ///  LambdaC * pow(sumN, LambdaExp) / (|A| + sumN). Standard Grill schedule.
+    /// </summary>
+    Pow,
+
+    /// <summary>
+    /// LambdaC * sqrt(log(sumN + e) / (|A| + sumN)) UCT-style log term. 
+    /// Slower asymptotic decay than Pow (sqrt(log N / N) vs 1/sqrt(N)), 
+    /// so regularization stays meaningful at higher sumN.
+    /// </summary>
+    UCT
+  }
+
+  /// <summary>
+  /// The value used for |A| (number of actions) in the denominator of the lambda_N schedules. 
+  /// According to Grill this would be average number of actions (e.g. 30)
+  /// causing enhanced regularization at low visit counts, but empirically small values are found better.
+  /// </summary>
+  public const int CGPUCT_BaseNumVisits = 1;
+
+  /// <summary>
+  /// Number of "pseudovisits" used to shrink Q toward parent Q when computing Q for backup.
+  /// </summary>
+  public double CGPUCT_NumUncertaintyPseudovisits = 0;
+
+
+  /// <summary>
+  /// Lambda schedule for the SELECTION phase (visit-target deficit pi_bar).
+  /// </summary>
+  public CBGPUCTLambdaScheduleType CBGPUCT_SelectLambdaSchedule = CBGPUCTLambdaScheduleType.Pow;
+
+  /// <summary>
+  /// Multiplicative scale on lambda_N for the SELECTION phase.
+  /// Larger values keep pi_bar closer to the prior P (more exploration);
+  /// smaller values let pi_bar concentrate on high-Q actions.
+  /// </summary>
+  public float CBGPUCT_SelectLambdaC = 1.75f;
+
+  /// <summary>
+  /// Exponent on (sum N_a) in the Pow lambda_N schedule for the SELECTION phase.
+  /// Value of 0.5 replicate Grill et al.
+  /// </summary>
+  public float CBGPUCT_SelectLambdaExp = 0.5f;
+
+  /// <summary>
+  /// Lambda schedule for the BACKUP phase (V_bar regularized value computation).
+  /// </summary>
+  public CBGPUCTLambdaScheduleType CBGPUCT_BackupLambdaSchedule = CBGPUCTLambdaScheduleType.Pow;
+
+  /// <summary>
+  /// Multiplicative scale on lambda_N for the BACKUP phase.
+  /// </summary>
+  public float CBGPUCT_BackupLambdaC = 0.75f;
+
+  /// <summary>
+  /// Exponent on (sum N_a) in the Pow lambda_N schedule for the BACKUP phase.
+  /// Smaller values cause more rapid decay of lambda_N and thus weaker regularization of Q higher visit counts.
+  /// </summary>
+  public float CBGPUCT_BackupLambdaExp = 0.4f;
+
+  /// <summary>
+  /// If true, the visit-target deficit uses the destination node's total
+  /// (graph-aggregated) visit count rather than the per-edge visit count:
+  ///   deficit(a) = pi_bar(a) * (sum_a edge.N + 1) - child(a).N
+  /// In transposition cases this redirects exploration away from children
+  /// already well-visited via other parents - sending visits where the
+  /// confidence about the child's value is lowest. The Q values used in
+  /// V_bar are unaffected (they always reflect cross-parent backups), so
+  /// re-routing visits in this way does not distort the parent's Q.
+  ///
+  /// When false, deficit uses per-edge N - each parent independently aims
+  /// for its own visit-count target without considering other parents'
+  /// contributions to the same child.
+  /// </summary>
+  public bool CBGPUCT_GraphAwareDeficit = true;
+
+  #endregion
+
   /// <summary>
   /// For values > 0, the power mean of the children Q is used in PUCT instead of just Q.
   /// The coefficient used for a given child with N visits is N^POWER_MEAN_N_EXPONENT.
@@ -344,6 +478,36 @@ public record ParamsSelect
     if (FPUMode != FPUType.ActionHead)
     {
       ActionResortUnvisitedChildren = false;
+    }
+  }
+
+
+  /// <summary>
+  /// Cross-validates this ParamsSelect against the ParamsSearch with which it will be used.
+  /// Performed after the per-class Validate() calls.
+  /// </summary>
+  /// <param name="paramsSearch"></param>
+  internal void ValidateAgainst(ParamsSearch paramsSearch)
+  {
+    if (CBGPUCT_Mode != CBGPUCTModeType.None)
+    {
+      if (!paramsSearch.EnableGraph)
+      {
+        throw new Exception($"CBGPUCT_Mode={CBGPUCT_Mode} requires ParamsSearch.EnableGraph=true.");
+      }
+      if (paramsSearch.PathTranspositionMode != PathMode.PositionEquivalence)
+      {
+        throw new Exception($"CBGPUCT_Mode={CBGPUCT_Mode} requires PathTranspositionMode=PositionEquivalence.");
+      }
+
+      if (MCGSParamsFixed.DEBUG_CBGPUCT)
+      {
+        Console.WriteLine($"[CBGPUCT] active mode={CBGPUCT_Mode} "
+                        + $"select(C={CBGPUCT_SelectLambdaC:F3} sched={CBGPUCT_SelectLambdaSchedule} exp={CBGPUCT_SelectLambdaExp:F3}) "
+                        + $"backup(C={CBGPUCT_BackupLambdaC:F3} sched={CBGPUCT_BackupLambdaSchedule} exp={CBGPUCT_BackupLambdaExp:F3}) "
+                        + $"GraphAwareDeficit={CBGPUCT_GraphAwareDeficit} "
+                        + $"(graph={paramsSearch.EnableGraph}, mode={paramsSearch.PathTranspositionMode})");
+      }
     }
   }
 
