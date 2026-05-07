@@ -159,6 +159,7 @@ public partial class MCGSSearch
 
     paramsSearch.Validate();
     paramsSelect.Validate();
+    paramsSelect.ValidateAgainst(paramsSearch);
 
     if (paramsSelect.RPOBackupLambda == 0 &&
       (paramsSearch.SelectExplorationForUncertaintyAtNode > 0
