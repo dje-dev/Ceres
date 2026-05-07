@@ -155,13 +155,6 @@ public record ParamsSelect
   public bool UseDynamicVLoss = false;
 
 
-  public float RPOBackupLambda = 0; // e.g. 0.6
-  public int RPOBackupMinN = 10;
-
-  public float RPOSelectLambda = 0; // e.g. 1.0
-  public float RPOLambdaPower = 0.5f; // e.g. 0.5 or 0.45, KL divergence is divided by MathF.Pow(N, RPOLambdaPower)
-
-
   #region CB-GPUCT (visit-target regularized-policy graph MCTS) parameters
 
   /// <summary>

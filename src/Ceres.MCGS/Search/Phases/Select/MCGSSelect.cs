@@ -159,7 +159,6 @@ public class MCGSSelect
 
     ParamsSearch paramsSearch = iterator.Engine.Manager.ParamsSearch;
     bool graphEnabled = paramsSearch.EnableGraph;
-    bool useRPO = graphEnabled && iterator.Engine.Manager.ParamsSelect.RPOSelectLambda > 0;
     bool enablePUCSuboptimalityThreshold = paramsSearch.VisitSuboptimalityRejectThreshold.HasValue;
     bool parallelEnabled = paramsSearch.Execution.SelectOperationParallelThresholdNumVisits < int.MaxValue;
     float cpuctMultiplier = iterator.CPUCTMultiplier;
@@ -342,8 +341,7 @@ public class MCGSSelect
       Debug.Assert(parentNode.N == childStats.SumN 
                 || (Engine.Manager.ParamsSelect.CBGPUCTSelectActive && Engine.Manager.ParamsSelect.CBGPUCT_GraphAwareDeficit));
 
-      if (MCGSParamsFixed.RESET_Q_DURING_SELECT_PHASE_FROM_ALL_CHILDREN
-       && Engine.Manager.ParamsSelect.RPOBackupLambda == 0)
+      if (MCGSParamsFixed.RESET_Q_DURING_SELECT_PHASE_FROM_ALL_CHILDREN)
       {
         if (Engine.Manager.ParamsSelect.CBGPUCTBackupActive)
         {
@@ -390,10 +388,6 @@ public class MCGSSelect
     // This will likely allow JIT to elide span bounds checks in the loop
     childVisitCounts = childVisitCounts[..numChildrenToConsider];
     scores = ALSO_COMPUTE_CHILD_SCORES ? scores[..numChildrenToConsider] : default;
-    if (useRPO)
-    {
-      ApplyRPO(numAttemptedVisits, parentNode, childVisitCounts, numChildrenToConsider);
-    }
 
     // Loop thru child slots and process any with nonzero visits.
     // Note that we must process visits to any not yet expanded children first,
@@ -1310,46 +1304,6 @@ public class MCGSSelect
   }
 
 
-
-  /// <summary>
-  /// Adjusts child visit counts using Rational Policy Optimization (RPO) to better align
-  /// visit allocation with optimal policy distribution across expanded children.
-  /// </summary>
-  private void ApplyRPO(int numAttemptedVisits, GNode parentNode, Span<short> childVisitCounts, int numChildrenToConsider)
-  {
-    bool wasNewChild = childVisitCounts.Length > parentNode.NumEdgesExpanded
-                    && childVisitCounts[parentNode.NumEdgesExpanded] > 0;
-
-    if (parentNode.NumEdgesExpanded > 1 && (RPO_CHOOSES_NEW_CHILDREN || !wasNewChild))
-    {
-      double qWhenNoChildren = QWhenNoChildren(parentNode, Engine.Manager.ParamsSelect);
-
-      throw new NotImplementedException("Disabled next line to avoid reference to TestFlag, possibly ok");
-      RPOResult rpo = default;
-#if NOT
-      RPOResult rpo = RPOTests.BestMoveInfo(parentNode, (float)qWhenNoChildren, numChildrenToConsider,
-                                            Engine.Manager.ParamsSelect.RPOSelectLambda,
-                                            Engine.Manager.ParamsSelect.RPOLambdaPower,
-                                            MCGSParamsFixed.RPO_USE_WEIGHTING,
-                                            Engine.Manager.ParamsSearch.TestFlag);
-#endif
-      if (rpo.optimalP != null)
-      {
-        Span<int> newVisitCounts = VisitAllocator.AllocateVisits(numAttemptedVisits, rpo.empiricalN, rpo.optimalP, parentNode.NumEdgesExpanded);
-        //COUNT++;
-        //COR += PearsonCorrelation(newVisitCounts, childVisitCounts[..newVisitCounts.Length]);
-
-        childVisitCounts.Clear();
-        int allocated = 0;
-        for (int i = 0; i < newVisitCounts.Length; i++)
-        {
-          childVisitCounts[i] = (short)newVisitCounts[i];
-          allocated += newVisitCounts[i];
-        }
-        Debug.Assert(numAttemptedVisits == allocated);
-      }
-    }
-  }
 
 
   private static int ApplyPUCTSuboptimalityThreshold(MCGSPath path,

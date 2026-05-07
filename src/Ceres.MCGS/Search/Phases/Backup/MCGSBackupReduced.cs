@@ -38,7 +38,6 @@ public partial class MCGSBackup
 {
   public void BackupReduced(MCGSSelectBackupStrategyBase strategy, MCGSPath path, int iteratorID)
   {
-    double rpoLambda = Engine.Manager.ParamsSelect.RPOBackupLambda;
     bool enablePseudoTranspositionBlending = Engine.Manager.ParamsSearch.EnablePseudoTranspositionBlending;
 
     ref MCGSPathVisit leafVisitRef = ref path.LeafVisitRef;
@@ -75,11 +74,6 @@ public partial class MCGSBackup
           }
           else
           {
-            if (rpoLambda > 0 && visitEdge.ChildNode.NumEdgesExpanded > 1)
-            {
-              visitEdge.ChildNode.RPOUpdateQ(enablePseudoTranspositionBlending, rpoLambda);
-            }
-
             int newNumPendingBackup = Interlocked.Add(ref visitPathRef.NumVisitsAttemptedPendingBackup, -numVisitsAttempted);
             Debug.Assert(numVisitsAccepted >= 0);
             if (newNumPendingBackup > 0)

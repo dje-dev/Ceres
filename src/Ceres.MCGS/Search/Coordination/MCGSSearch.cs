@@ -161,14 +161,6 @@ public partial class MCGSSearch
     paramsSelect.Validate();
     paramsSelect.ValidateAgainst(paramsSearch);
 
-    if (paramsSelect.RPOBackupLambda == 0 &&
-      (paramsSearch.SelectExplorationForUncertaintyAtNode > 0
-     || paramsSearch.SelectExplorationForUncertaintyAtNode > 0
-     || MCGSParamsFixed.TRACK_NODE_EDGE_UNCERTAINTY))
-    {
-      throw new Exception("Currently uncertainty tracking only works in RPO mode (when select updates disabled)");
-    }
-
     // TODO: clean this up?
     string tablebasePaths = paramsSearch.EnableTablebases ? paramsSearch.TablebasePaths : null;
     bool forceNoTablebaseTerminals = EvaluatorSyzygy.PosIsTablebaseWinWithNoDTZAvailable(tablebasePaths, priorMoves);
