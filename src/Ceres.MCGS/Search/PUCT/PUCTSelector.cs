@@ -150,7 +150,7 @@ public static class PUCTSelector
     }
 
 
-    if (false && paramsSearch.TestFlag)
+    if (true && paramsSearch.TestFlag)
     {
       Span<double> uncertaintyPolicySpan = stats.UP.Span;
       Span<double> uncertaintyValueSpan = stats.UV.Span;
@@ -158,10 +158,17 @@ public static class PUCTSelector
       Span<double> wSpan = stats.W.Span;
       for (int i = 0; i < Math.Min(node.NumEdgesExpanded, numToProcess); i++)
       {
-        const double VALUE_UNCERTAINTY_WEIGHT = 1.0f;
-        double n = Math.Max(1, nSpan[i]);
-        double adjust = (VALUE_UNCERTAINTY_WEIGHT * uncertaintyValueSpan[i]) / Math.Sqrt(n + 1);
-        wSpan[i] -= adjust * nSpan[i];
+        if (!double.IsNaN(uncertaintyValueSpan[i]))
+        {
+          const double VALUE_UNCERTAINTY_WEIGHT = 0.3f;
+          double n = Math.Max(1, nSpan[i]);
+          if (n == 1)
+          {
+            double adjust = (VALUE_UNCERTAINTY_WEIGHT * uncertaintyValueSpan[i]) / Math.Sqrt(n);
+            //adjust *= -1;
+            wSpan[i] -= adjust * nSpan[i];
+          }
+        }
       }
     }
 

@@ -1178,8 +1178,7 @@ public unsafe partial class Graph : IDisposable
         a[i] = (double)childEdgeHeaders[i].ActionV; // Read from header (survives expansion; edge struct has no storage)
 #endif
         // Extract value uncertainty with fill-in if missing
-        const double DEFAULT_UNCERTAINTY = 0.10f;
-        uv[i] = float.IsNaN(refEdge.UncertaintyV) ? DEFAULT_UNCERTAINTY : (double)refEdge.UncertaintyV;
+        uv[i] = (double)refEdge.UncertaintyV;
 
         w[i] = refEdge.N == 0 ? 0 : (refEdge.Q * refEdge.N);
 
