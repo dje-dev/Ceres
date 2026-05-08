@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Numerics.Tensors;
 
 #endregion
 
@@ -31,30 +32,26 @@ public static class TemperatureScaler
   {
     int count = probabilitiesKnown.Length;
 
+#if DEBUG
+    if (TensorPrimitives.Min(probabilitiesKnown) < 0.0 || TensorPrimitives.Max(probabilitiesKnown) > 1.0)
+    {
+      throw new ArgumentOutOfRangeException(nameof(probabilitiesKnown), "Probabilities must be in [0,1]");
+    }
+#endif
+
     double missingMass = 1.0 - sumProbabilities;
     int missingCount = countAllProbabilities - count;
-    double alpha = 1.0f / temperature;
+    double alpha = 1.0 / temperature;
 
-    // Raise to power (1/T) and accumulate denominator.
-    Span<double> scaled = count <= 64 ? stackalloc double[count] : new double[count];
+    TensorPrimitives.Pow(probabilitiesKnown, alpha, probabilitiesKnown);
 
-    double denominator = 0.0f;
-    for (int i = 0; i < count; i++)
-    {
-      if (probabilitiesKnown[i] < 0.0f || probabilitiesKnown[i] > 1.0f)
-      {
-        throw new ArgumentOutOfRangeException(nameof(probabilitiesKnown), "Probabilities must be in [0,1]");
-      }
-      double value = (float)Math.Pow(probabilitiesKnown[i], alpha);
-      scaled[i] = value;
-      denominator += value;
-    }
+    double denominator = TensorPrimitives.Sum(probabilitiesKnown);
 
     //  Add the unseen moves' contribution (uniform assumption).
     if (missingCount > 0 && missingMass > 0.0f)
     {
       double uniformRest = missingMass / missingCount;
-      double restContributionEach = (float)Math.Pow(uniformRest, alpha);
+      double restContributionEach = Math.Pow(uniformRest, alpha);
       denominator += restContributionEach * missingCount;
     }
 
@@ -64,9 +61,10 @@ public static class TemperatureScaler
     }
 
     // Normalize and write back in place.
+    double invDenominator = 1.0 / denominator;
     for (int i = 0; i < count; i++)
     {
-      probabilitiesKnown[i] = scaled[i] / denominator;
+      probabilitiesKnown[i] *= invDenominator;
     }
   }
 }
