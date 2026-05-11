@@ -150,7 +150,7 @@ public static class PUCTSelector
     }
 
 
-    if (true && paramsSearch.TestFlag)
+    if (false && paramsSearch.TestFlag)
     {
       Span<double> uncertaintyPolicySpan = stats.UP.Span;
       Span<double> uncertaintyValueSpan = stats.UV.Span;
