@@ -714,13 +714,10 @@ namespace Ceres.Chess.EncodedPositions
                                   board.TheirKing.Data, board.TheirQueens.Data, board.TheirRooks.Data, board.TheirBishops.Data, board.TheirKnights.Data, board.TheirPawns.Data,
                                   in miscInfo);
 
-      bool whiteCanCastleOO = true;
-      bool blackCanCastleOO = true;
-      bool whiteCanCastleOOO = true;
-      bool blackCanCastleOOO = true;
+      bool whiteCanCastleOO, whiteCanCastleOOO, blackCanCastleOO, blackCanCastleOOO;
       int rule50 = 0;
 
-      if (historyIndex == 0) // The Rule50 and castling can only be definitively determined for the first position.
+      if (historyIndex == 0) // Rule50 and castling can only be definitively determined for the first position.
       {
         rule50 = MiscInfo.InfoPosition.Rule50Count;
 
@@ -741,51 +738,23 @@ namespace Ceres.Chess.EncodedPositions
       }
       else
       {
-        // Some calculations are necessary to compute plausible en passant and castling rights.
-        // TODO: the PieceOnSquare calculations below could be made more efficient with direct bitmap operations.
-
-        // Best we can do is assume castling rights exist if the king and rook are in their initial positions.
-        if (pos.PieceOnSquare(SquareNames.E1) != new Piece(SideType.White, PieceType.King))
-        {
-          whiteCanCastleOO = false;
-          whiteCanCastleOOO = false;
-        }
-        else
-        {
-          if (pos.PieceOnSquare(SquareNames.A1) != new Piece(SideType.White, PieceType.Rook))
-          {
-            whiteCanCastleOOO = false;
-          }
-
-          if (pos.PieceOnSquare(SquareNames.H1) != new Piece(SideType.White, PieceType.Rook))
-          {
-            whiteCanCastleOO = false;
-          }
-        }
-
-        if (pos.PieceOnSquare(SquareNames.E8) != new Piece(SideType.Black, PieceType.King))
-        {
-          blackCanCastleOO = false;
-          blackCanCastleOOO = false;
-        }
-        else
-        {
-          if (pos.PieceOnSquare(SquareNames.A8) != new Piece(SideType.Black, PieceType.Rook))
-          {
-            blackCanCastleOOO = false;
-          }
-
-          if (pos.PieceOnSquare(SquareNames.H8) != new Piece(SideType.Black, PieceType.Rook))
-          {
-            blackCanCastleOO = false;
-          }
-        }
+        // Castling rights are not stored for history positions; assume true and let the
+        // board-scan below clear them for any slot where the king or rook is absent.
+        whiteCanCastleOO = whiteCanCastleOOO = blackCanCastleOO = blackCanCastleOOO = true;
       }
+
+      // FRC-aware castling reconstruction: the LC0 wire format does not carry rook
+      // placement, so derive it from board state. Castling-rights flags are passed by
+      // reference and cleared by the helper for any slot where no qualifying rook is
+      // found (or the king is off its back rank).
+      RookPlacementInfo rookInfo = RookPlacementInfo.DeriveFromBoard(in pos,
+                                                                     ref whiteCanCastleOO, ref whiteCanCastleOOO,
+                                                                     ref blackCanCastleOO, ref blackCanCastleOOO);
 
       // NOTE: move number cannot be determined, set value to 2 (which will translate to 1 ply in FEN) since 0 is considered invalid.
       miscInfo = new PositionMiscInfo(whiteCanCastleOO, whiteCanCastleOOO, blackCanCastleOO, blackCanCastleOOO,
                                     thisHistoryPositionIsWhite ? SideType.White : SideType.Black,
-                                    rule50, repetitionCount, 2, enPassant);
+                                    rule50, repetitionCount, 2, enPassant, rookInfo);
       pos.SetMiscInfo(miscInfo);
 
       return pos;

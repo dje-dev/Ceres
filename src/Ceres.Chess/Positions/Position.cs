@@ -1475,44 +1475,48 @@ namespace Ceres.Chess
         }
         else if (movingPiece.Type == PieceType.Rook)
         {
-          // Standard chess: white rooks start at A1 (file 0) and H1 (file 7),
-          // black rooks at A8 (file 0) and H8 (file 7).
+          // FRC-aware: clear castling rights when the rook moves from its initial square.
+          // RookPlacementInfo stores files in H1-indexed convention (h=0..a=7), so the
+          // natural file (a=0..h=7) is (7 - InitPlacement). Standard chess (default
+          // RookInfo) yields natural files h=7 / a=0, matching the prior hard-coded checks.
+          RookPlacementInfo ri = this.MiscInfo.RookInfo;
           if (movingPiece.Side == SideType.White)
           {
-            if (move.FromSquare.File == 7 && move.FromSquare.Rank == 0)
+            if (move.FromSquare.Rank == 0 && move.FromSquare.File == (7 - ri.WhiteKRInitPlacement))
               newWhiteCanOO = false;
-            else if (move.FromSquare.File == 0 && move.FromSquare.Rank == 0)
+            else if (move.FromSquare.Rank == 0 && move.FromSquare.File == (7 - ri.WhiteQRInitPlacement))
               newWhiteCanOOO = false;
           }
           else
           {
-            if (move.FromSquare.File == 7 && move.FromSquare.Rank == 7)
+            if (move.FromSquare.Rank == 7 && move.FromSquare.File == (7 - ri.BlackKRInitPlacement))
               newBlackCanOO = false;
-            else if (move.FromSquare.File == 0 && move.FromSquare.Rank == 7)
+            else if (move.FromSquare.Rank == 7 && move.FromSquare.File == (7 - ri.BlackQRInitPlacement))
               newBlackCanOOO = false;
           }
         }
-        // If a rook is captured, update opponent's castling rights.
+        // If a rook is captured, update opponent's castling rights (FRC-aware via RookInfo).
         if (isCapture && targetPiece.Type == PieceType.Rook)
         {
+          RookPlacementInfo ri = this.MiscInfo.RookInfo;
           if (targetPiece.Side == SideType.White)
           {
-            if (move.ToSquare.File == 7 && move.ToSquare.Rank == 0)
+            if (move.ToSquare.Rank == 0 && move.ToSquare.File == (7 - ri.WhiteKRInitPlacement))
             {
               newWhiteCanOO = false;
             }
-            else if (move.ToSquare.File == 0 && move.ToSquare.Rank == 0)
+            else if (move.ToSquare.Rank == 0 && move.ToSquare.File == (7 - ri.WhiteQRInitPlacement))
             {
               newWhiteCanOOO = false;
             }
           }
           else
           {
-            if (move.ToSquare.File == 7 && move.ToSquare.Rank == 7)
+            if (move.ToSquare.Rank == 7 && move.ToSquare.File == (7 - ri.BlackKRInitPlacement))
             {
               newBlackCanOO = false;
             }
-            else if (move.ToSquare.File == 0 && move.ToSquare.Rank == 7)
+            else if (move.ToSquare.Rank == 7 && move.ToSquare.File == (7 - ri.BlackQRInitPlacement))
             {
               newBlackCanOOO = false;
             }
@@ -1536,7 +1540,9 @@ namespace Ceres.Chess
         newMove50Count = this.MiscInfo.Move50Count + 1;
       }
 
-      // Construct a new, immutable PositionMiscInfo.
+      // Construct a new, immutable PositionMiscInfo. RookInfo represents the game's
+      // initial rook placement (invariant across moves) and must be propagated; otherwise
+      // FRC games silently revert to standard-chess rook files after every move.
       PositionMiscInfo updatedMiscInfo = new PositionMiscInfo(
           newWhiteCanOO,
           newWhiteCanOOO,
@@ -1546,7 +1552,8 @@ namespace Ceres.Chess
           newMove50Count,
           newRepetitionCount,
           newMoveNum,
-          newEnPassant
+          newEnPassant,
+          this.MiscInfo.RookInfo
       );
       SetMiscInfo(updatedMiscInfo);
 

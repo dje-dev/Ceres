@@ -191,7 +191,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// Best move according to alternate reference model 1.
     /// </summary>
     public EncodedMove RefModel1BestMove;
-    
+
     #endregion
 
     /// <summary>
@@ -203,7 +203,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// Moves (actually half-moves) left until game end training target.
     /// </summary>
     public float MLH;
-    
+
     /// <summary>
     /// Difference between Q of best move and V as a training target proxying for uncertainty.
     /// We record this rather than (say) the absolute difference for uncertainty
@@ -554,15 +554,31 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
       int move50Count = pieceHistoryIndex > 0 ? 0 : TPGRecordEncoding.Move50CountDecoded(squareRecord.Move50Count.Value);
 
-      // Note that castling status and move 50 rule values are not available for positions other than current (index 0).
-      // For index > 0, we substitute a guess based on the settings for the current position.
+      // Build the Position with castling-rights flags and a default RookPlacementInfo,
+      // then for the current position (index 0) call the shared helper to derive the
+      // correct rook placement from board state and update via SetMiscInfo. The helper
+      // also clears any castling-rights ref parameter for which no qualifying rook is
+      // found, keeping the resulting state internally consistent. History positions
+      // (index > 0) retain the conservative "castling-might-be-possible" defaults
+      // above and a default RookPlacementInfo (RookInfo is not used for the historical
+      // planes the NN consumes).
+      SideType sideToMove = isWhite ? SideType.White : SideType.Black;
+      int repetitionCount = (int)squareRecord.HistoryRepetitionCounts[pieceHistoryIndex].Value;
       PositionMiscInfo miscInfo = new PositionMiscInfo(whiteCanOO, whiteCanOOO, blackCanOO, blackCanOOO,
-                                                       isWhite ? SideType.White : SideType.Black,
-                                                       move50Count,
-                                                       (int)squareRecord.HistoryRepetitionCounts[pieceHistoryIndex].Value,
-                                                       2, // use move plies 2 (i.e. 1 full move) since true value unknown
+                                                       sideToMove, move50Count, repetitionCount,
+                                                       2, // use move plies 2 (= 1 full move) since true value unknown
                                                        enPassant);
       Position p = new Position(piecesOnSquares.Slice(0, numAdded), miscInfo);
+
+      if (pieceHistoryIndex == 0)
+      {
+        RookPlacementInfo rookInfo = RookPlacementInfo.DeriveFromBoard(in p,
+                                                                       ref whiteCanOO, ref whiteCanOOO,
+                                                                       ref blackCanOO, ref blackCanOOO);
+        miscInfo = new PositionMiscInfo(whiteCanOO, whiteCanOOO, blackCanOO, blackCanOOO,
+                                        sideToMove, move50Count, repetitionCount, 2, enPassant, rookInfo);
+        p.SetMiscInfo(miscInfo);
+      }
 
       return p;
     }
@@ -601,11 +617,11 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
         if (PolicyIndices[i] == index)
         {
           return true;
-        } 
+        }
       }
 
       return false;
-    } 
+    }
 
 
     /// <summary>

@@ -101,7 +101,20 @@ namespace Ceres.Chess
           mirroredEnPassant = (EnPassantFileIndexEnum)(7 - EnPassantFileIndex);
         }
 
-        return new PositionMiscInfo(WhiteCanOO, WhiteCanOOO, BlackCanOO, BlackCanOOO, SideToMove, Move50Count, RepetitionCount, MoveNum, mirroredEnPassant);
+        // Horizontal mirror: the rook formerly east of the king is now west of the king,
+        // so kingside/queenside designations swap (OO <-> OOO) and the KR / QR slots in
+        // RookPlacementInfo cross. Files in RookPlacementInfo are H1-indexed (h=0..a=7);
+        // a horizontal mirror inverts that as (7 - file). For standard chess (defaults
+        // KR=0, QR=7) the new values reduce to KR=0, QR=7 — symmetric and unchanged.
+        RookPlacementInfo mirroredRook = default;
+        mirroredRook.WhiteKRInitPlacement = (byte)(7 - RookInfo.WhiteQRInitPlacement);
+        mirroredRook.WhiteQRInitPlacement = (byte)(7 - RookInfo.WhiteKRInitPlacement);
+        mirroredRook.BlackKRInitPlacement = (byte)(7 - RookInfo.BlackQRInitPlacement);
+        mirroredRook.BlackQRInitPlacement = (byte)(7 - RookInfo.BlackKRInitPlacement);
+
+        return new PositionMiscInfo(WhiteCanOOO, WhiteCanOO, BlackCanOOO, BlackCanOO,
+                                    SideToMove, Move50Count, RepetitionCount, MoveNum,
+                                    mirroredEnPassant, mirroredRook);
       }
     }
 
