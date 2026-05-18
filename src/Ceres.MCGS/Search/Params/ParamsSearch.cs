@@ -31,7 +31,7 @@ public enum PathMode
   /// Only the current position is used (no history).
   /// 
   /// This mode suffers from the GHI (graph history inconsistency) problem because it 
-  /// records information keyed only by the position, while the game’s rules make game state
+  /// records information keyed only by the position, while the gameï¿½s rules make game state
   /// (draw by repetition detection) depend on prior occurrences along the current line.
   /// 
   /// By aliasing together all positions that are identical in board position,
@@ -188,9 +188,9 @@ public record ParamsSearch
 
   // Optionally stop descent at a transposition node only if it has a
   // sufficiently large number of visits. 
-  // This parameter is the cutoff value of a transposed child’s visit count
+  // This parameter is the cutoff value of a transposed childï¿½s visit count
   // relative to to the edge's requested visits (as a ratio)
-  // triggering stop of descent and instead directly backing up the child’s value.
+  // triggering stop of descent and instead directly backing up the childï¿½s value.
   // Larger values encourages exploring more deeply those nodes that are often visited
   // from many parents (and therefore may have more importance to accurately evaluate).
   // Tests with T81 on HOP at 240s+4s versus Stockfish at various levels (Elo +/-18):
@@ -420,6 +420,15 @@ public record ParamsSearch
   /// If nodes should apply supplemental updates.
   /// </summary>
   public bool EnableGraphCatchUp = false;
+
+  /// <summary>
+  /// If true, applies an "early smoothing" mechanism to the per-move time allocation:
+  /// for up to 3 of the first 20 engine moves after the first-move-bonus move, when the
+  /// current search root N is below 35% of the post-first-move baseline (an "early unsmooth"
+  /// graph), boost the move's allocation by 1.3x. Helps compensate when graph reuse is poor
+  /// in the early game.
+  /// </summary>
+  public bool GameLimitEarlySmoothing = true;
 
   /// <summary>
   /// If searches are possibly terminated early if it is determined the top move
