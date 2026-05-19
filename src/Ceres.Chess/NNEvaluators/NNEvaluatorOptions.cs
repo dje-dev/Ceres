@@ -32,6 +32,7 @@ namespace Ceres.Chess.NNEvaluators
     public const float DEFAULT_POLICY_TEMPERATURE = 1f;
     public const float DEFAULT_POLICY1_TEMPERATURE = 1f;
     public const float DEFAULT_POLICY2_TEMPERATURE = 1f;
+    public const float DEFAULT_ACTION_TEMPERATURE = 1f; 
 
     #region Value Head Options
 
@@ -108,7 +109,7 @@ namespace Ceres.Chess.NNEvaluators
       float policy1Temperature = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "P1TEMP", Policy1Temperature);
       float policy2Temperature = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "P2TEMP", Policy2Temperature);
       bool policy2BlendLogits = CheckOptionSpecifiedElseDefaultBoolean(optionsDict, "P2BLENDLOGITS", Policy2BlendLogits);
-
+      float actionTemperature = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "ACTTEMP", ActionTemperature);
       bool useCUDAGraphs = CheckOptionSpecifiedElseDefaultBoolean(optionsDict, "CUDAGRAPHS", EnableCUDAGraphs);
       int optimizationLevel = CheckOptionSpecifiedElseDefaultInt(optionsDict, "OPT", OptimizationLevel, 0, 5);
 
@@ -173,6 +174,12 @@ namespace Ceres.Chess.NNEvaluators
     /// If false, blending is performed after converting each head to probabilities.
     /// </summary>
     public virtual bool Policy2BlendLogits { get; init; } = true;
+
+    /// <summary>
+    /// Temperature applied to action selection probabilities.
+    /// </summary>
+    public virtual float ActionTemperature { get; init; } = 1.0f;
+
 
     /// <summary>
     /// Returns true if any advanced policy features are requested that require

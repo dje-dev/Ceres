@@ -221,29 +221,6 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
 
 
-  /// <summary>
-  /// Creates evaluator with pool of exact batch size engines for intelligent batch splitting.
-  /// Uses MultiGPUEnginePool for multi-GPU support and optimized batch handling.
-  /// </summary>
-  /// <param name="onnxFileName">Path to ONNX model file</param>
-  /// <param name="netType">Type of neural network (LC0 or TPG)</param>
-  /// <param name="poolMode">Engine pool mode (Exact or Range)</param>
-  /// <param name="batchSizes">Array of exact batch sizes for engines</param>
-  /// <param name="gpuIDs">GPU IDs to use, defaults to [0]</param>
-  /// <param name="useCudaGraphs">Enable CUDA graphs for faster inference</param>
-  /// <param name="softMaxBatchSize">Soft max batch size (can exceed largest engine via splitting)</param>
-  public NNEvaluatorTensorRT(string onnxFileName,
-                             ONNXNetExecutor.NetTypeEnum netType,
-                             EnginePoolMode poolMode,
-                             int[] batchSizes,
-                             int[] gpuIDs = null,
-                             bool useCudaGraphs = false,
-                             int softMaxBatchSize = 0,
-                             int optimizationLevel = 3)
-    : this(onnxFileName, netType, poolMode, batchSizes, null, gpuIDs, useCudaGraphs, softMaxBatchSize, optimizationLevel, forceBF16: false, refittable: false)
-  {
-  }
-
 
   /// <summary>
   /// Creates evaluator with pool of exact batch size engines for intelligent batch splitting.
@@ -717,6 +694,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     bool policy2BlendLogits = Options?.Policy2BlendLogits ?? true;
     float policy1Temperature = Options?.Policy1Temperature ?? 1.0f;
     float policy2Temperature = Options?.Policy2Temperature ?? 1.0f;
+    float actionTemperature = Options?.ActionTemperature ?? 1.0f;
 
     // Capture buffer size for thread-local allocation in handler
     int requiredBufferSize = outputFloatBufferSize;
@@ -746,7 +724,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                    fractionPolicyHead2, policy2BlendLogits,
                                    policy1Temperature, policy2Temperature,
                                    NetType == ONNXNetExecutor.NetTypeEnum.TPG,
-                                   posMoveIsLegal);
+                                   posMoveIsLegal, actionTemperature);
     };
 
     if (useByteInputs)
@@ -1037,7 +1015,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                             float fractionPolicyHead2, bool policy2BlendLogits,
                                             float policy1Temperature, float policy2Temperature,
                                             bool wdlIsLogistic,
-                                            Func<int, int, bool> posMoveIsLegal)
+                                            Func<int, int, bool> posMoveIsLegal,
+                                            float actionTemperature = 1)
   {
     // Compute tensor offsets once outside the parallel loop
     TensorOffsets offsets = ComputeTensorOffsets(engineBatchSize);
@@ -1181,11 +1160,22 @@ public class NNEvaluatorTensorRT : NNEvaluator
           float a1 = actionLogits[baseActionIndex + 1]; // D logit
           float a2 = actionLogits[baseActionIndex + 2]; // L logit
 
-          // Numerically stable softmax
+          // Numerically stable softmax with optional temperature scaling
           float actionLogitMax = MathF.Max(MathF.Max(a0, a1), a2);
-          float expW = MathF.Exp(a0 - actionLogitMax);
-          float expD = MathF.Exp(a1 - actionLogitMax);
-          float expL = MathF.Exp(a2 - actionLogitMax);
+          float expW, expD, expL;
+          if (actionTemperature != 1.0f)
+          {
+            float invActionTemp = 1.0f / actionTemperature;
+            expW = MathF.Exp((a0 - actionLogitMax) * invActionTemp);
+            expD = MathF.Exp((a1 - actionLogitMax) * invActionTemp);
+            expL = MathF.Exp((a2 - actionLogitMax) * invActionTemp);
+          }
+          else
+          {
+            expW = MathF.Exp(a0 - actionLogitMax);
+            expD = MathF.Exp(a1 - actionLogitMax);
+            expL = MathF.Exp(a2 - actionLogitMax);
+          }
           float actionSum = expW + expD + expL;
 
           // Store (W_prob, L_prob) - D is derived as 1 - W - L
@@ -1482,6 +1472,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     bool policy2BlendLogits = Options?.Policy2BlendLogits ?? true;
     float policy1Temperature = Options?.Policy1Temperature ?? 1.0f;
     float policy2Temperature = Options?.Policy2Temperature ?? 1.0f;
+    float actionTemperature = Options?.ActionTemperature ?? 1.0f;
 
     // Capture buffer size for thread-local allocation in handler
     int requiredBufferSize = outputFloatBufferSize;
@@ -1534,7 +1525,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
                              valueHead1TemperatureScaling, valueHead2TemperatureScaling,
                              fractionPolicyHead2, policy2BlendLogits,
                              policy1Temperature, policy2Temperature,
-                             NetType == ONNXNetExecutor.NetTypeEnum.TPG);
+                             NetType == ONNXNetExecutor.NetTypeEnum.TPG,
+                             actionTemperature);
     };
 
     if (NetType == ONNXNetExecutor.NetTypeEnum.LC0)
@@ -1815,7 +1807,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                       float valueHead1TemperatureScaling, float valueHead2TemperatureScaling,
                                       float fractionPolicyHead2, bool policy2BlendLogits,
                                       float policy1Temperature, float policy2Temperature,
-                                      bool wdlIsLogistic)
+                                      bool wdlIsLogistic,
+                                      float actionTemperature = 1f)
   {
     // Compute tensor offsets once outside the parallel loop
     TensorOffsets offsets = ComputeTensorOffsets(engineBatchSize);
@@ -1971,11 +1964,22 @@ public class NNEvaluatorTensorRT : NNEvaluator
           float a1 = actionLogits[baseActionIndex + 1]; // D logit
           float a2 = actionLogits[baseActionIndex + 2]; // L logit
 
-          // Numerically stable softmax
+          // Numerically stable softmax with optional temperature scaling
           float actionLogitMax = MathF.Max(MathF.Max(a0, a1), a2);
-          float expW = MathF.Exp(a0 - actionLogitMax);
-          float expD = MathF.Exp(a1 - actionLogitMax);
-          float expL = MathF.Exp(a2 - actionLogitMax);
+          float expW, expD, expL;
+          if (actionTemperature != 1.0f)
+          {
+            float invActionTemp = 1.0f / actionTemperature;
+            expW = MathF.Exp((a0 - actionLogitMax) * invActionTemp);
+            expD = MathF.Exp((a1 - actionLogitMax) * invActionTemp);
+            expL = MathF.Exp((a2 - actionLogitMax) * invActionTemp);
+          }
+          else
+          {
+            expW = MathF.Exp(a0 - actionLogitMax);
+            expD = MathF.Exp(a1 - actionLogitMax);
+            expL = MathF.Exp(a2 - actionLogitMax);
+          }
           float actionSum = expW + expD + expL;
 
           // Store (W_prob, L_prob) - D is derived as 1 - W - L
