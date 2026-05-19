@@ -44,7 +44,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
 {
   internal const bool VERBOSE_ACTION_HEAD = false;
 
-  float MIN_PROBABILITY_FOR_ACTION_REARRANGEMENT => ParamsSearch.TestFlag2 ? 0 : 0.01f; // Action head values lose accuracy below about the 1% level
+  const float MIN_PROBABILITY_FOR_ACTION_REARRANGEMENT = 0.01f; // Action head values lose accuracy below about the 1% level
   const int MAX_SWAPS = 5;
   internal const float ACTION_HEAD_FPU_VALUE = 0.10f;
 
