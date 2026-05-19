@@ -131,7 +131,7 @@ namespace Ceres.MCTS.Managers.Limits
       // Therefore an adjustment was made to use more time in the early game (first 40% of time used).
       // However even in this early phases, extensive testing (versus SF) showed that
       // large increases in time spent are Elo negative; only modest increases are slightly helpful (5 to 10 Elo).
-      const float BASE_MULTIPLIER_EARLY = 0.72f; // use more time early in game
+      const float BASE_MULTIPLIER_EARLY = 0.70f; // use more time early in game
       const float BASE_MULTIPLIER_NOT_EARLY = 0.68f;
 
       float adjustedBaseMultiplier = earlyGameExtension ? BASE_MULTIPLIER_EARLY : BASE_MULTIPLIER_NOT_EARLY;
