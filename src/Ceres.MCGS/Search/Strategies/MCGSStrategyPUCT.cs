@@ -16,10 +16,14 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
-
+using System.Threading;
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
-
+using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
+using Ceres.Chess.NetEvaluation.Batch;
+using Ceres.Chess.NNEvaluators;
+using Ceres.Chess.Positions;
 using Ceres.MCGS.Graphs;
 using Ceres.MCGS.Graphs.GEdgeHeaders;
 using Ceres.MCGS.Graphs.GEdges;
@@ -40,10 +44,8 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
 {
   internal const bool VERBOSE_ACTION_HEAD = false;
 
-  internal const bool ACTION_HEAD_CONSERVATIVE_RESORT_MODE = false;
-  // if the top policy move is conservatively ineligible for rearrangement
-  const bool ACTION_REARRANGE_PIN_TOP_POLICY_MOVE = ACTION_HEAD_CONSERVATIVE_RESORT_MODE;
-  const int MAX_SWAPS = ACTION_HEAD_CONSERVATIVE_RESORT_MODE ? 2 : 5;
+  const float MIN_PROBABILITY_FOR_ACTION_REARRANGEMENT = 0.01f; // Action head values lose accuracy below about the 1% level
+  const int MAX_SWAPS = 5;
   internal const float ACTION_HEAD_FPU_VALUE = 0.10f;
 
   public ParamsSearch ParamsSearch => Engine.Manager.ParamsSearch;
@@ -102,7 +104,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
   /// <param name="node"></param>
   /// <param name="numTargetVisits"></param>
   /// <returns></returns>
-  internal override int NumChildrenToConsider(GNode node, int numTargetVisits) 
+  internal override int NumChildrenToConsider(GNode node, int numTargetVisits)
     => node.NumEdgesExpanded + numTargetVisits;
 
 
@@ -111,31 +113,41 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
   /// <summary>
   /// Reorders children (originally sorted by prior, index 0 = best prior)
   /// by <paramref name="scores"/> descending, subject to the constraint that
-  /// no child moves more than <paramref name="d"/> positions from its prior rank.
+  /// no child moves more than <paramref name="maxD"/> positions from its prior rank.
   /// Writes the resulting permutation (original indices) into <paramref name="result"/>.
   /// </summary>
-  public static void SortDisplacementCapped(ReadOnlySpan<double> scores, int d, Span<int> result)
+  public static void SortDisplacementCapped(ReadOnlySpan<double> scores,
+                                            int maxD,
+                                            Span<int> result,
+                                            int numEligible = int.MaxValue)
   {
     int n = scores.Length;
     if (result.Length != n)
+    {
       throw new ArgumentException("result must have same length as scores", nameof(result));
-    if (d < 0)
-      throw new ArgumentOutOfRangeException(nameof(d));
+    }
 
-    // For small N (typical MCTS branching), a stack-allocated bool array
-    // avoids any heap allocation.
-    Span<bool> placed = n <= 256 ? stackalloc bool[n] : new bool[n];
-    placed.Clear();
+    if (maxD < 0)
+    {
+      throw new ArgumentOutOfRangeException(nameof(maxD));
+    }
 
+    Span<bool> placed = stackalloc bool[n];
     for (int slot = 0; slot < n; slot++)
     {
-      int lo = Math.Max(0, slot - d);
-      int hi = Math.Min(n - 1, slot + d);
+      if (slot >= numEligible)
+      {
+        result[slot] = slot;
+        continue;
+      }
+
+      int lo = Math.Max(0, slot - maxD);
+      int hi = Math.Min(numEligible - 1, slot + maxD);
 
       // Deadline rule: any unplaced child i with i + d == slot MUST go now,
       // otherwise it would violate its upper displacement bound next iteration.
       int pick = -1;
-      int forcedIdx = slot - d; // the only i where i + d == slot
+      int forcedIdx = slot - maxD; // the only i where i + d == slot
       if (forcedIdx >= 0 && forcedIdx <= hi && !placed[forcedIdx])
       {
         pick = forcedIdx;
@@ -174,10 +186,11 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
   }
 
 
+  NNEvaluator actualVEvaluator = null;
+  Lock actualVEvaluatorLock = new();
+
   void PossiblyActionResortUsingAction(GNode node, Graph graph, in ParamsSearch paramsSearch, in ParamsSelect paramsSelect)
   {
-    const float MIN_PROBABILITY_FOR_ACTION_BOOST = 0;
-
     Debug.Assert(node.N == 1);
     if (paramsSelect.FPUMode != ParamsSelect.FPUType.ActionHead
       || node.NumPolicyMoves < 2)
@@ -207,10 +220,38 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
                                        cpuctMultiplier: 1.0f,
                                        temperatureMultiplier: 1.0f);
 
-    // Compute baseline scores (without ActionHead, using default FPU settings)
+    // Compute baseline children actual V and
+    // also CPUCT scores (without ActionHead, using default FPU settings)
     double[] baselineScores = null;
+    double[] actualV = null;
     if (VERBOSE_ACTION_HEAD)
     {
+      actualV = new double[nodeRef.NumPolicyMoves];
+      lock (actualVEvaluatorLock)
+      {
+        if (actualVEvaluator == null)
+        {
+          // Create dedicated NN evaluator avoid locking problems 
+          actualVEvaluator = Engine.Manager.EvaluatorDef.ToEvaluator();
+        }
+        for (int i = 0; i < nodeRef.NumPolicyMoves; i++)
+        {
+          if (i < nodeRef.NumEdgesExpanded)
+          {
+            actualV[i] = node.ChildEdgeAtIndex(i).ChildNode.V;
+          }
+          else
+          {
+            MGPosition pos = node.CalcPosition();
+            MGMove mgMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(node.ChildEdgeHeaderAtIndex(i).Move, pos);
+            pos.MakeMove(mgMove);
+            NNEvaluatorResult childEval = actualVEvaluator.Evaluate(new PositionWithHistory(pos.ToPosition));
+            actualV[i] = childEval.V;
+          }
+        }
+      }
+
+
       baselineScores = new double[nodeRef.NumPolicyMoves];
       ParamsSelect defaultParams = new ParamsSelect();
       PUCTSelector.ComputeTopChildScores(graph, node,
@@ -234,20 +275,26 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     // Compute FEN for verbose output
     string fen = VERBOSE_ACTION_HEAD ? node.CalcPosition().ToPosition.FEN : null;
 
-    if (MAX_SWAPS > 0)
+    int numEligible = node.NumPolicyMoves;
+
+    // Possibly restrict subsitution of action value to moves with a minimum P
+    if (MIN_PROBABILITY_FOR_ACTION_REARRANGEMENT > 0)
     {
-      if (ACTION_REARRANGE_PIN_TOP_POLICY_MOVE)
+      for (int i = 0; i < numEligible; i++)
       {
-        ApplyDisplacementCappedSort(scores[1..], moveInfosSpan[1..], MAX_SWAPS, MIN_PROBABILITY_FOR_ACTION_BOOST,
-                                    baselineScores != null ? baselineScores.AsSpan(1) : default,
-                                    nodeRef.V, nodeRef.UncertaintyValue, nodeRef.UncertaintyPolicy, fen);
+        if (moveInfosSpan[i].P < MIN_PROBABILITY_FOR_ACTION_REARRANGEMENT)
+        {
+          numEligible = i;
+          break;
+        }
       }
-      else
-      {
-        ApplyDisplacementCappedSort(scores, moveInfosSpan, MAX_SWAPS, MIN_PROBABILITY_FOR_ACTION_BOOST,
-                                    baselineScores,
-                                    nodeRef.V, nodeRef.UncertaintyValue, nodeRef.UncertaintyPolicy, fen);
-      }
+    }
+
+    if (numEligible > 0 && MAX_SWAPS > 0)
+    {
+      ApplyDisplacementCappedSort(scores, moveInfosSpan, numEligible, MAX_SWAPS, baselineScores,
+                                  actualV != null ? actualV.AsSpan() : default,
+                                  nodeRef.V, nodeRef.UncertaintyValue, nodeRef.UncertaintyPolicy, fen);
     }
     else
     {
@@ -262,7 +309,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
         for (int i = 1; i < nodeRef.NumPolicyMoves; i++)
         {
           // Do not swap for low probability nodes.
-          if (moveInfosSpan[i].P < MIN_PROBABILITY_FOR_ACTION_BOOST)
+          if (moveInfosSpan[i].P < MIN_PROBABILITY_FOR_ACTION_REARRANGEMENT)
           {
             break;
           }
@@ -287,8 +334,10 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
   /// ensuring no element moves more than maxDisplacement positions from its original index.
   /// </summary>
   private static void ApplyDisplacementCappedSort(Span<double> scores, Span<GEdgeHeaderStruct> moveInfosSpan,
-                                                  int maxDisplacement, float minProbabilityForBoost,
+                                                  int numEligible,
+                                                  int maxDisplacement,
                                                   ReadOnlySpan<double> baselineScores,
+                                                  ReadOnlySpan<double> actualV,
                                                   float nodeV, float nodeUV, float nodeUP,
                                                   string fen)
   {
@@ -296,17 +345,16 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
 
     // Get the permutation from SortDisplacementCapped.
     Span<int> permutation = stackalloc int[n];
-    SortDisplacementCapped(scores, maxDisplacement, permutation);
+    SortDisplacementCapped(scores, maxDisplacement, permutation, Math.Min(n, numEligible));
 
     if (VERBOSE_ACTION_HEAD)
     {
-      DumpActionHeadResortInfo(scores, moveInfosSpan, permutation, baselineScores, nodeV, nodeUV, nodeUP, fen);
+      DumpActionHeadResortInfo(scores, moveInfosSpan, permutation, baselineScores, actualV, nodeV, nodeUV, nodeUP, fen);
     }
 
     // Apply the permutation to moveInfosSpan.
     // Use a temporary buffer to hold the reordered elements.
     Span<GEdgeHeaderStruct> temp = stackalloc GEdgeHeaderStruct[n];
-
     for (int i = 0; i < n; i++)
     {
       temp[i] = moveInfosSpan[permutation[i]];
@@ -315,11 +363,6 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     // Copy back to original span (only for elements with sufficient probability).
     for (int i = 0; i < n; i++)
     {
-      // Do not reorder low probability nodes.
-      if (temp[i].P < minProbabilityForBoost)
-      {
-        break;
-      }
       moveInfosSpan[i] = temp[i];
     }
   }
@@ -336,6 +379,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
                                                ReadOnlySpan<GEdgeHeaderStruct> moveInfosSpan,
                                                ReadOnlySpan<int> permutation,
                                                ReadOnlySpan<double> baselineScores,
+                                               ReadOnlySpan<double> actualV,
                                                float nodeV, float nodeUV, float nodeUP,
                                                string fen)
   {
@@ -355,6 +399,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     double[] actionVValues = new double[n];
     double[] actionHeadScores = new double[n];
     double[] baselineScoresArray = new double[n];
+    double[] actualVArray = new double[n];
     int[] newPosArray = new int[n];
 
     for (int i = 0; i < n; i++)
@@ -366,6 +411,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
 #endif
       actionHeadScores[i] = scores[i];
       baselineScoresArray[i] = baselineScores.IsEmpty ? double.NaN : baselineScores[i];
+      actualVArray[i] = actualV.IsEmpty ? double.NaN : actualV[i];
       newPosArray[i] = newPositions[i];
     }
 
@@ -380,6 +426,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     Console.WriteLine(FormatRow("Moves:", i => moveStrs[i].PadLeft(6)));
     Console.WriteLine(FormatRow("Policy:", i => (100 * policies[i]).ToString("0.0").PadLeft(5) + "%"));
 #if ACTION_ENABLED
+    Console.WriteLine(FormatRow("V       :", i => actualVArray[i].ToString("0.00").PadLeft(6)));
     Console.WriteLine(FormatRow("Action V:", i => actionVValues[i].ToString("0.00").PadLeft(6)));
 #endif
     if (!baselineScores.IsEmpty)
@@ -387,7 +434,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
       Console.WriteLine(FormatRow("Scores (baseline):", i => baselineScoresArray[i].ToString("0.00").PadLeft(6)));
     }
     Console.WriteLine(FormatRow("Scores (ActionHead):", i => actionHeadScores[i].ToString("0.00").PadLeft(6)));
-//    Console.WriteLine(FormatRow("Original position:", i => i.ToString().PadLeft(6)));
+    //    Console.WriteLine(FormatRow("Original position:", i => i.ToString().PadLeft(6)));
     Console.WriteLine(FormatRow("New position:", i =>
     {
       int delta = newPosArray[i] - i;
@@ -594,6 +641,49 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
       // Q should have already been set and will not change.
       Debug.Assert(node.Q >= 0.995);
     }
+    else if (ParamsSelect.CBGPUCTBackupActive)
+    {
+      // CB-GPUCT regularized backup: store V_bar (Grill reverse-KL) directly as Q.
+      // The existing edge.QChild refresh path then propagates it upward unchanged.
+      // deltaW is intentionally ignored: V_bar is recomputed from current child stats.
+      double vBar = CBGPUCTScoreCalc.ComputeVBar(node, ParamsSelect);
+
+      if (MCGSParamsFixed.DEBUG_CBGPUCT)
+      {
+        // Fair vanilla comparison: visit-weighted child Q (parent perspective) plus self V.
+        int nc = node.NumEdgesExpanded;
+        double sumChildN = 0;
+        double sumChildW = 0;
+        for (int i = 0; i < nc; i++)
+        {
+          GEdge edge = node.ChildEdgeAtIndex(i);
+          sumChildN += edge.N;
+          sumChildW += -edge.Q * edge.N;
+        }
+        double vanillaQ = (sumChildW + node.NodeRef.V) / (sumChildN + 1);
+
+        // Suppress trace when V_bar essentially matches the vanilla visit-weighted Q
+        // (most backups when the regularization isn't shifting Q meaningfully).
+        const double MIN_DELTA_TO_LOG = 0.25;
+        if (Math.Abs(vBar - vanillaQ) > MIN_DELTA_TO_LOG)
+        {
+          double lambdaN = (nc == 0 || sumChildN == 0)
+            ? 0
+            : CBGPUCTScoreCalc.ComputeLambdaNForBackup(ParamsSelect, sumChildN, nc);
+          Console.WriteLine($"[CBGPUCT] V_bar node=#{node.Index.Index} N={node.N} expanded={nc} "
+                          + $"sumChildN={sumChildN:F0} lambda_N={lambdaN:F4} "
+                          + $"V_bar={vBar:+0.0000;-0.0000} vanilla_Q={vanillaQ:+0.0000;-0.0000} "
+                          + $"delta={(vBar - vanillaQ):+0.0000;-0.0000}");
+        }
+      }
+
+      node.NodeRef.Q = vBar;
+
+      // Update D using running average (unchanged from standard backup).
+      double oldDSum = node.D * startN;
+      double newDSum = oldDSum + deltaD;
+      node.NodeRef.D = newDSum / (startN + deltaN);
+    }
     else
     {
       double oldWPure = node.ComputeQPure() * startN;
@@ -609,12 +699,17 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     }
 
 #if DEBUG
-    int count = 0;
-    for (int i=0;i<node.NumEdgesExpanded;i++)
+    // Skip in CB-GPUCT graph-aware mode: edge.N there caches child.N (cross-parent),
+    // not the per-edge visit count, so this invariant intentionally no longer holds.
+    if (!ParamsSelect.CBGPUCTSelectActive || !ParamsSelect.CBGPUCT_GraphAwareDeficit)
     {
-      count += node.ChildEdgeAtIndex(i).N;
+      int count = 0;
+      for (int i=0;i<node.NumEdgesExpanded;i++)
+      {
+        count += node.ChildEdgeAtIndex(i).N;
+      }
+      Debug.Assert(node.N == count + (node.NodeRef.Terminal.IsTerminal() ? node.N : 1));
     }
-    Debug.Assert(node.N == count + (node.NodeRef.Terminal.IsTerminal() ? node.N : 1));
 #endif
   }
 
@@ -628,7 +723,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
   /// <param name="newChildQ"></param>
   /// <param name="newD"></param>
   /// <param name="drawKnownToExistAtChild"></param>
-  public override void BackupToEdge(GEdge edge, int deltaN,  double newQChild, double newD, bool drawKnownToExistAtChild)
+  public override void BackupToEdge(GEdge edge, int deltaN, double newQChild, double newD, bool drawKnownToExistAtChild)
   {
     Debug.Assert(Math.Abs(newQChild) < 1.2f);
 
@@ -650,18 +745,32 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
       edge.AddUpdateSample(priorMean, newQChild);
     }
 
-    // The N on edges represents the number of visits along this path to the child node,
-    // independent of total visits to the child (some of which may have arisen via other parents).
-    // (see: https://github.com/lightvector/KataGo/blob/master/docs/GraphSearch.md).
-    edge.N += deltaN;
+    // Default: edge.N is per-edge visit count (visits along this path to the child).
+    // CB-GPUCT graph-aware mode: edge.N caches the destination node's total N (a slightly
+    // stale snapshot taken at this parent's most recent backup; cross-parent visits to
+    // the same child between this parent's backups are not reflected). This avoids the
+    // per-child node deref during gather. childNode.N has already been updated by the
+    // BackupToNode call earlier in the backup chain, so the snapshot is fresh here.
+    // Terminal edges have no destination node (childNode is null), so fall back to
+    // the increment semantic for those - matches the guard pattern used by
+    // PropagateQChangesUpward below.
+    if (ParamsSelect.CBGPUCTSelectActive && ParamsSelect.CBGPUCT_GraphAwareDeficit
+        && edge.Type == GEdgeStruct.EdgeType.ChildEdge)
+    {
+      edge.N = edge.ChildNode.NodeRef.N;
+    }
+    else
+    {
+      edge.N += deltaN;
+    }
     edge.QChild = newQChild;
 
     // Note that the assertion on edge N and child N
     // does not apply in coalesce mode because in that case one node appears twice in the path
     // (once as the leaf) and that BackupToNode at the leaf is omitted
     // to allow the node to be updated exactly once (at the earlier visit).
-//    Debug.Assert(Engine.Manager.ParamsSearch.PathTranspositionMode == Paths.MCGSPathMode.Coalesce
-//            || !(edge.Type == GEdgeStruct.EdgeType.ChildEdge && edge.N > edge.ChildNode.N));
+    //    Debug.Assert(Engine.Manager.ParamsSearch.PathTranspositionMode == Paths.MCGSPathMode.Coalesce
+    //            || !(edge.Type == GEdgeStruct.EdgeType.ChildEdge && edge.N > edge.ChildNode.N));
 
     // Potentially propagate Q changes upward to other parents of the child node.
     if (backupOffPathNumAdditionalLevelsToPropagate > 0

@@ -30,6 +30,19 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
 {
   public readonly float Aggressiveness;
 
+  const int EARLY_SMOOTHING_MIN_BASELINE_N = 10_000; // disabled at low nodes where reduced allocation in late game more likely highly adverse
+  const int EARLY_SMOOTHING_WINDOW_MOVES = 25;
+  const int EARLY_SMOOTHING_MAX_ADJUSTS = 3;
+  const float EARLY_SMOOTHING_BASELINE_FRAC = 0.35f;
+  const float EARLY_SMOOTHING_BOOST = 1.3f;
+
+  // Per-game state for GameLimitEarlySmoothing. Reset on IsFirstMoveOfGame == true,
+  // so the manager can be safely reused across multiple games in self-play tournaments.
+  int earlySmoothingBaselineN = -1;     // FinalN of the first-move-bonus search (once recorded)
+  bool earlySmoothingRecordPending = false;  // armed on move 1, consumed on move 2
+  int earlySmoothingMovesRemaining = 0;      // counts down from EARLY_SMOOTHING_WINDOW_MOVES
+  int earlySmoothingAdjustsApplied = 0;      // capped at EARLY_SMOOTHING_MAX_ADJUSTS
+
   /// <summary>
   /// Constructor.
   /// </summary>
@@ -55,7 +68,7 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
     {
       float fracNodesRetainedSinceLastMove = (float)thisRootN / priorRootN;
       graphReuseShrinkageMultiplier = MapFractionGraphReusedToShrinkageMultiplier(fracNodesRetainedSinceLastMove);
-//Console.WriteLine(treeReuseShrinkageMultiplier + "  " + fracNodesRetainedSinceLastMove);
+      //Console.WriteLine(treeReuseShrinkageMultiplier + "  " + fracNodesRetainedSinceLastMove);
     }
 
     // TODO: Someday implement this idea to prevent too many in a row.
@@ -130,10 +143,10 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
 
     float adjustedBaseMultiplier = earlyGameExtension ? BASE_MULTIPLIER_EARLY : BASE_MULTIPLIER_NOT_EARLY;
     float ret = Aggressiveness
-              * graphReuseShrinkageMultiplier 
-              * adjustedBaseMultiplier 
-              * (1.0f / baseDivisor) 
-              * factorWinningness 
+              * graphReuseShrinkageMultiplier
+              * adjustedBaseMultiplier
+              * (1.0f / baseDivisor)
+              * factorWinningness
               * factorFirstMove;
 
     return ret;
@@ -182,15 +195,53 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
 
       // Allocate 0.20 at minimum.
       _ => 0.20f
-    };  
+    };
+
+
+  /// <summary>
+  /// Maintains GameLimitEarlySmoothing state. Called at the top of ComputeMoveAllocation
+  /// when the flag is enabled. Resets on the first move of a game and records the baseline
+  /// root N on the move immediately following the first-move-bonus move.
+  /// </summary>
+  void UpdateEarlySmoothingState(ManagerGameLimitInputs inputs)
+  {
+    if (inputs.IsFirstMoveOfGame)
+    {
+      earlySmoothingBaselineN = -1;
+      earlySmoothingRecordPending = true;
+      earlySmoothingMovesRemaining = 0;
+      earlySmoothingAdjustsApplied = 0;
+      return;
+    }
+
+    if (earlySmoothingRecordPending
+        && inputs.PriorMoveStats != null
+        && inputs.PriorMoveStats.Count >= 2)
+    {
+      // PriorMoveStats[^2] is the engine's prior move (the first-move-bonus search).
+      int recordedN = inputs.PriorMoveStats[^2].FinalN;
+
+      if (recordedN > EARLY_SMOOTHING_MIN_BASELINE_N)
+      {
+        earlySmoothingBaselineN = recordedN;
+        earlySmoothingMovesRemaining = EARLY_SMOOTHING_WINDOW_MOVES;
+      }
+      earlySmoothingRecordPending = false;
+    }
+  }
 
 
   /// Determines how much time or nodes resource to
   /// allocate to the the current move in a game subject to
-  /// a limit on total number of time or nodes over 
+  /// a limit on total number of time or nodes over
   /// some number of moves (or possibly all moves).
   public ManagerGameLimitOutputs ComputeMoveAllocation(ManagerGameLimitInputs inputs)
   {
+    if (true)
+    {
+      UpdateEarlySmoothingState(inputs);
+    }
+
     // Check if the early game extension mode should be enabled.
     bool earlyGameExtensionMode = false;
     if (inputs.TargetLimitType == SearchLimitType.SecondsPerMove // TODO: Extend this to NodesPerMove?
@@ -249,8 +300,8 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
       fractionOfIncrementToUse = numIncrementsAvailableTime switch
       {
         < 0.0f => 0.05f, // possibly already in technical forfeit!
-        < 1.0f => 0.50f, 
-        < 2.0f => 0.90f, 
+        < 1.0f => 0.50f,
+        < 2.0f => 0.90f,
         < 3.0f => 0.96f, // if at least 2 increments are available we don't need to hold much back
         _ => 0.99f,
       };
@@ -262,12 +313,39 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
     // Prevent totalValueFromUse being zero or negative.
     if (SearchLimit.TypeIsNodesLimit(inputs.TargetLimitType))
     {
-      totalValueUse = Math.Max(1, totalValueUse); 
+      totalValueUse = Math.Max(1, totalValueUse);
     }
     else if (SearchLimit.TypeIsTimeLimit(inputs.TargetLimitType))
     {
       const float MIN_TIME = 0.05f; // 50 milliseconds minimum
       totalValueUse = Math.Max(MIN_TIME, totalValueUse);
+    }
+
+    // Optionally boost allocation under the GameLimitEarlySmoothing feature.
+    if (true && earlySmoothingMovesRemaining > 0)
+    {
+      earlySmoothingMovesRemaining--;  // consume one slot from the 20-move window
+
+      bool canStillAdjust = earlySmoothingAdjustsApplied < EARLY_SMOOTHING_MAX_ADJUSTS;
+      bool baselineValid = earlySmoothingBaselineN > 0;
+      bool isEarlyUnsmooth = baselineValid
+                          && inputs.RootN < EARLY_SMOOTHING_BASELINE_FRAC * earlySmoothingBaselineN;
+
+      if (canStillAdjust && isEarlyUnsmooth)
+      {
+        earlySmoothingAdjustsApplied++;
+        totalValueUse *= EARLY_SMOOTHING_BOOST;
+#if NOT
+        ConsoleColor savedColor = Console.ForegroundColor;
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine($"\r\n[GameLimitEarlySmoothing] boost x{EARLY_SMOOTHING_BOOST:F2}  "
+                        + $"RootN={inputs.RootN} < {EARLY_SMOOTHING_BASELINE_FRAC:F2}*baseline({earlySmoothingBaselineN})"
+                        + $"={EARLY_SMOOTHING_BASELINE_FRAC * earlySmoothingBaselineN:F0}  "
+                        + $"adj {earlySmoothingAdjustsApplied}/{EARLY_SMOOTHING_MAX_ADJUSTS}  "
+                        + $"window {EARLY_SMOOTHING_WINDOW_MOVES - earlySmoothingMovesRemaining}/{EARLY_SMOOTHING_WINDOW_MOVES}");
+        Console.ForegroundColor = savedColor;
+#endif
+      }
     }
 
     // But never spend more than 35% of fixed time remaining
