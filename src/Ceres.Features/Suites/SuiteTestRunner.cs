@@ -98,9 +98,9 @@ namespace Ceres.Features.Suites
     void Init()
     {
       // Create and warmup both engines (in parallel)
-      Parallel.Invoke(() => { PopulateCeresEngines(Def.Engine1Def, Def.CeresEngine1Def, EnginesCeres1, numConcurrentSuiteThreads); },
-                      () => { PopulateCeresEngines(Def.Engine2Def, Def.CeresEngine2Def, EnginesCeres2, numConcurrentSuiteThreads); },
-                      () => { EngineExternal = Def.ExternalEngineDef?.EngineDef.CreateEngine(); EngineExternal?.Warmup(Def.ExternalEngineDef.SearchLimit.KnownMaxNumNodes); });
+      PopulateCeresEngines(Def.Engine1Def, Def.CeresEngine1Def, EnginesCeres1, numConcurrentSuiteThreads);
+      PopulateCeresEngines(Def.Engine2Def, Def.CeresEngine2Def, EnginesCeres2, numConcurrentSuiteThreads);
+      Def.ExternalEngineDef?.EngineDef.CreateEngine(); EngineExternal?.Warmup(Def.ExternalEngineDef.SearchLimit.KnownMaxNumNodes);
     }
 
     int numSearches = 0;
