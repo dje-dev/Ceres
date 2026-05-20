@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using Ceres.Base.Math;
 using Ceres.Chess;
 
@@ -54,6 +55,7 @@ public static class PUCTSelector
     GatheredChildStats stats = gatherStats;
     return stats ?? (gatherStats = new GatheredChildStats());
   }
+
 
 
   /// <summary>
@@ -131,6 +133,11 @@ public static class PUCTSelector
           && paramsSelect.GetFPUMode(node.IsSearchRoot) == ParamsSelect.FPUType.PolicyImputed)
     {
       qWhenNoChildrenComposite = ApplyRPOImputedFPU(paramsSelect, node, stats, numToProcess);
+    }
+
+    if (FPURunningStats.DEBUG_DUMP_FPU_CORRELATION_STATS)
+    {
+      FPURunningStats.Record(node, paramsSearch, paramsSelect, qWhenNoChildrenComposite, stats.P.Span, numToProcess);
     }
 
     // Possibly apply supplemental temperature scaling.
@@ -360,8 +367,6 @@ public static class PUCTSelector
   /// </summary>
   private static double[] ApplyRPOImputedFPU(ParamsSelect paramsSelect, GNode node, GatheredChildStats stats, int numToProcess)
   {
-    const float TAU = 0.50f;
-
     Span<double> pSpan = stats.P.Span;
     Span<double> nSpan = stats.N.Span;
     Span<double> wSpan = stats.W.Span;
@@ -407,7 +412,7 @@ public static class PUCTSelector
     {
       Console.WriteLine();
       Console.WriteLine($"[RPO] NumEdgesExpanded = {numExpanded}, Q = {node.Q:0.00}, " +
-                        $"TAU = {TAU:0.00}, BestIndex = {bestIndex}, BestQ = {bestQ:0.00}");
+                        $"TAU = {paramsSelect.PolicyImputationTau:0.00}, BestIndex = {bestIndex}, BestQ = {bestQ:0.00}");
       Console.WriteLine(FormatRow("Before imputation:", i =>
         i < numExpanded && stats.N.Span[i] > 0
           ? (-stats.W.Span[i] / stats.N.Span[i]).ToString("0.00").PadLeft(5)
@@ -418,16 +423,12 @@ public static class PUCTSelector
 
     if (nSpan[0] > 0)
     {
-      // Top-policy child is visited - anchor on average of
-      // (a) the parent Q
-      // (b) the Q of top policy move
       int indexToUse = bestIndex; // 0
       float childQ = bestIndex >= 0 ? (float)(-wSpan[bestIndex] / nSpan[bestIndex])
                                     : (float)node.Q;
-      float anchorQ = 0.5f * (childQ + (float)node.Q);
-//anchorQ = (float)node.Q;
-//anchorQ = childQ;
-      BoltzmannCalibration.ComputeQFromPolicy_AnchorChild(pi, 0, anchorQ, TAU, qOut,
+      // float anchorQ = 0.5f * (childQ + (float)node.Q); this test slightly worse
+      float anchorQ = (float)node.Q;
+      BoltzmannCalibration.ComputeQFromPolicy_AnchorChild(pi, 0, anchorQ, paramsSelect.PolicyImputationTau, qOut,
                                                           renormalizeIfNeeded: false,
                                                           clipToRange: true, clipMin: -1.2f, clipMax: 1.2f);
 
@@ -439,7 +440,7 @@ public static class PUCTSelector
     else
     {
       // Top-policy child unvisited - anchor on parent V (so E_pi[Q] == node.Q).
-      BoltzmannCalibration.ComputeQFromPolicy_MatchParentValue(pi, (float)node.Q, TAU, qOut,
+      BoltzmannCalibration.ComputeQFromPolicy_MatchParentValue(pi, (float)node.Q, paramsSelect.PolicyImputationTau, qOut,
                                                                renormalizeIfNeeded: false,
                                                                clipToRange: true, clipMin: -1.2f, clipMax: 1.2f);
 
@@ -611,36 +612,4 @@ public static class PUCTSelector
       }
     }
   }
-
-
-  /// <summary>
-  /// Computes the UCT scores (used to select best child) for all children
-  /// </summary>
-  /// <param name="graph"></param>
-  /// <param name="node"></param>
-  /// <param name="paramsSearch"></param>
-  /// <param name="paramsSelect"></param>
-  /// <param name="selectorID"></param>
-  /// <param name="dualCollisionFraction"></param>
-  /// <param name="cpuctMultiplier"></param>
-  /// <param name="temperatureMultiplier"></param>
-  /// <returns></returns>
-  public static double[] CalcChildScores(Graph graph, 
-                                         GNode node,
-                                         ParamsSearch paramsSearch, 
-                                         ParamsSelect paramsSelect,
-                                         int selectorID, 
-                                         bool refreshStaleEdges,
-                                         float dualCollisionFraction = 0.25f, 
-                                         float cpuctMultiplier = 1, 
-                                         float temperatureMultiplier = 1)
-  {
-    double[] scores = new double[node.NodeRef.NumPolicyMoves];
-
-    ComputeTopChildScores(graph, node, paramsSearch, paramsSelect, selectorID, refreshStaleEdges, null,
-                          dualCollisionFraction, 0, node.NodeRef.NumPolicyMoves - 1,
-                          1, scores, default, cpuctMultiplier, temperatureMultiplier);
-    return scores;
-  }
-
 }

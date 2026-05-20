@@ -72,6 +72,13 @@ public record ParamsSelect
   public const float MinPolicyProbability = 0.005f;
 
   /// <summary>
+  /// Regularization coefficient on Boltzmann calibration of policy-based imputation values. 
+  /// Higher values make the imputed Q values more closely track the policy (thus more exploration).
+  /// </summary>
+  public float PolicyImputationTau = 0.10f;
+  
+
+  /// <summary>
   /// When action head enabled, if the univisited children should be reordered upon first visit
   /// using not just policy but instead the PUCT scores inclusive of 
   /// the effect of both policy and value (i.e. using the action head values as fill-in).

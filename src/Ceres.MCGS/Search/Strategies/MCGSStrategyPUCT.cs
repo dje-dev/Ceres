@@ -17,13 +17,10 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using Ceres.Chess;
+
 using Ceres.Chess.EncodedPositions;
-using Ceres.Chess.MoveGen;
-using Ceres.Chess.MoveGen.Converters;
-using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.NNEvaluators;
-using Ceres.Chess.Positions;
+
 using Ceres.MCGS.Graphs;
 using Ceres.MCGS.Graphs.GEdgeHeaders;
 using Ceres.MCGS.Graphs.GEdges;
@@ -81,6 +78,11 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
   {
     backupOffPathNumAdditionalLevelsToPropagate = engine.Manager.ParamsSearch.OffPathBackupNumAdditionalLevelsToPropagate;
     refreshSiblingDuringBackupToNode = MCGSParamsFixed.REFRESH_SIBLING_DURING_BACKUP_PHASE && Engine.Manager.ParamsSearch.EnablePseudoTranspositionBlending;
+
+    // Register evaluator definition with PUCTSelector so it can lazily create a
+    // shared NN evaluator used by GetChildV (action-head diagnostics and FPU
+    // correlation diagnostic).
+    FPURunningStats.EnsureEvaluatorDef(engine.Manager.EvaluatorDef);
   }
 
   private static void CheckThreadStaticsInitialized()
@@ -227,30 +229,10 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     if (VERBOSE_ACTION_HEAD)
     {
       actualV = new double[nodeRef.NumPolicyMoves];
-      lock (actualVEvaluatorLock)
+      for (int i = 0; i < nodeRef.NumPolicyMoves; i++)
       {
-        if (actualVEvaluator == null)
-        {
-          // Create dedicated NN evaluator avoid locking problems 
-          actualVEvaluator = Engine.Manager.EvaluatorDef.ToEvaluator();
-        }
-        for (int i = 0; i < nodeRef.NumPolicyMoves; i++)
-        {
-          if (i < nodeRef.NumEdgesExpanded)
-          {
-            actualV[i] = node.ChildEdgeAtIndex(i).ChildNode.V;
-          }
-          else
-          {
-            MGPosition pos = node.CalcPosition();
-            MGMove mgMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(node.ChildEdgeHeaderAtIndex(i).Move, pos);
-            pos.MakeMove(mgMove);
-            NNEvaluatorResult childEval = actualVEvaluator.Evaluate(new PositionWithHistory(pos.ToPosition));
-            actualV[i] = childEval.V;
-          }
-        }
+        actualV[i] = FPURunningStats.GetChildV(node, i);
       }
-    
 
       baselineScores = new double[nodeRef.NumPolicyMoves];
       ParamsSelect defaultParams = new ParamsSelect();

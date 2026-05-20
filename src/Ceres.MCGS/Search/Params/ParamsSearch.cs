@@ -115,6 +115,11 @@ public record ParamsSearch
   };
 
   /// <summary>
+  /// Identifying string;
+  /// </summary>
+  public string ID = "";
+
+  /// <summary>
   /// Method for choosing which move is best to make at end of search.
   /// Using Q instead of the AlphaZero approach of N (in most situations)
   /// seems to slightly improve play quality and opens the possibilty
