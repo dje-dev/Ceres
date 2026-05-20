@@ -14,17 +14,13 @@
 #region Using directives
 
 using System;
-using System.Buffers.Text;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Threading;
-using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
 using Ceres.Chess;
+
 using Ceres.MCGS.Graphs;
-using Ceres.MCGS.Graphs.GEdgeHeaders;
 using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Managers;
@@ -114,20 +110,9 @@ public static class PUCTSelector
 
     graph.GatherChildInfoViaChildren(node, selectorID, maxChildIndex, dualCollisionFraction, stats, refreshStaleEdges);
 
-    // Possibly use ACPI (Action Conditional Policy Imputation)
-    // to impute Q values for unvisited children based on policy and Q values of visited children.
+    // Possibly use action head directly
     double[] qWhenNoChildrenComposite = null;
-    if (numToProcess > 1
-     && node.N > 1
-     && node.NumEdgesExpanded > 0
-     && paramsSelect.FPUMode == ParamsSelect.FPUType.ACPI
-     )
-    {
-      // TODO: Experimental.
-      qWhenNoChildrenComposite = ApplyACPIFPU(node, paramsSelect, maxChildIndex, stats, numToProcess);
-    }
-    else if (numToProcess > 1
-          && paramsSelect.GetFPUMode(node.IsSearchRoot) == ParamsSelect.FPUType.ActionHead)
+    if (numToProcess > 1 && paramsSelect.GetFPUMode(node.IsSearchRoot) == ParamsSelect.FPUType.ActionHead)
     {
       // Use per-move value from the neural network action head as FPU for unvisited children.
       double fallbackFPU = paramsSelect.CalcQWhenNoChildren(node.IsSearchRoot, node.Q, stats.SumPVisited);
@@ -140,6 +125,12 @@ public static class PUCTSelector
         // Negate because child Q values are stored from opponent's perspective
         qWhenNoChildrenComposite[i] = double.IsNaN(actionV) ? fallbackFPU : -actionV;
       }
+    }
+    else if (numToProcess > 1
+          && node.NumEdgesExpanded > 0
+          && paramsSelect.GetFPUMode(node.IsSearchRoot) == ParamsSelect.FPUType.PolicyImputed)
+    {
+      qWhenNoChildrenComposite = ApplyRPOImputedFPU(paramsSelect, node, stats, numToProcess);
     }
 
     // Possibly apply supplemental temperature scaling.
@@ -355,6 +346,140 @@ public static class PUCTSelector
 
 
   /// <summary>
+  /// Per-child FPU via Boltzmann calibration over the policy.
+  /// Imputes parent-perspective Q for every child using rootQ and/or the top
+  /// policy move's Q as anchor:
+  ///   - If the top-policy child (index 0) has been visited, anchor on its
+  ///     observed Q (most informative single-child anchor):
+  ///         Q_i = anchorQ + tau * (log pi_i - log pi_0)
+  ///   - Otherwise anchor on parent V so the imputed Q vector matches it in
+  ///     expectation:
+  ///         Q_i = node.Q + tau * (log pi_i + H(pi))
+  /// Both branches assume the prior is approximately a Boltzmann policy at
+  /// temperature tau, so log-pi differences are proportional to Q differences.
+  /// </summary>
+  private static double[] ApplyRPOImputedFPU(ParamsSelect paramsSelect, GNode node, GatheredChildStats stats, int numToProcess)
+  {
+    const float TAU = 0.50f;
+
+    Span<double> pSpan = stats.P.Span;
+    Span<double> nSpan = stats.N.Span;
+    Span<double> wSpan = stats.W.Span;
+
+    int numExpanded = node.NumEdgesExpanded;
+    string FormatRow(string label, Func<int, string> valueFunc)
+    {
+      IEnumerable<string> values = Enumerable.Range(0, numToProcess)
+        .Select(i => valueFunc(i) + (i == numExpanded - 1 ? " |" : ""));
+      return $"{label,-20} " + string.Join(" ", values);
+    }
+
+    float[] pi = new float[numToProcess];
+    float sumPi = 0;
+    for (int i = 0; i < numToProcess; i++)
+    {
+      pi[i] = (float)pSpan[i];
+      sumPi += pi[i];
+    }
+    for (int i = 0; i < numToProcess; i++)
+    {
+      pi[i] /= sumPi;
+    }
+
+    // Determine best child to use as anchor for imputation.
+    int bestIndex = -1;
+    double bestQ = float.MaxValue;
+    for (int i = 0; i < node.NumEdgesExpanded; i++)
+    {
+      if (stats.N.Span[i] > 0)
+      {
+        double thisQ = stats.W.Span[i] / stats.N.Span[i];
+        if (thisQ < bestQ)
+        {
+          bestIndex = i;
+          bestQ = thisQ;
+        }
+      }
+    }
+
+    const bool VERBOSE = false;
+    if (VERBOSE)
+    {
+      Console.WriteLine();
+      Console.WriteLine($"[RPO] NumEdgesExpanded = {numExpanded}, Q = {node.Q:0.00}, " +
+                        $"TAU = {TAU:0.00}, BestIndex = {bestIndex}, BestQ = {bestQ:0.00}");
+      Console.WriteLine(FormatRow("Before imputation:", i =>
+        i < numExpanded && stats.N.Span[i] > 0
+          ? (-stats.W.Span[i] / stats.N.Span[i]).ToString("0.00").PadLeft(5)
+          : " N/A "));
+    }
+
+    Span<float> qOut = stackalloc float[numToProcess];
+
+    if (nSpan[0] > 0)
+    {
+      // Top-policy child is visited - anchor on average of
+      // (a) the parent Q
+      // (b) the Q of top policy move
+      int indexToUse = bestIndex; // 0
+      float childQ = bestIndex >= 0 ? (float)(-wSpan[bestIndex] / nSpan[bestIndex])
+                                    : (float)node.Q;
+      float anchorQ = 0.5f * (childQ + (float)node.Q);
+//anchorQ = (float)node.Q;
+//anchorQ = childQ;
+      BoltzmannCalibration.ComputeQFromPolicy_AnchorChild(pi, 0, anchorQ, TAU, qOut,
+                                                          renormalizeIfNeeded: false,
+                                                          clipToRange: true, clipMin: -1.2f, clipMax: 1.2f);
+
+      if (VERBOSE)
+      {
+        Console.WriteLine($"[RPO] Anchor mode = AnchorChild(top), childQ = {childQ:0.00}, anchorQ = {anchorQ:0.00}");
+      }
+    }
+    else
+    {
+      // Top-policy child unvisited - anchor on parent V (so E_pi[Q] == node.Q).
+      BoltzmannCalibration.ComputeQFromPolicy_MatchParentValue(pi, (float)node.Q, TAU, qOut,
+                                                               renormalizeIfNeeded: false,
+                                                               clipToRange: true, clipMin: -1.2f, clipMax: 1.2f);
+
+      if (VERBOSE)
+      {
+        Console.WriteLine($"[RPO] Anchor mode = MatchParentValue, parentQ = {node.Q:0.00}");
+      }
+    }
+
+    double[] result = qWhenNoChildrenBuffer ??= new double[PUCTScoreCalcVector.MAX_CHILDREN];
+    for (int i = 0; i < numToProcess; i++)
+    {
+      result[i] = StatUtils.Bounded(qOut[i], -1.0f, 1.0f);
+    }
+
+    // Cap Q values for unexpanded children to not exceed defaultFPU + 0.30.
+    // Compute what the default FPU value would be without imputation
+    // DJE
+    double defaultFPU = paramsSelect.CalcQWhenNoChildren(node.IsSearchRoot, node.Q, stats.SumPVisited);
+    double maxQ = 0.30 + defaultFPU;
+    for (int i = numExpanded; i < numToProcess; i++)
+    {
+      if ( result[i] > maxQ)
+      {
+        result[i] = maxQ;
+      }
+    }
+
+    if (VERBOSE)
+    {
+      Console.WriteLine(FormatRow("After imputation:", i => result[i].ToString("0.00").PadLeft(5)));
+      Console.WriteLine(FormatRow("Policy:", i => stats.P.Span[i].ToString("0.00").PadLeft(5)));
+      Console.WriteLine();
+    }
+
+    return result;
+  }
+
+
+  /// <summary>
   ///	Returns imputed Q - values for use as FPU(First Play Urgency) estimates.
   ///
   /// Implements a Boltzmann - based Q-value imputation for unvisited child nodes in MCTS.The goal is to estimate Q - values for children that haven't been explored yet, using the policy distribution and known Q-values from visited children.
@@ -391,13 +516,13 @@ public static class PUCTSelector
 
     // Determine best child to use as anchor for imputation.
     int bestIndex = 0;
-    double bestQ = float.MinValue;
+    double bestQ = float.MaxValue;
     for (int i = 0; i < node.NumEdgesExpanded; i++)
     {
       if (stats.N.Span[i] > 0)
       {
         double thisQ = stats.W.Span[i] / stats.N.Span[i];
-        if (thisQ > bestQ)
+        if (thisQ < bestQ)
         {
           bestIndex = i;
           bestQ = thisQ;
@@ -406,13 +531,13 @@ public static class PUCTSelector
     }
 
     // when fitted from sample data from small/medium-sized graphs we see 0.07 (low N) to 0.13 (higher N)
-    float TAU = 0.25f;
+    float TAU = 0.50f;
 
     void SetQFromChild(int childIndex, Span<float> ret)
     {
       float q = (float)(stats.W.Span[childIndex] / stats.N.Span[childIndex]);
       BoltzmannCalibration.ComputeQFromPolicy_AnchorChild(pi, childIndex, -q, TAU, ret,
-                                                              renormalizeIfNeeded: false, clipToRange: true, clipMin: -1.2f, clipMax: 1.2f);
+                                                          renormalizeIfNeeded: false, clipToRange: true, clipMin: -1.2f, clipMax: 1.2f);
       if (float.IsNaN(ret[0]))
       {
         throw new Exception("NaN in SetQFromChild");

@@ -50,17 +50,21 @@ public record ParamsSelect
     Same,
 
     /// <summary>
-    /// Anchor-Calibrated Policy Inversion (ACPI).
-    ///	Uses policy-based imputation to estimate Q values.
-    /// </summary>
-    ACPI,
-
-    /// <summary>
     /// Use per-move value from the neural network action head.
     /// Falls back to Reduction when action data is unavailable.
     /// </summary>
     ActionHead,
+
+    /// <summary>
+    ///	Uses policy-based imputation to estimate Q values.
+    /// Per-child imputed Q via Boltzmann calibration over the policy:
+    /// Q_i = anchor + tau * (log pi_i - log pi_anchor). 
+    /// Anchored on the top-policy child's observed Q when it has visits, 
+    /// else on parent V (so E_pi[Q] == parent V).
+    /// </summary>
+    PolicyImputed,
   };
+
 
   /// <summary>
   /// Minimum policy value for moves (as a fraction) which forces policy probabilities to be at least this level.
@@ -456,8 +460,8 @@ public record ParamsSelect
       FPUType.Absolute => fpuValue,
       FPUType.Reduction => parentQ + fpuValue * Math.Sqrt(parentSumPVisited),
       FPUType.Same => parentQ,
-      FPUType.ACPI => parentQ + fpuValue * Math.Sqrt(parentSumPVisited), // Will be overridden with per-child imputed values; fallback to reduction
       FPUType.ActionHead => parentQ + fpuValue * Math.Sqrt(parentSumPVisited), // Scalar fallback; per-child values from action head override this in PUCTSelector
+      FPUType.PolicyImputed => parentQ + fpuValue * Math.Sqrt(parentSumPVisited), // Scalar fallback; per-child RPO-imputed values override this in PUCTSelector
       _ => throw new NotImplementedException($"Unknown FPUType: {GetFPUMode(isRoot)}")
     };
   }
