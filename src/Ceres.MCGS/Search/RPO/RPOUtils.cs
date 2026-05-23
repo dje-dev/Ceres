@@ -19,6 +19,7 @@ using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Search.Params;
 using Ceres.MCGS.Search.Phases;
+using Ceres.MCGS.Utils;
 
 namespace Ceres.MCGS.Search.RPO;
 
@@ -342,5 +343,392 @@ weighted=false; // <---------------------- HACK. WEIGHTING ALREADY HANDLED JUST 
     Console.WriteLine("post P : " + String.Join(", ", piStar2.ToArray()));
 
     return TensorPrimitives.Dot(piStar2, q);
+  }
+
+
+  /// <summary>
+  /// Golden-value smoke tests for the unified RPO primitive
+  /// (RegularizedPolicyOptimum + RPOVisitAllocator) against the legacy
+  /// implementations they replace.  Prints results to Console; does not assert
+  /// (this is invoked manually as a sanity check).
+  /// </summary>
+  public static void TestRPOUnified()
+  {
+    Console.WriteLine();
+    Console.WriteLine("=== TestRPOUnified ===");
+
+    TestReverseKLParity();
+    TestForwardKLMatchValueParity();
+    TestForwardKLMatchChildParity();
+    TestVBarRegression();
+    TestAllocatorParity();
+    TestFixedPointSelfConsistency();
+    TestLambdaScheduleCurve();
+
+    Console.WriteLine("=== TestRPOUnified complete ===");
+    Console.WriteLine();
+  }
+
+
+  /// <summary>
+  /// Prints the lambda_N selection-phase schedule across a range of sumN values both with
+  /// the coefficient log-growth term off (legacy / backup-phase) and on (selection-phase,
+  /// using the current defaults).  Values are computed by direct evaluation of the formula
+  /// rather than by calling the internal helper.
+  /// </summary>
+  private static void TestLambdaScheduleCurve()
+  {
+    // Mirror Ceres select-phase defaults.
+    double lambdaC = 1.75;
+    double lambdaExp = 0.5;
+    double denominatorBase = 1.0;
+    double cLogBase = Ceres.MCGS.Search.Params.ParamsSelect.DEFAULT_LOG_GROWTH_BASE;
+    double cLogFactor = Ceres.MCGS.Search.Params.ParamsSelect.DEFAULT_LOG_GROWTH_FACTOR;
+
+    int[] sumNs = { 10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000 };
+
+    Console.WriteLine("[LambdaSchedule]   sumN   | no-cLog  | with-cLog | c(N)   | boost");
+    foreach (int N in sumNs)
+    {
+      double basePart = N > 0 ? lambdaC * Math.Pow(N, lambdaExp) / (denominatorBase + N) : 0;
+      double cEff = lambdaC + cLogFactor * Math.Log((N + cLogBase + 1.0) / cLogBase);
+      double withCLog = N > 0 ? cEff * Math.Pow(N, lambdaExp) / (denominatorBase + N) : 0;
+      double boostPct = basePart > 0 ? 100.0 * (withCLog / basePart - 1.0) : 0;
+      Console.WriteLine($"                {N,7:N0}  | {basePart,7:F5}  | {withCLog,7:F5}   | {cEff,5:F3}  | +{boostPct,5:F1}%");
+    }
+  }
+
+
+  /// <summary>
+  /// Compares RegularizedPolicyOptimum.Solve (ReverseKL) to legacy
+  /// ReverseKlPosteriorPolicy.ComputePosterior on a small fixture.
+  /// </summary>
+  private static void TestReverseKLParity()
+  {
+    // Existing self-test fixture from BoltzmannCalibration.TestBoltzmann.
+    double[] mu = { 0.769, 0.231 };
+    double[] q = { 0.664, 0.600 };
+    double lambda = 0.064;
+
+    double[] yNew = new double[mu.Length];
+    RegularizedPolicyOptimum.Solve(mu, q, lambda, RPOAnchor.None, RPORegularization.ReverseKL,
+                                   yNew, default, out double vStarNew);
+
+    (double Q, double PriorP, int N, double U)[] actions = new (double, double, int, double)[mu.Length];
+    for (int i = 0; i < mu.Length; i++)
+    {
+      actions[i] = (q[i], mu[i], 1, double.NaN);
+    }
+    double[] yLegacy = new double[mu.Length];
+    double[] qFillLegacy = new double[mu.Length];
+    ReverseKlPosteriorPolicy.ComputePosterior(actions, lambda, lambdaQ: 0.0,
+                                              rootQ: 0.6, rootU: 0.0,
+                                              yLegacy, qFillLegacy,
+                                              new ReverseKlPosteriorPolicy.Options(bisectionIterations: 60));
+
+    double maxDelta = 0.0;
+    for (int i = 0; i < mu.Length; i++)
+    {
+      double d = Math.Abs(yNew[i] - yLegacy[i]);
+      if (d > maxDelta) maxDelta = d;
+    }
+    Console.WriteLine($"[ReverseKL parity]   y_new=[{yNew[0]:F4},{yNew[1]:F4}] y_legacy=[{yLegacy[0]:F4},{yLegacy[1]:F4}] maxDelta={maxDelta:E2} vStar={vStarNew:F4}");
+  }
+
+
+  /// <summary>
+  /// Compares RegularizedPolicyOptimum.Solve (ForwardKL, MatchValue anchor) to
+  /// legacy BoltzmannCalibration.ComputeQFromPolicy_MatchParentValue on a small fixture.
+  /// </summary>
+  private static void TestForwardKLMatchValueParity()
+  {
+    double[] mu = { 0.769, 0.231 };
+    double[] qIn = { double.NaN, double.NaN };
+    double parentValue = 0.20;
+    double tau = 0.05;
+
+    double[] qFillNew = new double[mu.Length];
+    RegularizedPolicyOptimum.Solve(mu, qIn, tau,
+                                   new RPOAnchor(RPOAnchorMode.MatchValue, -1, parentValue),
+                                   RPORegularization.ForwardKLSoftmax,
+                                   default, qFillNew, out double _,
+                                   new RPOOptions(bisectionIterations: 12, bisectionResidualTol: 1e-6,
+                                                  clampQToUnitInterval: false, minPriorProbability: 0.0));
+
+    float[] muF = { 0.769f, 0.231f };
+    float[] qLegacy = new float[mu.Length];
+    BoltzmannCalibration.ComputeQFromPolicy_MatchParentValue(muF, (float)parentValue, (float)tau, qLegacy,
+                                                             renormalizeIfNeeded: false,
+                                                             clipToRange: false);
+
+    double maxDelta = 0.0;
+    for (int i = 0; i < mu.Length; i++)
+    {
+      double d = Math.Abs(qFillNew[i] - qLegacy[i]);
+      if (d > maxDelta) maxDelta = d;
+    }
+    Console.WriteLine($"[Fwd MatchValue]     qFill_new=[{qFillNew[0]:F4},{qFillNew[1]:F4}] qFill_legacy=[{qLegacy[0]:F4},{qLegacy[1]:F4}] maxDelta={maxDelta:E2}");
+  }
+
+
+  /// <summary>
+  /// Compares RegularizedPolicyOptimum.Solve (ForwardKL, MatchChild anchor) to
+  /// legacy BoltzmannCalibration.ComputeQFromPolicy_AnchorChild on a small fixture.
+  /// </summary>
+  private static void TestForwardKLMatchChildParity()
+  {
+    double[] mu = { 0.769, 0.231 };
+    double[] qIn = { double.NaN, double.NaN };
+    double anchorQ = 0.664;
+    double tau = 0.05;
+    int anchorIdx = 0;
+
+    double[] qFillNew = new double[mu.Length];
+    RegularizedPolicyOptimum.Solve(mu, qIn, tau,
+                                   new RPOAnchor(RPOAnchorMode.MatchChild, anchorIdx, anchorQ),
+                                   RPORegularization.ForwardKLSoftmax,
+                                   default, qFillNew, out double _,
+                                   new RPOOptions(bisectionIterations: 12, bisectionResidualTol: 1e-6,
+                                                  clampQToUnitInterval: false, minPriorProbability: 0.0));
+
+    float[] muF = { 0.769f, 0.231f };
+    float[] qLegacy = new float[mu.Length];
+    BoltzmannCalibration.ComputeQFromPolicy_AnchorChild(muF, anchorIdx, (float)anchorQ, (float)tau, qLegacy,
+                                                         renormalizeIfNeeded: false,
+                                                         clipToRange: false);
+
+    double maxDelta = 0.0;
+    for (int i = 0; i < mu.Length; i++)
+    {
+      double d = Math.Abs(qFillNew[i] - qLegacy[i]);
+      if (d > maxDelta) maxDelta = d;
+    }
+    Console.WriteLine($"[Fwd MatchChild]     qFill_new=[{qFillNew[0]:F4},{qFillNew[1]:F4}] qFill_legacy=[{qLegacy[0]:F4},{qLegacy[1]:F4}] maxDelta={maxDelta:E2}");
+  }
+
+
+  /// <summary>
+  /// V_bar regression: builds a small action set with some NaN q's, runs the new
+  /// Solve under ReverseKL, and compares its vStar output to sum_i y_i * qFill_i
+  /// computed by the legacy ComputePosterior on the same inputs.
+  /// </summary>
+  private static void TestVBarRegression()
+  {
+    double[] mu = { 0.50, 0.30, 0.20 };
+    double[] qIn = { -0.20, double.NaN, 0.10 };
+    double lambda = 0.05;
+    double rootQ = 0.0;
+
+    double[] yNew = new double[mu.Length];
+    double[] qFillNew = new double[mu.Length];
+    RegularizedPolicyOptimum.Solve(mu, qIn, lambda, RPOAnchor.None, RPORegularization.ReverseKL,
+                                   yNew, qFillNew, out double vStarNew,
+                                   options: new RPOOptions(bisectionIterations: 60, bisectionResidualTol: 1e-9,
+                                                           clampQToUnitInterval: true, minPriorProbability: 0.0),
+                                   nanFallbackQ: rootQ);
+
+    (double Q, double PriorP, int N, double U)[] actions = new (double, double, int, double)[mu.Length];
+    for (int i = 0; i < mu.Length; i++)
+    {
+      actions[i] = (qIn[i], mu[i], 1, double.NaN);
+    }
+    double[] yLegacy = new double[mu.Length];
+    double[] qFillLegacy = new double[mu.Length];
+    ReverseKlPosteriorPolicy.ComputePosterior(actions, lambda, lambdaQ: 0.0,
+                                              rootQ: rootQ, rootU: 0.0,
+                                              yLegacy, qFillLegacy,
+                                              new ReverseKlPosteriorPolicy.Options(bisectionIterations: 60));
+
+    double vStarLegacy = 0.0;
+    for (int i = 0; i < mu.Length; i++)
+    {
+      vStarLegacy += yLegacy[i] * qFillLegacy[i];
+    }
+    double vStarDelta = Math.Abs(vStarNew - vStarLegacy);
+    Console.WriteLine($"[V_bar regression]   vStar_new={vStarNew:F6} vStar_legacy={vStarLegacy:F6} delta={vStarDelta:E2}");
+  }
+
+
+  /// <summary>
+  /// Sanity check that IterativeLargestDeficit and HamiltonClosedForm allocate
+  /// the same total visits on a representative fixture (per-child counts may
+  /// differ by 1 at tie boundaries).
+  /// </summary>
+  private static void TestAllocatorParity()
+  {
+    double[] piBar = { 0.40, 0.35, 0.25 };
+    double[] currentN = { 10.0, 12.0, 8.0 };
+    int budget = 20;
+
+    short[] visitsIter = new short[piBar.Length];
+    int placedIter = RPOVisitAllocator.Allocate(piBar, currentN, budget,
+                                                visitsIter, default,
+                                                new RPOAllocationOptions(RPOAllocationAlgorithm.IterativeLargestDeficit, true));
+
+    short[] visitsHam = new short[piBar.Length];
+    int placedHam = RPOVisitAllocator.Allocate(piBar, currentN, budget,
+                                               visitsHam, default,
+                                               new RPOAllocationOptions(RPOAllocationAlgorithm.HamiltonClosedForm, true));
+
+    Console.WriteLine($"[Allocator parity]   iter={placedIter}:[{visitsIter[0]},{visitsIter[1]},{visitsIter[2]}] "
+                    + $"hamilton={placedHam}:[{visitsHam[0]},{visitsHam[1]},{visitsHam[2]}]");
+  }
+
+
+  /// <summary>
+  /// Verifies that the Sinkhorn-style fixed-point iteration converges and produces
+  /// a state where the closed-form identity  q(a) = v* + lambda * (1 - mu(a) / pi_bar(a))
+  /// holds for unvisited children (within tolerance).
+  /// </summary>
+  private static void TestFixedPointSelfConsistency()
+  {
+    // Mixed visited/unvisited case.
+    double[] mu = { 0.40, 0.30, 0.20, 0.10 };
+    double[] qIn = { 0.30, double.NaN, double.NaN, double.NaN };
+    double parentQ = 0.20;
+    double lambda = 0.10;
+
+    // Sum mu (already 1.0, but track for safety).
+    double sumMu = 0.0;
+    for (int i = 0; i < mu.Length; i++) sumMu += mu[i];
+    double[] muNorm = new double[mu.Length];
+    for (int i = 0; i < mu.Length; i++) muNorm[i] = mu[i] / sumMu;
+
+    // Seed: for unvisited, start at parentQ.
+    double[] qWorking = new double[mu.Length];
+    for (int i = 0; i < mu.Length; i++) qWorking[i] = double.IsNaN(qIn[i]) ? parentQ : qIn[i];
+
+    double[] piBar = new double[mu.Length];
+    RPOOptions opts = new(bisectionIterations: 60, bisectionResidualTol: 1e-9,
+                          clampQToUnitInterval: true, minPriorProbability: 0.0);
+
+    // Initial solve (iteration 0 in CBGPUCT.ScoreCalc terms).
+    RegularizedPolicyOptimum.Solve(mu, qWorking, lambda, RPOAnchor.None, RPORegularization.ReverseKL,
+                                   piBar, default, out double vStar, opts, parentQ);
+
+    // Run 5 fixed-point iterations.
+    int iterations = 0;
+    double maxDelta = double.PositiveInfinity;
+    for (int iter = 0; iter < 30 && maxDelta > 1e-8; iter++)
+    {
+      maxDelta = 0.0;
+      for (int i = 0; i < mu.Length; i++)
+      {
+        if (!double.IsNaN(qIn[i])) continue;
+        if (!(piBar[i] > 1e-12)) continue;
+        double qNew = parentQ + lambda * (1.0 - muNorm[i] / piBar[i]);
+        if (qNew < -1.0) qNew = -1.0;
+        else if (qNew > 1.0) qNew = 1.0;
+        double d = Math.Abs(qNew - qWorking[i]);
+        if (d > maxDelta) maxDelta = d;
+        qWorking[i] = qNew;
+      }
+      RegularizedPolicyOptimum.Solve(mu, qWorking, lambda, RPOAnchor.None, RPORegularization.ReverseKL,
+                                     piBar, default, out vStar, opts, parentQ);
+      iterations = iter + 1;
+    }
+
+    // Verify self-consistency: at the fixed point, v* should equal parentQ.
+    double maxResidual = Math.Abs(vStar - parentQ);
+
+    Console.WriteLine($"[FixedPoint A]       iters={iterations} |vStar-parentQ|={maxResidual:E2} "
+                    + $"q_final=[{qWorking[0]:F3},{qWorking[1]:F3},{qWorking[2]:F3},{qWorking[3]:F3}] "
+                    + $"piBar=[{piBar[0]:F3},{piBar[1]:F3},{piBar[2]:F3},{piBar[3]:F3}] vStar={vStar:F4} parentQ={parentQ:F4}");
+
+    // Second case: deliberately bad initial FPU (highly optimistic for unvisited).
+    // Should converge to a value much lower than the initial guess.
+    double[] qWorking2 = new double[mu.Length];
+    qWorking2[0] = 0.30;
+    for (int i = 1; i < mu.Length; i++) qWorking2[i] = 0.95;
+    double initialFpu = qWorking2[1];
+
+    RegularizedPolicyOptimum.Solve(mu, qWorking2, lambda, RPOAnchor.None, RPORegularization.ReverseKL,
+                                   piBar, default, out vStar, opts, parentQ);
+
+    iterations = 0;
+    maxDelta = double.PositiveInfinity;
+    for (int iter = 0; iter < 30 && maxDelta > 1e-8; iter++)
+    {
+      maxDelta = 0.0;
+      for (int i = 1; i < mu.Length; i++)
+      {
+        if (!(piBar[i] > 1e-12)) continue;
+        double qNew = parentQ + lambda * (1.0 - muNorm[i] / piBar[i]);
+        if (qNew < -1.0) qNew = -1.0;
+        else if (qNew > 1.0) qNew = 1.0;
+        double d = Math.Abs(qNew - qWorking2[i]);
+        if (d > maxDelta) maxDelta = d;
+        qWorking2[i] = qNew;
+      }
+      RegularizedPolicyOptimum.Solve(mu, qWorking2, lambda, RPOAnchor.None, RPORegularization.ReverseKL,
+                                     piBar, default, out vStar, opts, parentQ);
+      iterations = iter + 1;
+    }
+    Console.WriteLine($"[FixedPoint B]       iters={iterations} initialFPU={initialFpu:F3} -> "
+                    + $"q_final=[{qWorking2[0]:F3},{qWorking2[1]:F3},{qWorking2[2]:F3},{qWorking2[3]:F3}] "
+                    + $"piBar=[{piBar[0]:F3},{piBar[1]:F3},{piBar[2]:F3},{piBar[3]:F3}] vStar={vStar:F4}");
+
+    // Third case: per-child FPU varied across unvisited (simulates Boltzmann or action-head FPU).
+    // Initial q's are NOT self-consistent so the fixed point actually moves them.
+    double[] qWorking3 = new double[mu.Length];
+    qWorking3[0] = 0.30;     // visited
+    qWorking3[1] = 0.10;     // optimistic-ish
+    qWorking3[2] = -0.30;    // pessimistic
+    qWorking3[3] = 0.50;     // very optimistic
+    double[] qInitial = (double[])qWorking3.Clone();
+
+    RegularizedPolicyOptimum.Solve(mu, qWorking3, lambda, RPOAnchor.None, RPORegularization.ReverseKL,
+                                   piBar, default, out vStar, opts, parentQ);
+
+    iterations = 0;
+    maxDelta = double.PositiveInfinity;
+    for (int iter = 0; iter < 30 && maxDelta > 1e-8; iter++)
+    {
+      maxDelta = 0.0;
+      for (int i = 1; i < mu.Length; i++)
+      {
+        if (!(piBar[i] > 1e-12)) continue;
+        double qNew = parentQ + lambda * (1.0 - muNorm[i] / piBar[i]);
+        if (qNew < -1.0) qNew = -1.0;
+        else if (qNew > 1.0) qNew = 1.0;
+        double d = Math.Abs(qNew - qWorking3[i]);
+        if (d > maxDelta) maxDelta = d;
+        qWorking3[i] = qNew;
+      }
+      RegularizedPolicyOptimum.Solve(mu, qWorking3, lambda, RPOAnchor.None, RPORegularization.ReverseKL,
+                                     piBar, default, out vStar, opts, parentQ);
+      iterations = iter + 1;
+    }
+    Console.WriteLine($"[FixedPoint C]       iters={iterations} initial=[{qInitial[1]:F2},{qInitial[2]:F2},{qInitial[3]:F2}] -> "
+                    + $"final=[{qWorking3[1]:F3},{qWorking3[2]:F3},{qWorking3[3]:F3}] "
+                    + $"piBar=[{piBar[0]:F3},{piBar[1]:F3},{piBar[2]:F3},{piBar[3]:F3}] vStar={vStar:F4}");
+
+    // Case D: production-realistic setting (2 iterations) starting from parentQ FPU.
+    // Shows the mild-correction regime: partial movement toward the constraint v* = parentQ.
+    double[] qWorking4 = new double[mu.Length];
+    qWorking4[0] = 0.30;
+    for (int i = 1; i < mu.Length; i++) qWorking4[i] = parentQ;
+
+    RegularizedPolicyOptimum.Solve(mu, qWorking4, lambda, RPOAnchor.None, RPORegularization.ReverseKL,
+                                   piBar, default, out double vStar0, opts, parentQ);
+    double piBar0Vis = piBar[0];
+    double vStar0Save = vStar0;
+
+    for (int iter = 0; iter < 2; iter++)
+    {
+      for (int i = 1; i < mu.Length; i++)
+      {
+        if (!(piBar[i] > 1e-12)) continue;
+        double qNew = parentQ + lambda * (1.0 - muNorm[i] / piBar[i]);
+        if (qNew < -1.0) qNew = -1.0;
+        else if (qNew > 1.0) qNew = 1.0;
+        qWorking4[i] = qNew;
+      }
+      RegularizedPolicyOptimum.Solve(mu, qWorking4, lambda, RPOAnchor.None, RPORegularization.ReverseKL,
+                                     piBar, default, out vStar0, opts, parentQ);
+    }
+    Console.WriteLine($"[FixedPoint D iter=2] before piBar[0]={piBar0Vis:F3} vStar={vStar0Save:F4} | "
+                    + $"after piBar[0]={piBar[0]:F3} vStar={vStar0:F4} "
+                    + $"q_unvisited=[{qWorking4[1]:F3},{qWorking4[2]:F3},{qWorking4[3]:F3}]");
   }
 }

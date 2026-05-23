@@ -18,6 +18,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 
+using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.NNEvaluators;
 
@@ -681,16 +682,27 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     }
 
 #if DEBUG
-    // Skip in CB-GPUCT graph-aware mode: edge.N there caches child.N (cross-parent),
-    // not the per-edge visit count, so this invariant intentionally no longer holds.
-    if (!ParamsSelect.CBGPUCTSelectActive || !ParamsSelect.CBGPUCT_GraphAwareDeficit)
+    // edge.N is always the per-edge visit count (cross-parent N is folded in on the
+    // fly by CBGPUCTScoreCalc.ScoreCalc and not stored in edge.N).  The +1 accounts
+    // for the parent's own first visit.  Under CBGPUCT_CrossParentN, leftover visits
+    // can be absorbed at the parent (MCGSSelect.cs ~line 303) which bumps node.N
+    // without touching any child edge, so the gap can exceed 1; we still require it
+    // to be at least 1.
     {
       int count = 0;
-      for (int i=0;i<node.NumEdgesExpanded;i++)
+      for (int i = 0; i < node.NumEdgesExpanded; i++)
       {
         count += node.ChildEdgeAtIndex(i).N;
       }
-      Debug.Assert(node.N == count + (node.NodeRef.Terminal.IsTerminal() ? node.N : 1));
+      int expected = count + (node.NodeRef.Terminal.IsTerminal() ? node.N : 1);
+      if (ParamsSelect.CBGPUCT_CrossParentNEnabled)
+      {
+        Debug.Assert(node.N >= expected);
+      }
+      else
+      {
+        Debug.Assert(node.N == expected);
+      }
     }
 #endif
   }
@@ -727,24 +739,11 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
       edge.AddUpdateSample(priorMean, newQChild);
     }
 
-    // Default: edge.N is per-edge visit count (visits along this path to the child).
-    // CB-GPUCT graph-aware mode: edge.N caches the destination node's total N (a slightly
-    // stale snapshot taken at this parent's most recent backup; cross-parent visits to
-    // the same child between this parent's backups are not reflected). This avoids the
-    // per-child node deref during gather. childNode.N has already been updated by the
-    // BackupToNode call earlier in the backup chain, so the snapshot is fresh here.
-    // Terminal edges have no destination node (childNode is null), so fall back to
-    // the increment semantic for those - matches the guard pattern used by
-    // PropagateQChangesUpward below.
-    if (ParamsSelect.CBGPUCTSelectActive && ParamsSelect.CBGPUCT_GraphAwareDeficit
-        && edge.Type == GEdgeStruct.EdgeType.ChildEdge)
-    {
-      edge.N = edge.ChildNode.NodeRef.N;
-    }
-    else
-    {
-      edge.N += deltaN;
-    }
+    // edge.N is the per-edge visit count (visits along this path to the child).  Any
+    // cross-parent contribution to the visit-target deficit is folded in on the fly
+    // by CBGPUCTScoreCalc.ScoreCalc via the CBGPUCT_CrossParentNFraction blend, so we
+    // no longer overwrite edge.N with child.N in graph-aware mode.
+    edge.N += deltaN;
     edge.QChild = newQChild;
 
     // Note that the assertion on edge N and child N

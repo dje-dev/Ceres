@@ -298,7 +298,7 @@ public class MCGSSelect
       int numAbsorbedAtParent = numAttemptedVisits - childStats.NumVisitsAccepted;
       if (numAbsorbedAtParent > 0
           && Engine.Manager.ParamsSelect.CBGPUCTSelectActive
-          && Engine.Manager.ParamsSelect.CBGPUCT_GraphAwareDeficit)
+          && Engine.Manager.ParamsSelect.CBGPUCT_SelectCrossParentNEnabled)
       {
         strategy.BackupToNode(parentNode, numAbsorbedAtParent,
                               parentNode.Q * numAbsorbedAtParent,
@@ -338,26 +338,16 @@ public class MCGSSelect
       //   - we can ask SelectChildren to refresh edges above, safe in the knowledge that these updates will 
       //     be applied to the parent node here (maintaining correctness of the pure Q).
 
-      Debug.Assert(parentNode.N == childStats.SumN 
-                || (Engine.Manager.ParamsSelect.CBGPUCTSelectActive && Engine.Manager.ParamsSelect.CBGPUCT_GraphAwareDeficit));
+      Debug.Assert(parentNode.N == childStats.SumN
+                || (Engine.Manager.ParamsSelect.CBGPUCTSelectActive && Engine.Manager.ParamsSelect.CBGPUCT_SelectCrossParentNEnabled));
 
       if (MCGSParamsFixed.RESET_Q_DURING_SELECT_PHASE_FROM_ALL_CHILDREN)
       {
         if (Engine.Manager.ParamsSelect.CBGPUCTBackupActive)
         {
-          // Don't use vanilla weighted-N average since we are using CBGPUCT for backup.
-#if NOT
-          // Refresh
-          for (int i=0;i<parentNode.NumEdgesExpanded;i++)
-          {
-            GNode childNode = parentNode.ChildEdgeAtIndex(i).ChildNode;
-            if (Engine.Manager.ParamsSelect.CBGPUCT_GraphAwareDeficit)
-            {
-              parentNode.ChildEdgeAtIndex(i).N = childNode.N;
-            }
-            parentNode.ChildEdgeAtIndex(i).QChild = childNode.Q;
-          }
-#endif
+          // No-op: under CBGPUCT, parent.Q is recomputed by ComputeVBar during BackupToNode,
+          // and edge.QChild for multi-parent transposition edges is now refreshed proactively
+          // in Graph.GatherChildInfoViaChildren (gated on CBGPUCT_CrossParentNEnabled).
         }
         else
         {
@@ -897,20 +887,16 @@ public class MCGSSelect
                                             out bool wasCreated, out GNode standaloneTranspositionNode,
                                             true);
 
-    // CB-GPUCT graph-aware mode: edge.N is a (slightly stale) snapshot of the destination
-    // node's total visit count. Initialize from the existing child.N at edge creation so
-    // transposition links to already-visited nodes start with the correct cross-parent
-    // baseline rather than 0. For freshly-created nodes child.N is 0, so this is a no-op.
-    // Also seed edge.QChild from child.Q: in graph-aware mode the N==0 check (used elsewhere
-    // to suppress reading edge.Q) doesn't fire when N is initialized from a transposition
-    // target's prior visits, so without this seed edge.Q would be 0 (struct default) and
-    // produce an invalid -edge.Q=0 in ScoreCalc and ComputeVBar until the first BackupToEdge.
-    // Terminal edges have no destination node, so we skip them.
+    // CB-GPUCT: when CBGPUCT_CrossParentNFraction > 0, seed edge.QChild from child.Q
+    // for transposition links so that ComputeVBar / ScoreCalc do not read an invalid
+    // -edge.Q=0 before the first BackupToEdge.  edge.N stays at 0 (its per-edge default);
+    // any cross-parent contribution is folded in on the fly by ScoreCalc via the
+    // blend in CBGPUCT_CrossParentNFraction.  Terminal edges have no destination node,
+    // so we skip them.
     ParamsSelect ps = iterator.Engine.Manager.ParamsSelect;
-    if (ps.CBGPUCTSelectActive && ps.CBGPUCT_GraphAwareDeficit && !wasCollision
+    if (ps.CBGPUCTSelectActive && ps.CBGPUCT_SelectCrossParentNEnabled && !wasCollision
         && childEdge.Type == GEdgeStruct.EdgeType.ChildEdge)
     {
-      childEdge.N = childEdge.ChildNode.NodeRef.N;
       childEdge.QChild = childEdge.ChildNode.Q;
     }
 
