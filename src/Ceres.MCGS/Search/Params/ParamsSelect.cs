@@ -614,14 +614,17 @@ public record ParamsSelect
   public float CBGPUCT_BackupQShrinkageDecayExponent = 1.5f;
 
   /// <summary>
-  /// BOUNDED RELATIVE value-shrinkage in the BACKUP phase.  Applied after the existing
-  /// absolute Q-shrinkage (which uses CBGPUCT_BackupQShrinkageFractionAtN1 / DecayExponent)
-  /// and shrinks each visited child's q toward a single global baseline v_0 by:
+  /// BOUNDED RELATIVE pi_bar shrinkage in the BACKUP phase.  After Solve produces
+  /// pi_bar (and after any absolute pi_bar shrinkage via
+  /// CBGPUCT_BackupPiBarShrinkagePseudoVisits), shrink each child's pi_bar toward
+  /// the normalized prior mu by:
   ///   alpha_i = min(1, (N_i / N_max)^p)
-  ///   q_shrunk[i] = alpha_i * q_after_absolute[i] + (1 - alpha_i) * v_0
-  /// where N_max = max_j edge.N[j] over visited children and v_0 is the
-  /// already-computed imputation anchor (the blended anchorForImputation:
-  /// CBGPUCT_QAnchorTypeBackup combined with CBGPUCT_BackupImputationAnchorK).
+  ///   pi_bar_shrunk[i] = alpha_i * pi_bar[i] + (1 - alpha_i) * mu_norm[i]
+  /// renormalized to sum to 1.  N_i is the CHILD NODE'S visit count
+  /// (edge.ChildNode.N - the cumulative statistical support for the q estimate
+  /// across all parents in graph mode, not the per-edge count); N_max is the max
+  /// across the considered children; for terminal edges edge.N is used in place
+  /// of child.N.  This shrunk pi_bar then drives the V_bar dot product.
   ///
   /// PRINCIPLE: bounded RELATIVE influence (not minimum-MSE estimation).  Standard
   /// empirical Bayes pulls every point toward a baseline whenever individual
@@ -632,10 +635,15 @@ public record ParamsSelect
   /// providing absolute regularization; bounded-relative shrinkage only enforces
   /// per-action evidence parity.
   ///
-  /// alpha mechanics with p = 0.5 (default productive setting):
+  /// Acting on pi_bar directly (rather than via q shrinkage or per-action lambda)
+  /// is the most direct knob: low-N children's mass is pulled back toward the prior
+  /// mu without going through the (alpha - q) denominator or the per-action prior
+  /// re-weighting.  Easier to reason about and easier to keep monotone in p.
+  ///
+  /// alpha mechanics with p = 0.5 (suggested productive starting setting):
   ///   N_i = N_max          : alpha = 1       (no shrinkage)
-  ///   N_i = N_max / 4      : alpha = 0.5     (50/50 blend with v_0)
-  ///   N_i = 1, N_max = 200 : alpha = 0.071   (heavy shrinkage to v_0)
+  ///   N_i = N_max / 4      : alpha = 0.5     (50/50 with mu_norm)
+  ///   N_i = 1, N_max = 200 : alpha = 0.071   (heavy shrinkage to mu)
   /// At p = 1 (linear) the shrinkage is more aggressive; at p = 0.25 it is gentler.
   /// Set 0 to disable (no bounded-relative shrinkage applied; current behavior).
   ///
@@ -643,17 +651,16 @@ public record ParamsSelect
   /// / alpha_i (larger beta for laggards).  In our reverse-KL setup that dual does
   /// NOT cleanly translate to "stronger pull toward mu for that action" - in reverse
   /// KL, per-action lambda re-weights the prior rather than the regularization
-  /// intensity (see CBGPUCT_BackupLambdaPerChildExponent doc for the asymmetry).
-  /// Operating in q-space (value shrinkage) sidesteps that and gives a clean
-  /// interpretation, hence we implement value shrinkage here.  A future knob could
-  /// expose the weighted-KL dual via the lambdaPerChild mechanism if desired.
+  /// intensity (see CBGPUCT_BackupLambdaPerChildExponent docs).  Operating directly
+  /// on pi_bar (here) sidesteps that asymmetry and gives a clean monotone
+  /// interpretation of the p knob.  A future option could expose the weighted-KL
+  /// dual via the Solve's lambdaPerChild path if desired.
   ///
-  /// Compatibility: composes with absolute Q-shrinkage (applied first, then this).
-  /// Set CBGPUCT_BackupQShrinkageFractionAtN1 = 0 to disable absolute, leaving only
-  /// bounded-relative.  Set this knob to 0 to disable bounded-relative, leaving only
-  /// absolute.  Both zero = no Q-shrinkage at all (legacy behavior).
+  /// Composes with the existing absolute pi_bar shrinkage (applied first when both
+  /// are active).  Set CBGPUCT_BackupPiBarShrinkagePseudoVisits = 0 to disable
+  /// absolute and leave only bounded-relative, or vice versa.
   /// </summary>
-  public float CBGPUCT_BackupQShrinkageBoundedRelativeExponent = 0.0f;
+  public float CBGPUCT_BackupPiBarShrinkageBoundedRelativeExponent = 0.0f;
 
 
   /// <summary>

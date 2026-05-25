@@ -581,6 +581,7 @@ internal static class CBGPUCTDumpDiagnostics
                                        ReadOnlySpan<double> qRaw,
                                        ReadOnlySpan<double> qShrunk,
                                        ReadOnlySpan<double> qFill,
+                                       ReadOnlySpan<double> piBarPreShrink,
                                        ReadOnlySpan<double> piBar,
                                        ReadOnlySpan<double> edgeN,
                                        int numChildren, int numExpanded, double sumN, double lambdaN,
@@ -600,7 +601,8 @@ internal static class CBGPUCTDumpDiagnostics
     double[] qrDisplay = new double[numChildren];
     double[] qs = new double[numChildren];
     double[] qf = new double[numChildren];
-    double[] pi = new double[numChildren];
+    double[] piPre = new double[numChildren];
+    double[] piPost = new double[numChildren];
     double[] contrib = new double[numChildren];
     double[] en = new double[numChildren];
     for (int i = 0; i < numChildren; i++)
@@ -612,8 +614,10 @@ internal static class CBGPUCTDumpDiagnostics
       qrDisplay[i] = double.IsNaN(qRaw[i]) ? qFill[i] : qRaw[i];
       qs[i] = qShrunk[i];
       qf[i] = qFill[i];
-      pi[i] = piBar[i];
+      piPre[i] = piBarPreShrink[i];
+      piPost[i] = piBar[i];
       en[i] = edgeN[i];
+      // Contribution uses post-shrinkage piBar (what the dot product actually consumed).
       double qForAvg = double.IsNaN(qRaw[i]) ? qFill[i] : qRaw[i];
       contrib[i] = piBar[i] * qForAvg;
     }
@@ -646,8 +650,11 @@ internal static class CBGPUCTDumpDiagnostics
       Console.WriteLine(FormatRow("Q_shrunk:", numChildren, boundary, i => FmtQ(qs[i])));
       Console.WriteLine(FormatRow("Q_fill:", numChildren, boundary, i => FmtQ(qf[i])));
       Console.WriteLine(FormatRow("P:", numChildren, boundary, i => FmtP(m[i])));
+      // pi_bar = unshrunk (straight from Solve); pi_bar_shrunk = post all shrinkage, used in dot product.
       ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
-        FormatRow("pi_bar:", numChildren, boundary, i => FmtP(pi[i])));
+        FormatRow("pi_bar:", numChildren, boundary, i => FmtP(piPre[i])));
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+        FormatRow("pi_bar_shrunk:", numChildren, boundary, i => FmtP(piPost[i])));
       ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
         FormatRow("contribution:", numChildren, boundary, i => FmtQ(contrib[i])));
       ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,

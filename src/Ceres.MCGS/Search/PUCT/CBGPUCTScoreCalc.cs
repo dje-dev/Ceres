@@ -287,6 +287,94 @@ internal static class CBGPUCTScoreCalc
 
 
   /// <summary>
+  /// BOUNDED RELATIVE pi_bar shrinkage toward the normalized prior mu.  For each child:
+  ///   alpha_i = min(1, (N_i / N_max)^p)
+  ///   pi_bar[i] := alpha_i * pi_bar[i] + (1 - alpha_i) * mu_norm[i]
+  /// then renormalize.  N_i = nValues[i] is the per-child statistical support; caller
+  /// should pass child.N (statistical support across all parents in graph mode), not
+  /// edge.N.  When alpha_i = 1 the child is well-sampled relative to its peers and is
+  /// NOT shrunk; only laggards are pulled toward mu.  Set exponent = 0 to disable
+  /// (no-op return).
+  /// </summary>
+  private static void ApplyPiBarShrinkageBoundedRelative(Span<double> piBar, ReadOnlySpan<double> mu,
+                                                         ReadOnlySpan<double> nValues,
+                                                         double exponent, int n)
+  {
+    if (n <= 0 || !(exponent > 0.0))
+    {
+      return;
+    }
+
+    // Find N_max (statistical-support max) for ratio normalization.
+    double nMax = 0.0;
+    for (int i = 0; i < n; i++)
+    {
+      if (nValues[i] > nMax)
+      {
+        nMax = nValues[i];
+      }
+    }
+    if (!(nMax > 0.0))
+    {
+      return;
+    }
+
+    // Normalize mu over the considered subset (same convention as ApplyPiBarShrinkage).
+    double muSum = 0.0;
+    for (int i = 0; i < n; i++)
+    {
+      double m = mu[i];
+      if (m > 0.0)
+      {
+        muSum += m;
+      }
+    }
+    if (!(muSum > 0.0))
+    {
+      return;
+    }
+    double invMuSum = 1.0 / muSum;
+
+    // Apply shrinkage in place; accumulate new sum for renormalization.
+    double piSum = 0.0;
+    for (int i = 0; i < n; i++)
+    {
+      double ratio = nValues[i] / nMax;
+      double alphaI;
+      if (ratio >= 1.0)
+      {
+        alphaI = 1.0;
+      }
+      else if (exponent == 1.0)
+      {
+        alphaI = ratio;
+      }
+      else if (exponent == 0.5)
+      {
+        alphaI = Math.Sqrt(ratio);
+      }
+      else
+      {
+        alphaI = Math.Pow(ratio, exponent);
+      }
+
+      double muNorm = (mu[i] > 0.0 ? mu[i] : 0.0) * invMuSum;
+      double v = alphaI * piBar[i] + (1.0 - alphaI) * muNorm;
+      piBar[i] = v;
+      piSum += v;
+    }
+    if (piSum > 0.0)
+    {
+      double inv = 1.0 / piSum;
+      for (int i = 0; i < n; i++)
+      {
+        piBar[i] *= inv;
+      }
+    }
+  }
+
+
+  /// <summary>
   /// Applies a minimum floor to pi_bar so that no child is functionally starved when its
   /// imputed Q and policy are jointly low.  Two passes: first counts how many entries are
   /// below the floor and the mass they hold; second applies the floor (and conditionally
@@ -789,6 +877,12 @@ internal static class CBGPUCTScoreCalc
     Span<double> qShrunk = stackalloc double[numChildren];
     Span<double> qRaw = stackalloc double[numChildren];
     Span<double> edgeNSpan = stackalloc double[numChildren];
+    // Per-child statistical support: in graph mode with transpositions, child.N
+    // accumulates across all parents while edge.N counts only visits via THIS edge.
+    // The Q estimate's statistical support is the child-side count.  Used by the
+    // bounded-relative pi_bar shrinkage; for terminal edges (no child node) we fall
+    // back to edge.N since the Q is exact anyway.
+    Span<double> childNSpan = stackalloc double[numChildren];
 
     double sumN = 0.0;
     double nodeQ = node.Q;
@@ -799,7 +893,8 @@ internal static class CBGPUCTScoreCalc
     double kPseudoBackup = fractionAtN1Backup > 0.0f ? fractionAtN1Backup / (1.0 - fractionAtN1Backup) : 0.0;
     double decayExpBackup = paramsSelect.CBGPUCT_BackupQShrinkageDecayExponent;
 
-    // First pass: build mu, qRaw (raw observed Q in this node's perspective), and edgeNSpan.
+    // First pass: build mu, qRaw (raw observed Q in this node's perspective), edgeNSpan,
+    // and childNSpan (child-node N for bounded-relative pi_bar shrinkage).
     // Expanded slots read from the edge (P / N / Q); unexpanded slots read header.P only
     // and contribute qRaw = NaN, edgeN = 0 to the Solve.  sumN counts visited edges only
     // (unvisited contribute 0), matching the lambda_N input domain.
@@ -823,12 +918,18 @@ internal static class CBGPUCTScoreCalc
           qRaw[i] = -edge.Q;
         }
         sumN += edgeN;
+        // Statistical support = child node's total visit count (across all parents).
+        // Terminal edges have no child node; use edge.N (their Q is exact).
+        childNSpan[i] = edge.Type == GEdgeStruct.EdgeType.ChildEdge
+          ? edge.ChildNode.NodeRef.N
+          : edgeN;
       }
       else
       {
         // Unexpanded slot (no edge object): use header policy, no observed Q.
         mu[i] = (double)headersSpan[i].P;
         edgeNSpan[i] = 0;
+        childNSpan[i] = 0;
         qRaw[i] = double.NaN;
       }
     }
@@ -874,84 +975,30 @@ internal static class CBGPUCTScoreCalc
     // Second pass: build qShrunk (used as input to Solve for pi_bar).
     //   - Visited (qRaw not NaN) with absolute shrinkage: Bayesian shrinkage toward impliedQ.
     //   - Visited without absolute shrinkage: qShrunk = qRaw passthrough.
-    //   - Visited with BOUNDED RELATIVE shrinkage: additional pull toward scalar v_0
-    //     (= anchorForImputation), applied AFTER the absolute step.  Strength is
-    //     alpha_i = min(1, (N_i/N_max)^p): no shrinkage for the most-visited child(ren),
-    //     heavy shrinkage for under-sampled peers.  Capped at alpha=1 so equal-evidence
-    //     siblings are not shrunk.  See CBGPUCT_BackupQShrinkageBoundedRelativeExponent
-    //     docs for the principle (bounded relative influence, not minimum-MSE).
     //   - Unvisited: pre-fill with the per-child policy-implied Q (= what the SELECT
     //     phase FPU uses).  Solve then sees a finite q and uses it directly, bypassing
     //     the scalar nanFallback path - so pi_bar AND the V_bar dot product see per-
     //     child policy-correlated q for unvisited children, instead of a single
     //     uniform value.
     //
-    // NOTE: The dual "weighted KL" formulation of the bounded-relative principle would
-    // set per-action beta_i = lambdaN / alpha_i (larger lambda for laggards).  In our
-    // reverse-KL Solve, per-action lambda re-weights the prior rather than acting as a
-    // per-action regularization intensity (see CBGPUCT_BackupLambdaPerChildExponent
-    // doc for the asymmetry), so the dual does not have the intuitive "more pull toward
-    // mu for that action" interpretation.  Operating in q-space (value shrinkage, here)
-    // sidesteps this; a future knob could expose the weighted-KL dual if desired.
-    float boundedRelExp = paramsSelect.CBGPUCT_BackupQShrinkageBoundedRelativeExponent;
-    bool boundedRelActive = boundedRelExp > 0.0f;
-    double nMaxVisited = 0.0;
-    if (boundedRelActive)
-    {
-      for (int i = 0; i < numChildren; i++)
-      {
-        double n = edgeNSpan[i];
-        if (n > nMaxVisited)
-        {
-          nMaxVisited = n;
-        }
-      }
-    }
+    // Bounded-relative robustness is applied at the pi_bar (not q) layer downstream;
+    // see CBGPUCT_BackupPiBarShrinkageBoundedRelativeExponent / ApplyPiBarShrinkageBoundedRelative.
     for (int i = 0; i < numChildren; i++)
     {
       if (double.IsNaN(qRaw[i]))
       {
         qShrunk[i] = impliedQ[i];
-        continue;
       }
-
-      // Stage A: existing absolute Q-shrinkage toward per-child policy-implied Q.
-      double qStage = qRaw[i];
-      if (fractionAtN1Backup > 0.0f)
+      else if (fractionAtN1Backup > 0.0f)
       {
         double edgeN = edgeNSpan[i];
         double nPow = decayExpBackup == 1.0 ? edgeN : Math.Pow(edgeN, decayExpBackup);
         double precision = nPow / (nPow + kPseudoBackup);
-        qStage = qRaw[i] * precision + impliedQ[i] * (1.0 - precision);
-      }
-
-      // Stage B: bounded RELATIVE value-shrinkage toward scalar baseline v_0.
-      // alpha_i is capped at 1 so well-sampled slots are never shrunk; only laggards.
-      if (boundedRelActive && nMaxVisited > 0.0)
-      {
-        double ratio = edgeNSpan[i] / nMaxVisited;
-        double alphaI;
-        if (ratio >= 1.0)
-        {
-          alphaI = 1.0;
-        }
-        else if (boundedRelExp == 1.0f)
-        {
-          alphaI = ratio;
-        }
-        else if (boundedRelExp == 0.5f)
-        {
-          alphaI = Math.Sqrt(ratio);
-        }
-        else
-        {
-          alphaI = Math.Pow(ratio, boundedRelExp);
-        }
-        qShrunk[i] = alphaI * qStage + (1.0 - alphaI) * anchorForImputation;
+        qShrunk[i] = qRaw[i] * precision + impliedQ[i] * (1.0 - precision);
       }
       else
       {
-        qShrunk[i] = qStage;
+        qShrunk[i] = qRaw[i];
       }
     }
 
@@ -1108,19 +1155,40 @@ internal static class CBGPUCTScoreCalc
       }
     }
 
+    // Snapshot pi_bar from Solve BEFORE any shrinkage, so the dump can show both the
+    // raw Solve output and the shrunk version that actually drives V_bar.  Tiny cost
+    // (numChildren doubles); always taken so diagnostics stay consistent whether the
+    // dump is enabled or not.
+    Span<double> piBarPreShrink = stackalloc double[numChildren];
+    piBar[..numChildren].CopyTo(piBarPreShrink);
+
     // Pi_bar shrinkage toward the normalized prior, by per-child N.  Highly recommended
     // for backup: prevents a single high-Q low-N rollout from dominating V_bar.  Disabled
-    // when CBGPUCT_PiBarShrinkageBackupPseudoVisits == 0.
+    // when CBGPUCT_PiBarShrinkageBackupPseudoVisits == 0.  Uses edge.N (legacy semantics).
     if (paramsSelect.CBGPUCT_BackupPiBarShrinkagePseudoVisits > 0.0f)
     {
       ApplyPiBarShrinkage(piBar, mu, edgeNSpan,
                           paramsSelect.CBGPUCT_BackupPiBarShrinkagePseudoVisits, numChildren);
     }
 
+    // BOUNDED RELATIVE pi_bar shrinkage: pulls low-N (relative to peers) children's
+    // pi_bar toward the normalized prior mu.  Uses child.N (statistical support).
+    // See CBGPUCT_BackupPiBarShrinkageBoundedRelativeExponent docs for the principle.
+    // Layers on top of the absolute shrinkage above when both are active (mu target
+    // is the same in both, so order does not affect the algebraic fixed point modulo
+    // the per-step renormalizations).
+    if (paramsSelect.CBGPUCT_BackupPiBarShrinkageBoundedRelativeExponent > 0.0f)
+    {
+      ApplyPiBarShrinkageBoundedRelative(piBar, mu, childNSpan,
+                                         paramsSelect.CBGPUCT_BackupPiBarShrinkageBoundedRelativeExponent,
+                                         numChildren);
+    }
+
     // V_bar dot product (helper applies observed-only renormalization when knob is set).
     // Default mode: visited slots contribute qRaw, unvisited contribute qFill (Solve's
     // imputation).  Observed-only mode: only visited slots contribute (qRaw only), with
-    // pi_bar renormalized over the visited subset so weights sum to 1.
+    // pi_bar renormalized over the visited subset so weights sum to 1.  Uses the post-
+    // shrinkage piBar (the one we actually committed to).
     double childContribution = ComputeVBarChildContribution(piBar, qRaw, qFill, numChildren,
                                                             nodeQ, vBarObservedOnly);
 
@@ -1132,7 +1200,7 @@ internal static class CBGPUCTScoreCalc
 
     if (CBGPUCTDumpDiagnostics.DEBUG_DUMP_CBGPUCT_BACKUP_CALCS)
     {
-      CBGPUCTDumpDiagnostics.DumpCBGPUCTBackup(node, mu, qRaw, qShrunk, qFill, piBar, edgeNSpan,
+      CBGPUCTDumpDiagnostics.DumpCBGPUCTBackup(node, mu, qRaw, qShrunk, qFill, piBarPreShrink, piBar, edgeNSpan,
                                                numChildren, numExpanded, sumN, lambdaN,
                                                childContribution, vBar,
                                                paramsSelect.RPOBackupRegularization);
