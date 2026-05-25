@@ -194,24 +194,24 @@ internal static class CBGPUCTScoreCalc
 
       case ParamsSelect.CBGPUCTQAnchorType.BestChildElseParentQ:
       case ParamsSelect.CBGPUCTQAnchorType.BlendBestChildParentQ:
-      {
-        double best = double.NegativeInfinity;
-        for (int i = 0; i < numChildren; i++)
         {
-          double q = qRaw[i];
-          if (!double.IsNaN(q) && q > best)
+          double best = double.NegativeInfinity;
+          for (int i = 0; i < numChildren; i++)
           {
-            best = q;
+            double q = qRaw[i];
+            if (!double.IsNaN(q) && q > best)
+            {
+              best = q;
+            }
           }
+          if (double.IsNegativeInfinity(best))
+          {
+            return node.Q;
+          }
+          return type == ParamsSelect.CBGPUCTQAnchorType.BestChildElseParentQ
+            ? best
+            : 0.5 * (best + node.Q);
         }
-        if (double.IsNegativeInfinity(best))
-        {
-          return node.Q;
-        }
-        return type == ParamsSelect.CBGPUCTQAnchorType.BestChildElseParentQ
-          ? best
-          : 0.5 * (best + node.Q);
-      }
 
       default:
         return node.Q;
@@ -287,17 +287,46 @@ internal static class CBGPUCTScoreCalc
 
 
   /// <summary>
-  /// BOUNDED RELATIVE pi_bar shrinkage toward the normalized prior mu.  For each child:
-  ///   alpha_i = min(1, (N_i / N_max)^p)
-  ///   pi_bar[i] := alpha_i * pi_bar[i] + (1 - alpha_i) * mu_norm[i]
-  /// then renormalize.  N_i = nValues[i] is the per-child statistical support; caller
-  /// should pass child.N (statistical support across all parents in graph mode), not
-  /// edge.N.  When alpha_i = 1 the child is well-sampled relative to its peers and is
-  /// NOT shrunk; only laggards are pulled toward mu.  Set exponent = 0 to disable
-  /// (no-op return).
+  /// BOUNDED RELATIVE pi_bar shrinkage: caps the influence of low-N (relative to
+  /// peers) visited children whose pi_bar exceeds what their statistical support
+  /// would justify, then redistributes the freed mass to the UNCAPPED visited
+  /// siblings.  For each visited child (qRaw[i] not NaN):
+  ///   alpha_i = min(1, (N_i / N_max_visited)^p)
+  ///   cap_i   = alpha_i * pi_bar[i] + (1 - alpha_i) * mu_norm_visited[i]
+  ///   pi_bar[i] := min(pi_bar[i], cap_i)
+  /// where mu_norm_visited is mu normalized over the visited subset.  The freed
+  /// mass (sum over capped slots of pi_bar - cap) is distributed proportionally
+  /// across the uncapped visited slots so they get a uniform multiplicative
+  /// boost; capped slots STAY at their cap (the influence bound is preserved
+  /// strictly, not partially undone by a global rescale).  Unvisited slots are
+  /// never touched.
+  ///
+  /// WHY ONE-SIDED CAP, NOT SYMMETRIC SHRINKAGE: the principle is bounded
+  /// RELATIVE INFLUENCE, not minimum-MSE estimation.  Symmetric shrinkage
+  /// (mixing pi_bar toward muNorm in both directions) has two failure modes:
+  ///   1. For slots whose pi_bar is BELOW muNorm because Q legitimately said
+  ///      the move is unattractive, the symmetric mixture spuriously BOOSTS
+  ///      them - rewarding low-Q slots is the opposite of what we want.
+  ///   2. With visited's mu_norm summing to 1.0 but visited's pi_bar summing
+  ///      to visitedSumPre, any rescale that preserves visitedSumPre also
+  ///      scales the alpha=1 "leader" slot, violating the documented invariant
+  ///      that fully-supported slots are untouched.  Compounded across backups
+  ///      this becomes a systematic V_bar pessimism bias proportional to
+  ///      (pi_bar_leader - muNorm_leader).
+  /// The one-sided cap is invariant for any slot whose pi_bar is at or below
+  /// cap (which always includes the leader), so the only V_bar effect comes
+  /// from actually-overconcentrated slots being pulled back.
+  ///
+  /// MASS PRESERVATION: total visited mass is preserved exactly because the
+  /// excess from capped slots is added back to uncapped visited slots only.
+  /// Unvisited slots are neither capped nor scaled, so the visited-vs-unvisited
+  /// split also matches what Solve produced.
+  ///
+  /// Set exponent = 0 to disable (no-op return).
   /// </summary>
   private static void ApplyPiBarShrinkageBoundedRelative(Span<double> piBar, ReadOnlySpan<double> mu,
                                                          ReadOnlySpan<double> nValues,
+                                                         ReadOnlySpan<double> qRaw,
                                                          double exponent, int n)
   {
     if (n <= 0 || !(exponent > 0.0))
@@ -305,11 +334,12 @@ internal static class CBGPUCTScoreCalc
       return;
     }
 
-    // Find N_max (statistical-support max) for ratio normalization.
+    // Find N_max over VISITED slots only.  Unvisited slots have qRaw == NaN and
+    // their nValues entries (typically 0) must not skew the ratio denominator.
     double nMax = 0.0;
     for (int i = 0; i < n; i++)
     {
-      if (nValues[i] > nMax)
+      if (!double.IsNaN(qRaw[i]) && nValues[i] > nMax)
       {
         nMax = nValues[i];
       }
@@ -319,26 +349,38 @@ internal static class CBGPUCTScoreCalc
       return;
     }
 
-    // Normalize mu over the considered subset (same convention as ApplyPiBarShrinkage).
-    double muSum = 0.0;
+    // Normalize mu over the VISITED subset only.  Sum-to-1 over visited makes
+    // mu_norm[i] a proper per-slot share that can be directly compared to
+    // pi_bar[i] when deciding whether a slot is overconcentrated.
+    double muSumVisited = 0.0;
     for (int i = 0; i < n; i++)
     {
-      double m = mu[i];
-      if (m > 0.0)
+      if (!double.IsNaN(qRaw[i]) && mu[i] > 0.0)
       {
-        muSum += m;
+        muSumVisited += mu[i];
       }
     }
-    if (!(muSum > 0.0))
+    if (!(muSumVisited > 0.0))
     {
       return;
     }
-    double invMuSum = 1.0 / muSum;
+    double invMuSumVisited = 1.0 / muSumVisited;
 
-    // Apply shrinkage in place; accumulate new sum for renormalization.
-    double piSum = 0.0;
+    // Single pass: compute cap per visited slot, apply min(piBar, cap), and
+    // track which slots ended up capped vs uncapped.  Capped slots contribute
+    // their excess (piBar - cap) to cappedFreedMass; uncapped slots' current
+    // mass goes into uncappedMass so we can compute the redistribute factor.
+    Span<bool> isCapped = stackalloc bool[n];
+    double cappedFreedMass = 0.0;
+    double uncappedMass = 0.0;
     for (int i = 0; i < n; i++)
     {
+      isCapped[i] = false;
+      if (double.IsNaN(qRaw[i]))
+      {
+        continue;   // unvisited slot: untouched throughout
+      }
+
       double ratio = nValues[i] / nMax;
       double alphaI;
       if (ratio >= 1.0)
@@ -358,17 +400,36 @@ internal static class CBGPUCTScoreCalc
         alphaI = Math.Pow(ratio, exponent);
       }
 
-      double muNorm = (mu[i] > 0.0 ? mu[i] : 0.0) * invMuSum;
-      double v = alphaI * piBar[i] + (1.0 - alphaI) * muNorm;
-      piBar[i] = v;
-      piSum += v;
+      double muNorm = (mu[i] > 0.0 ? mu[i] : 0.0) * invMuSumVisited;
+      double cap = alphaI * piBar[i] + (1.0 - alphaI) * muNorm;
+      if (piBar[i] > cap)
+      {
+        cappedFreedMass += piBar[i] - cap;
+        piBar[i] = cap;
+        isCapped[i] = true;
+      }
+      else
+      {
+        uncappedMass += piBar[i];
+      }
     }
-    if (piSum > 0.0)
+
+    // Redistribute freed mass uniformly across the uncapped visited slots ONLY.
+    // Capped slots remain strictly at their cap value (the influence bound is
+    // preserved), unvisited slots remain untouched.  When all visited slots
+    // happen to be uncapped (cappedFreedMass == 0), nothing to do; same when
+    // nothing is uncapped (degenerate; would only happen if every visited slot
+    // were over-cap, which can't happen because the leader's cap equals its own
+    // pi_bar and so the leader is always uncapped).
+    if (cappedFreedMass > 0.0 && uncappedMass > 0.0)
     {
-      double inv = 1.0 / piSum;
+      double factor = (uncappedMass + cappedFreedMass) / uncappedMass;
       for (int i = 0; i < n; i++)
       {
-        piBar[i] *= inv;
+        if (!double.IsNaN(qRaw[i]) && !isCapped[i])
+        {
+          piBar[i] *= factor;
+        }
       }
     }
   }
@@ -1179,7 +1240,7 @@ internal static class CBGPUCTScoreCalc
     // the per-step renormalizations).
     if (paramsSelect.CBGPUCT_BackupPiBarShrinkageBoundedRelativeExponent > 0.0f)
     {
-      ApplyPiBarShrinkageBoundedRelative(piBar, mu, childNSpan,
+      ApplyPiBarShrinkageBoundedRelative(piBar, mu, childNSpan, qRaw,
                                          paramsSelect.CBGPUCT_BackupPiBarShrinkageBoundedRelativeExponent,
                                          numChildren);
     }

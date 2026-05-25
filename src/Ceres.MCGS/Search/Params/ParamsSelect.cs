@@ -614,51 +614,59 @@ public record ParamsSelect
   public float CBGPUCT_BackupQShrinkageDecayExponent = 1.5f;
 
   /// <summary>
-  /// BOUNDED RELATIVE pi_bar shrinkage in the BACKUP phase.  After Solve produces
-  /// pi_bar (and after any absolute pi_bar shrinkage via
-  /// CBGPUCT_BackupPiBarShrinkagePseudoVisits), shrink each child's pi_bar toward
-  /// the normalized prior mu by:
+  /// BOUNDED RELATIVE pi_bar INFLUENCE CAP in the BACKUP phase.  After Solve
+  /// produces pi_bar (and after any absolute pi_bar shrinkage via
+  /// CBGPUCT_BackupPiBarShrinkagePseudoVisits), cap each visited child's pi_bar
+  /// at a bounded-relative ceiling and redistribute the freed mass to the
+  /// UNCAPPED visited siblings:
   ///   alpha_i = min(1, (N_i / N_max)^p)
-  ///   pi_bar_shrunk[i] = alpha_i * pi_bar[i] + (1 - alpha_i) * mu_norm[i]
-  /// renormalized to sum to 1.  N_i is the CHILD NODE'S visit count
-  /// (edge.ChildNode.N - the cumulative statistical support for the q estimate
-  /// across all parents in graph mode, not the per-edge count); N_max is the max
-  /// across the considered children; for terminal edges edge.N is used in place
-  /// of child.N.  This shrunk pi_bar then drives the V_bar dot product.
+  ///   cap_i   = alpha_i * pi_bar[i] + (1 - alpha_i) * mu_norm[i]
+  ///   pi_bar[i] := min(pi_bar[i], cap_i)
+  ///   freedMass = sum over capped slots of (pi_bar_pre - cap)
+  ///   uncapped slots get a uniform multiplicative boost so visited mass is
+  ///   exactly preserved.
+  /// N_i is the CHILD NODE'S visit count (edge.ChildNode.N - the cumulative
+  /// statistical support for the q estimate across all parents in graph mode,
+  /// not the per-edge count); N_max is the max across considered children; for
+  /// terminal edges edge.N is used in place of child.N.  mu_norm is mu
+  /// normalized to sum to 1 over visited slots only.  Unvisited slots are
+  /// neither capped nor scaled - Solve's imputation already gave them their
+  /// appropriate pi_bar.
   ///
-  /// PRINCIPLE: bounded RELATIVE influence (not minimum-MSE estimation).  Standard
-  /// empirical Bayes pulls every point toward a baseline whenever individual
-  /// estimates are noisy, even if every point is equally noisy.  Here we shrink ONLY
-  /// when a child is under-sampled RELATIVE to its peers - so no single noisy slot
-  /// can dominate the others, but if every slot is equally undersampled, nothing is
-  /// shrunk (alpha_i = 1 across the board).  The global lambda_N on KL is already
-  /// providing absolute regularization; bounded-relative shrinkage only enforces
-  /// per-action evidence parity.
+  /// PRINCIPLE: bounded RELATIVE INFLUENCE (not minimum-MSE estimation).  The
+  /// cap-and-redistribute form is the truer reading of the principle than a
+  /// symmetric pull toward mu would be:
+  ///   - Slots whose pi_bar is at or BELOW their cap are untouched.  In
+  ///     particular, the leader (alpha=1, cap=piBar) is always untouched -
+  ///     and slots whose pi_bar is small for legitimate low-Q reasons are
+  ///     never spuriously boosted toward muNorm.
+  ///   - Slots whose pi_bar EXCEEDS their cap (the "single low-N rollout
+  ///     dominates V_bar" failure case) get pulled down to cap exactly, and
+  ///     the freed mass flows to better-supported siblings.  A capped slot
+  ///     stays at cap (the influence bound is preserved strictly, not
+  ///     partially undone by a global rescale).
   ///
-  /// Acting on pi_bar directly (rather than via q shrinkage or per-action lambda)
-  /// is the most direct knob: low-N children's mass is pulled back toward the prior
-  /// mu without going through the (alpha - q) denominator or the per-action prior
-  /// re-weighting.  Easier to reason about and easier to keep monotone in p.
+  /// WHY NOT SYMMETRIC SHRINKAGE: a symmetric mixture pi_bar := alpha*piBar +
+  /// (1-alpha)*muNorm has two failure modes.  First, for slots whose Q
+  /// legitimately produced a pi_bar below muNorm, it boosts them upward -
+  /// rewarding low-Q slots is the opposite of what we want.  Second, since
+  /// muNorm sums to 1 over visited but piBar over visited sums to
+  /// visitedSumPre, any rescale that preserves total visited mass also scales
+  /// the leader (whose alpha=1 was supposed to make it invariant); the leader
+  /// loses mass proportional to its visited-share excess (piBar - muNorm),
+  /// which compounds into a systematic V_bar pessimism bias.  The one-sided
+  /// cap avoids both pathologies by definition.
   ///
   /// alpha mechanics with p = 0.5 (suggested productive starting setting):
-  ///   N_i = N_max          : alpha = 1       (no shrinkage)
-  ///   N_i = N_max / 4      : alpha = 0.5     (50/50 with mu_norm)
-  ///   N_i = 1, N_max = 200 : alpha = 0.071   (heavy shrinkage to mu)
-  /// At p = 1 (linear) the shrinkage is more aggressive; at p = 0.25 it is gentler.
-  /// Set 0 to disable (no bounded-relative shrinkage applied; current behavior).
+  ///   N_i = N_max          : alpha = 1       (cap = piBar; never capped)
+  ///   N_i = N_max / 4      : alpha = 0.5     (cap = midpoint of piBar/muNorm)
+  ///   N_i = 1, N_max = 200 : alpha = 0.071   (cap close to muNorm)
+  /// At p = 1 (linear) the cap is tighter; at p = 0.25 it is looser.  Set 0
+  /// to disable (no cap applied; current pi_bar passes through unchanged).
   ///
-  /// FUTURE WORK: the dual formulation is "weighted KL" with per-action beta_i = beta
-  /// / alpha_i (larger beta for laggards).  In our reverse-KL setup that dual does
-  /// NOT cleanly translate to "stronger pull toward mu for that action" - in reverse
-  /// KL, per-action lambda re-weights the prior rather than the regularization
-  /// intensity (see CBGPUCT_BackupLambdaPerChildExponent docs).  Operating directly
-  /// on pi_bar (here) sidesteps that asymmetry and gives a clean monotone
-  /// interpretation of the p knob.  A future option could expose the weighted-KL
-  /// dual via the Solve's lambdaPerChild path if desired.
-  ///
-  /// Composes with the existing absolute pi_bar shrinkage (applied first when both
-  /// are active).  Set CBGPUCT_BackupPiBarShrinkagePseudoVisits = 0 to disable
-  /// absolute and leave only bounded-relative, or vice versa.
+  /// Composes with the existing absolute pi_bar shrinkage (applied first when
+  /// both are active).  Set CBGPUCT_BackupPiBarShrinkagePseudoVisits = 0 to
+  /// disable absolute and leave only the bounded-relative cap, or vice versa.
   /// </summary>
   public float CBGPUCT_BackupPiBarShrinkageBoundedRelativeExponent = 0.0f;
 
@@ -994,7 +1002,7 @@ public record ParamsSelect
       {
         Console.WriteLine($"[CBGPUCT] active mode={CBGPUCT_Mode} "
                         + $"select(C={CBGPUCT_SelectLambdaC:F3} sched={CBGPUCT_SelectLambdaSchedule} exp={CBGPUCT_SelectLambdaExp:F3} "
-                        +   $"cLogBase={CBGPUCT_SelectLambdaCLogBase:F0} cLogFactor={CBGPUCT_SelectLambdaCLogFactor:F3}) "
+                        + $"cLogBase={CBGPUCT_SelectLambdaCLogBase:F0} cLogFactor={CBGPUCT_SelectLambdaCLogFactor:F3}) "
                         + $"backup(C={CBGPUCT_BackupLambdaC:F3} sched={CBGPUCT_BackupLambdaSchedule} exp={CBGPUCT_BackupLambdaExp:F3}) "
                         + $"selDenom={CBGPUCT_SelectLambdaDenominatorBase} bkpDenom={CBGPUCT_BackupLambdaDenominatorBase} "
                         + $"CrossParentNFraction={CBGPUCT_SelectCrossParentNFraction:F3} "
