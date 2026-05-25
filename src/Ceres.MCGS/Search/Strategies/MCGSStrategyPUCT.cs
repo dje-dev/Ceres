@@ -695,7 +695,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
         count += node.ChildEdgeAtIndex(i).N;
       }
       int expected = count + (node.NodeRef.Terminal.IsTerminal() ? node.N : 1);
-      if (ParamsSelect.CBGPUCT_CrossParentNEnabled)
+      if (ParamsSelect.CBGPUCT_SelectCrossParentNEnabled)
       {
         Debug.Assert(node.N >= expected);
       }

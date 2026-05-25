@@ -264,6 +264,40 @@ public record ParamsSelect
   /// </summary>
   public float CBGPUCT_BackupImputationAnchorK = 3.0f;
 
+  /// <summary>
+  /// When true, the V_bar dot product sums pi_bar * qRaw over VISITED children only
+  /// (renormalizing pi_bar over the visited subset).  When false (default), it sums
+  /// pi_bar * q over ALL children, with q imputed for unvisited slots via
+  /// ComputePolicyImpliedQ.
+  ///
+  /// Rationale: Grill's V*(s) = sum_a pi*(s,a) Q(s,a) is over the full action set and
+  /// assumes Q is known for all actions.  We don't have a Q-network, so unvisited Q
+  /// must be imputed from the policy itself.  Including the policy-derived imputed q
+  /// in V_bar effectively folds the policy's value-correlation hypothesis back into
+  /// the value estimate - useful when the policy is reliable, harmful when it is not
+  /// (since the policy already shapes pi_bar through the KL term, double-counting).
+  ///
+  /// "Observed only" mode is more epistemically honest: V_bar uses only first-hand
+  /// search evidence (observed q + selfV at the parent), while pi_bar still benefits
+  /// from the full policy-aware regularization (its visited entries' RELATIVE
+  /// weighting reflects the regularization solve over the full action set; we just
+  /// don't multiply unvisited slots' imputed q into the sum).
+  ///
+  /// INTERACTION WITH FIXED-POINT (CBGPUCT_BackupFixedPointIterations):
+  /// When ObservedOnly is true, the fixed-point iteration's reference value vRef is
+  /// also computed over visited only (renormalized pi_bar * qRaw).  This means the
+  /// iteration converges to a different fixed point than the full-coverage variant -
+  /// not "V_bar = E_y[q] over all actions" but "V_bar = E_y_renorm_visited[qRaw]".
+  /// Imputed q's for unvisited slots are still updated by the Sinkhorn formula (so
+  /// pi_bar still shifts among visited vs. unvisited), but the IMPUTED q's no longer
+  /// contribute to the value the iteration is matching.  The effect: pi_bar pulls
+  /// further toward visited children (since the value target ignores unvisited
+  /// contributions) and the iteration converges faster (typically 1-2 iters).
+  /// Recommendation: leave fixed-point off (the default 0) when first experimenting
+  /// with ObservedOnly, then enable it once you've confirmed ObservedOnly is helping.
+  /// </summary>
+  public bool CBGPUCT_BackupVBarObservedOnly = false;
+
 
 
   /// <summary>

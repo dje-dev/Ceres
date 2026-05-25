@@ -680,6 +680,57 @@ internal static class CBGPUCTScoreCalc
 
 
   /// <summary>
+  /// Computes the V_bar pre-blend child contribution:
+  ///   sum_i pi_bar[i] * q_used[i]
+  /// where q_used is qRaw for visited slots and qFill for unvisited slots in
+  /// the default (full-coverage) mode.  In observedOnly mode the sum is restricted
+  /// to visited slots and pi_bar is renormalized over that subset, so the result
+  /// depends only on observed q values (selfV is still blended in by the caller).
+  /// Returns nodeQFallback when observedOnly is set but no slot is visited.
+  /// </summary>
+  private static double ComputeVBarChildContribution(ReadOnlySpan<double> piBar,
+                                                     ReadOnlySpan<double> qRaw,
+                                                     ReadOnlySpan<double> qFill,
+                                                     int numChildren,
+                                                     double nodeQFallback,
+                                                     bool observedOnly)
+  {
+    if (!observedOnly)
+    {
+      double sumAll = 0.0;
+      for (int i = 0; i < numChildren; i++)
+      {
+        sumAll += piBar[i] * (double.IsNaN(qRaw[i]) ? qFill[i] : qRaw[i]);
+      }
+      return sumAll;
+    }
+
+    double piVisited = 0.0;
+    for (int i = 0; i < numChildren; i++)
+    {
+      if (!double.IsNaN(qRaw[i]))
+      {
+        piVisited += piBar[i];
+      }
+    }
+    if (!(piVisited > 0.0))
+    {
+      return nodeQFallback;
+    }
+    double inv = 1.0 / piVisited;
+    double sumObs = 0.0;
+    for (int i = 0; i < numChildren; i++)
+    {
+      if (!double.IsNaN(qRaw[i]))
+      {
+        sumObs += piBar[i] * inv * qRaw[i];
+      }
+    }
+    return sumObs;
+  }
+
+
+  /// <summary>
   /// Computes V_bar(node) via the regularized policy improvement closed form over the
   /// children's q values, then blends in the node's own network value V using the
   /// standard Ceres convention (self-V counts as 1 visit out of N total).
@@ -872,15 +923,24 @@ internal static class CBGPUCTScoreCalc
                                    options: opts,
                                    nanFallbackQ: node.Q);
 
+    bool vBarObservedOnly = paramsSelect.CBGPUCT_BackupVBarObservedOnly;
+
     // Optional Sinkhorn-style fixed-point refinement for BACKUP.  Same algebraic
     // identity as the select-side iteration:
     //     q(a) = vRef + lambda * (1 - mu_norm(a) / pi_bar(a))
-    // but with vRef set to the current V_bar pre-blend (= sum_i pi_bar[i] * q_used[i],
-    // where q_used uses qRaw for visited slots and qFill for unvisited) rather than
-    // the constant qParent used in selection.  At convergence E_y[q] equals V_bar,
-    // making V_bar the self-consistent regularized value (the soft-Bellman fixed
-    // point), rather than a one-shot computation anchored to the previous backup's
-    // node.Q via the imputation.
+    // but with vRef set to the current V_bar pre-blend rather than the constant
+    // qParent used in selection.  At convergence E_y[q] equals V_bar, making V_bar
+    // the self-consistent regularized value (the soft-Bellman fixed point), rather
+    // than a one-shot computation anchored to the previous backup's node.Q via the
+    // imputation.
+    //
+    // When CBGPUCT_BackupVBarObservedOnly is set, vRef is computed observed-only
+    // (renormalized pi_bar over visited slots, summed against qRaw only).  The
+    // iteration then converges to a DIFFERENT fixed point: vRef equals the
+    // observed-only V_bar, not the Grill-style E_y[q] over all actions.  Imputed
+    // q's for unvisited slots still get refreshed (and pi_bar still shifts), but
+    // those imputed q's no longer enter the value target.  See
+    // CBGPUCT_BackupVBarObservedOnly docs for the rationale and recommended usage.
     //
     // Skipped when CBGPUCT_BackupFixedPointIterations == 0 (default) - zero overhead,
     // behavior identical to legacy.  Only valid for reverse KL (the forward-KL
@@ -902,12 +962,9 @@ internal static class CBGPUCTScoreCalc
         muNorm[i] = sumMu > 0.0 ? mu[i] * invSumMu : 1.0 / numChildren;
       }
 
-      // Initial reference: V_bar pre-blend at the current pi_bar / qFill.
-      double vRef = 0.0;
-      for (int i = 0; i < numChildren; i++)
-      {
-        vRef += piBar[i] * (double.IsNaN(qRaw[i]) ? qFill[i] : qRaw[i]);
-      }
+      // Initial reference value (full-coverage OR observed-only per knob).
+      double vRef = ComputeVBarChildContribution(piBar, qRaw, qFill, numChildren,
+                                                 nodeQ, vBarObservedOnly);
 
       double convergenceTol = paramsSelect.RPOBackupFixedPointTol;
       for (int iter = 0; iter < backupFpIters; iter++)
@@ -943,11 +1000,8 @@ internal static class CBGPUCTScoreCalc
                                        out double _,
                                        options: opts,
                                        nanFallbackQ: vRef);
-        vRef = 0.0;
-        for (int i = 0; i < numChildren; i++)
-        {
-          vRef += piBar[i] * (double.IsNaN(qRaw[i]) ? qFill[i] : qRaw[i]);
-        }
+        vRef = ComputeVBarChildContribution(piBar, qRaw, qFill, numChildren,
+                                            nodeQ, vBarObservedOnly);
       }
     }
 
@@ -960,17 +1014,12 @@ internal static class CBGPUCTScoreCalc
                           paramsSelect.CBGPUCT_BackupPiBarShrinkagePseudoVisits, numChildren);
     }
 
-    // V_bar dot product.
-    //   - Visited expanded slot: use raw qRaw[i] (preserves the existing convention of
-    //     NOT applying shrinkage in the dot product to avoid double-counting the prior).
-    //   - Unvisited slot (expanded-with-N=0 OR unexpanded high-P): use qFill[i], which
-    //     is Solve's imputation under the configured regularization / anchor.
-    double childContribution = 0.0;
-    for (int i = 0; i < numChildren; i++)
-    {
-      double qForAvg = double.IsNaN(qRaw[i]) ? qFill[i] : qRaw[i];
-      childContribution += piBar[i] * qForAvg;
-    }
+    // V_bar dot product (helper applies observed-only renormalization when knob is set).
+    // Default mode: visited slots contribute qRaw, unvisited contribute qFill (Solve's
+    // imputation).  Observed-only mode: only visited slots contribute (qRaw only), with
+    // pi_bar renormalized over the visited subset so weights sum to 1.
+    double childContribution = ComputeVBarChildContribution(piBar, qRaw, qFill, numChildren,
+                                                            nodeQ, vBarObservedOnly);
 
     // Blend self-V (counts as 1 visit) with regularized child contribution (counts as totalN - 1).
     int totalN = node.NodeRef.N;
