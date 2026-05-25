@@ -327,14 +327,19 @@ public static class PUCTSelector
       qIn[i] = (i < numExpanded && nSpan[i] > 0) ? -wSpan[i] / nSpan[i] : double.NaN;
     }
 
-    // Anchor choice mirrors legacy ApplyRPOImputedFPU.  The reverse-KL path ignores
-    // the anchor (it must be None there); construct the appropriate anchor for forward KL.
+    // Anchor VALUE is dispatched by CBGPUCT_QAnchorTypeFPU (default ParentQ = node.Q,
+    // matching legacy behavior).  Anchor MODE selection (MatchChild vs MatchValue) is
+    // independent of the value and stays based on whether child 0 is visited - this
+    // affects only the q calibration formula's intercept, not the value being matched.
+    // The reverse-KL path ignores the anchor entirely (must be None there).
     RPORegularization regularization = paramsSelect.RPOFPURegularization;
+    double anchorValue = CBGPUCTScoreCalc.ComputeImputationAnchor(
+      paramsSelect.CBGPUCT_QAnchorTypeFPU, node, qIn, numToProcess);
     RPOAnchor anchor = regularization == RPORegularization.ReverseKL
       ? RPOAnchor.None
       : (nSpan[0] > 0
-          ? new RPOAnchor(RPOAnchorMode.MatchChild, 0, node.Q)
-          : new RPOAnchor(RPOAnchorMode.MatchValue, -1, node.Q));
+          ? new RPOAnchor(RPOAnchorMode.MatchChild, 0, anchorValue)
+          : new RPOAnchor(RPOAnchorMode.MatchValue, -1, anchorValue));
 
     double lambda = paramsSelect.PolicyImputationTau;
     RPOOptions opts = new(bisectionIterations: 12,

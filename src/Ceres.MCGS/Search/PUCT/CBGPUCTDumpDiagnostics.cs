@@ -566,14 +566,24 @@ internal static class CBGPUCTDumpDiagnostics
   /// Dump for CBGPUCTScoreCalc.ComputeVBar (regularized backup).
   /// Also computes (for visual comparison) the parent-Q the standard
   /// non-CBGPUCT backup would have produced from the same inputs.
+  ///
+  /// numExpanded marks the boundary between expanded children (i &lt; numExpanded) and
+  /// extended-coverage unexpanded children (numExpanded &lt;= i &lt; numChildren).  A '|'
+  /// separator is drawn after the boundary so the two sub-blocks are visually distinct.
+  ///
+  /// qFill is Solve's NaN-imputed q vector; it lets the Q_raw row show the imputed value
+  /// for unvisited slots (so the row is never NaN), and lets the contribution row exactly
+  /// match the V_bar dot product (which uses qFill[i] for NaN-qRaw slots and qRaw[i] for
+  /// visited slots).
   /// </summary>
   public static void DumpCBGPUCTBackup(GNode node,
                                        ReadOnlySpan<double> mu,
                                        ReadOnlySpan<double> qRaw,
                                        ReadOnlySpan<double> qShrunk,
+                                       ReadOnlySpan<double> qFill,
                                        ReadOnlySpan<double> piBar,
                                        ReadOnlySpan<double> edgeN,
-                                       int numChildren, double sumN, double lambdaN,
+                                       int numChildren, int numExpanded, double sumN, double lambdaN,
                                        double childContribution, double vBar,
                                        RPORegularization regularization)
   {
@@ -587,22 +597,30 @@ internal static class CBGPUCTDumpDiagnostics
     int totalN = node.NodeRef.N;
 
     double[] m = new double[numChildren];
-    double[] qr = new double[numChildren];
+    double[] qrDisplay = new double[numChildren];
     double[] qs = new double[numChildren];
+    double[] qf = new double[numChildren];
     double[] pi = new double[numChildren];
     double[] contrib = new double[numChildren];
     double[] en = new double[numChildren];
     for (int i = 0; i < numChildren; i++)
     {
       m[i] = mu[i];
-      qr[i] = qRaw[i];
+      // Q_raw row shows the actual value the dot product used: raw observation for
+      // visited slots, Solve's imputation (qFill) for unvisited slots.  Combined with
+      // the edgeN row (0 indicates imputed), the reader can still distinguish them.
+      qrDisplay[i] = double.IsNaN(qRaw[i]) ? qFill[i] : qRaw[i];
       qs[i] = qShrunk[i];
+      qf[i] = qFill[i];
       pi[i] = piBar[i];
       en[i] = edgeN[i];
-      double qForAvg = double.IsNaN(qRaw[i]) ? nodeQ : qRaw[i];
+      double qForAvg = double.IsNaN(qRaw[i]) ? qFill[i] : qRaw[i];
       contrib[i] = piBar[i] * qForAvg;
     }
 
+    // PUCT_Q comparison uses the truly-raw qRaw (with NaN intact for unvisited) so that
+    // unvisited slots are correctly excluded from the visit-weighted average; this keeps
+    // the side-by-side comparison fair to the legacy backup, which never imputes.
     double puctQ = ComputeStandardBackupQ(qRaw, edgeN, numChildren, selfV, totalN, nodeQ);
     double backupDelta = Math.Abs(vBar - puctQ);
     bool significant = backupDelta > BACKUP_DIFF_THRESHOLD;
@@ -611,19 +629,22 @@ internal static class CBGPUCTDumpDiagnostics
       return;
     }
 
-    // numChildren here is node.NumEdgesExpanded so all rendered children are
-    // visited; suppress the '|' separator by passing 0.
-    int boundary = 0;
+    // Boundary is the index where the expanded segment ends and the unexpanded
+    // extended-coverage segment begins.  If numChildren == numExpanded (no extension)
+    // or numExpanded == 0, no separator is drawn (FormatRow handles those cases).
+    int boundary = numExpanded;
 
     lock (consoleLock)
     {
       Console.WriteLine();
-      WriteHeaderLine($"[CBGPUCT-BAK] numChildren={numChildren} sumN={sumN:F1} lambda_N={lambdaN:F4} " +
+      WriteHeaderLine($"[CBGPUCT-BAK] numChildren={numChildren} (expanded={numExpanded}) " +
+                      $"sumN={sumN:F1} lambda_N={lambdaN:F4} " +
                       $"nodeQ={nodeQ:F3} selfV={selfV:F3} N={totalN} reg={regularization} " +
                       $"delta={backupDelta:F3}", significant);
       Console.WriteLine(FormatRow("edgeN:", numChildren, boundary, i => FmtN(en[i])));
-      Console.WriteLine(FormatRow("Q_raw:", numChildren, boundary, i => FmtQ(qr[i])));
+      Console.WriteLine(FormatRow("Q_raw:", numChildren, boundary, i => FmtQ(qrDisplay[i])));
       Console.WriteLine(FormatRow("Q_shrunk:", numChildren, boundary, i => FmtQ(qs[i])));
+      Console.WriteLine(FormatRow("Q_fill:", numChildren, boundary, i => FmtQ(qf[i])));
       Console.WriteLine(FormatRow("P:", numChildren, boundary, i => FmtP(m[i])));
       ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
         FormatRow("pi_bar:", numChildren, boundary, i => FmtP(pi[i])));

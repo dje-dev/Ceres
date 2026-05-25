@@ -139,12 +139,12 @@ public record ParamsSelect
   /// the parent value is consistent with the regularized aggregate of its children.
   /// This is the reverse-KL analogue of the MatchValue forward-KL anchor.
   ///
-  /// Default 0 disables this (no extra solves; zero overhead, behavior identical
-  /// to legacy).  Typical setting: 2 or 3 iterations.  Higher counts risk pushing
-  /// unvisited q values toward the -1 clamp when the visited children's Q values
-  /// are systematically higher than v_parent (which can over-suppress exploration).
-  /// Cost scales linearly with the iteration count.  Only takes effect when
-  /// RPOSelectRegularization = ReverseKL.
+  /// Default 2 enables a small amount of refinement at low cost; set to 0 to disable
+  /// the iteration entirely (behavior identical to legacy, zero overhead).  Typical
+  /// productive range: 2 or 3 iterations.  Higher counts risk pushing unvisited q
+  /// values toward the -1 clamp when the visited children's Q values are systematically
+  /// higher than v_parent (which can over-suppress exploration).  Cost scales linearly
+  /// with the iteration count.  Only takes effect when RPOSelectRegularization = ReverseKL.
   /// </summary>
   public int CBGPUCT_SelectFixedPointIterations = 2;
 
@@ -153,6 +153,116 @@ public record ParamsSelect
   /// the largest single-child change in imputed q falls below this value.
   /// </summary>
   public double RPOSelectFixedPointTol = 1e-4;
+
+  /// <summary>
+  /// Number of Sinkhorn-style fixed-point refinement iterations applied after the
+  /// initial Solve in CB-GPUCT BACKUP (V_bar computation).  After the first Solve
+  /// produces pi_bar and qFill, the imputed q values for unvisited children are
+  /// refreshed via
+  ///   q(a) = vRef + lambda * (1 - mu(a) / pi_bar(a))
+  /// where vRef is the current V_bar-pre-blend (= sum_i pi_bar[i] * q_used[i] with
+  /// q_used = qRaw for visited slots and qFill for unvisited).  The Solve is then
+  /// repeated.  At convergence E_y[q] equals V_bar, making V_bar the self-consistent
+  /// regularized value of the state.
+  ///
+  /// Semantic difference from the SELECT-side fixed-point: select holds v_parent
+  /// constant (the existing parent Q is observed); backup lets vRef float (it IS
+  /// V_bar, the value being computed).  This removes the temporal coupling where
+  /// today's V_bar would otherwise be anchored to yesterday's V_bar via the imputation.
+  ///
+  /// Default 0 disables this (no extra solves; behavior identical to legacy backup).
+  /// Typical setting: 2 or 3 iterations.  Cost scales linearly with the iteration
+  /// count.  Only takes effect when RPOBackupRegularization = ReverseKL (ForwardKL
+  /// MatchValue enforces the equivalent constraint in closed form already).
+  /// </summary>
+  public int CBGPUCT_BackupFixedPointIterations = 0;
+
+  /// <summary>
+  /// Convergence threshold for the BACKUP fixed-point refinement.  Loop exits early
+  /// once the largest single-child change in imputed q falls below this value.
+  /// </summary>
+  public double RPOBackupFixedPointTol = 1e-4;
+
+  /// <summary>
+  /// Choice of base anchor VALUE used to calibrate per-child imputed Q for unvisited
+  /// children.  The selected scalar is passed as the MatchValue/MatchChild anchor.Value
+  /// to RegularizedPolicyOptimum.Solve, fixing the absolute level of the imputed q
+  /// vector (relative spread among children comes from lambda * log mu).
+  ///
+  /// IMPORTANT: This enum controls only the anchor VALUE, not the anchor MODE.  The
+  /// FPU call site additionally picks MatchChild(0) vs MatchValue mode based on
+  /// whether child 0 is visited (a legacy convention - see PUCTSelector docs for
+  /// the "legacy quirk" note).  Mode selection is orthogonal and unchanged here.
+  ///
+  /// Options:
+  ///   ParentV                  - node.NodeRef.V (raw NN value head; unaffected by search).
+  ///   ParentQ                  - node.Q (search-improved Q; under CBGPUCT this is the
+  ///                              previous V_bar, selfV-blended and possibly stale).
+  ///                              This reproduces the legacy FPU anchor value exactly.
+  ///   FirstChildElseParentQ    - observed Q of child 0 (parent perspective) if visited,
+  ///                              else node.Q.  Useful when child 0 is reliably the
+  ///                              highest-P move and is visited first; this is what the
+  ///                              MatchChild mode "should" do semantically (whereas
+  ///                              legacy keeps the value at node.Q regardless).
+  ///   BestChildElseParentQ     - max over visited children of -edge.Q (parent perspective),
+  ///                              else node.Q.  Anchors on the strongest observation;
+  ///                              corresponds to the "earlier dead code computing
+  ///                              bestIndex" referenced in PUCTSelector docs.
+  ///   BlendBestChildParentQ    - 0.5 * (best visited child Q + node.Q), else node.Q.
+  ///                              Compromise between BestChild and ParentQ.
+  /// </summary>
+  public enum CBGPUCTQAnchorType
+  {
+    ParentV,
+    ParentQ,
+    FirstChildElseParentQ,
+    BestChildElseParentQ,
+    BlendBestChildParentQ,
+  }
+
+  /// <summary>
+  /// Anchor VALUE used to calibrate per-child imputed Q in the FPU imputation
+  /// (ApplyRPOImputedFPU during selection).  Default ParentQ exactly reproduces
+  /// legacy behavior: anchor.Value = node.Q in both legacy branches (MatchChild
+  /// when child 0 visited, MatchValue otherwise - the mode switch is unrelated to
+  /// the value and remains driven by child 0's visit status regardless of this enum).
+  /// </summary>
+  public CBGPUCTQAnchorType CBGPUCT_QAnchorTypeFPU = CBGPUCTQAnchorType.ParentQ;
+
+  /// <summary>
+  /// Anchor VALUE used to calibrate per-child imputed Q in the BACKUP imputation
+  /// (ComputePolicyImpliedQ inside ComputeVBar).  Default ParentQ matches the
+  /// legacy backup base-anchor (node.Q); the result is then optionally further
+  /// blended with the visit-weighted observed child Q via CBGPUCT_BackupImputationAnchorK.
+  /// </summary>
+  public CBGPUCTQAnchorType CBGPUCT_QAnchorTypeBackup = CBGPUCTQAnchorType.ParentQ;
+
+  /// <summary>
+  /// Pseudo-visit count for blending nodeQ with the visit-weighted observed-child Q
+  /// when forming the anchor for backup imputation (used by ComputePolicyImpliedQ
+  /// inside ComputeVBar).  Effective formula:
+  ///   anchor = (1 - w) * nodeQ + w * visitWeightedObservedQ
+  ///   w     = sumN / (sumN + K)
+  ///
+  /// Motivation: nodeQ under CBGPUCT backup is the previous V_bar, which is selfV-
+  /// blended and includes previous imputed contributions.  When few children are
+  /// visited the selfV term dominates nodeQ; if selfV is over-optimistic relative
+  /// to the children search has actually observed, imputed q's get anchored to a
+  /// value that disagrees with the evidence and pi_bar mass flows to phantom-good
+  /// unvisited children.  Blending in the empirical visit-weighted child Q lets
+  /// search evidence override the stale anchor as N grows.
+  ///
+  /// Numerical example from a real backup with nodeQ=+0.353, observedAvg=-0.410
+  /// (three visited children with q in [-0.706, -0.124]), sumN=3:
+  ///     K=infinity (legacy) : anchor=+0.353, q(unvis mu=0.158)=+0.306  (vs evidence)
+  ///     K=10                : anchor=+0.177, q=+0.130
+  ///     K=3 (default)       : anchor=-0.028, q=-0.075   (matches empirical neighborhood)
+  ///     K=1                 : anchor=-0.219, q=-0.266
+  ///     K=0                 : anchor=-0.410, q=-0.457   (ignores prior entirely)
+  /// At K=3 prior and data carry equal weight at sumN=3 and the data weight reaches
+  /// 80% by sumN=15. Set to float.MaxValue to recover the legacy anchor-at-nodeQ behavior.
+  /// </summary>
+  public float CBGPUCT_BackupImputationAnchorK = 3.0f;
 
 
 
