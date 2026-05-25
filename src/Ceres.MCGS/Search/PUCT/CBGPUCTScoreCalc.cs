@@ -908,6 +908,48 @@ internal static class CBGPUCTScoreCalc
       ? RPOAnchor.None
       : new RPOAnchor(RPOAnchorMode.MatchValue, -1, node.Q);
 
+    // Per-child lambda vector, built only when the exponent knob is positive AND we're
+    // in reverse-KL mode (forward-KL Solve does not support per-child lambda).  Formula:
+    //   lambda_a = lambdaN * (max(N_a, N_FLOOR) / N_max)^p
+    // The floor prevents N_a=0 (unvisited slots, including extended-coverage admittees)
+    // from collapsing lambda_a to zero; we don't want them at exactly zero either since
+    // the bisection then ignores them entirely.  When lambdaPerChild stays empty Solve
+    // uses scalar lambdaN (existing behavior).
+    float perChildExp = paramsSelect.CBGPUCT_BackupLambdaPerChildExponent;
+    bool usePerChildLambda = perChildExp > 0.0f
+                          && paramsSelect.RPOBackupRegularization == RPORegularization.ReverseKL;
+    Span<double> lambdaPerChild = stackalloc double[numChildren];
+    if (usePerChildLambda)
+    {
+      double nMax = 0.0;
+      for (int i = 0; i < numChildren; i++)
+      {
+        if (edgeNSpan[i] > nMax)
+        {
+          nMax = edgeNSpan[i];
+        }
+      }
+      if (nMax > 0.0)
+      {
+        const double N_FLOOR = 0.5;
+        for (int i = 0; i < numChildren; i++)
+        {
+          double effN = edgeNSpan[i] >= N_FLOOR ? edgeNSpan[i] : N_FLOOR;
+          double ratio = effN / nMax;
+          double scale = perChildExp == 1.0f ? ratio : Math.Pow(ratio, perChildExp);
+          lambdaPerChild[i] = lambdaN * scale;
+        }
+      }
+      else
+      {
+        // No visited children at all - per-child can't discriminate; fall back to uniform.
+        for (int i = 0; i < numChildren; i++)
+        {
+          lambdaPerChild[i] = lambdaN;
+        }
+      }
+    }
+
     Span<double> piBar = stackalloc double[numChildren];
     // qFill captures Solve's NaN-imputed q vector so the V_bar dot product can use the
     // SAME imputed values Solve internally used for pi_bar (avoiding the prior silent
@@ -921,7 +963,8 @@ internal static class CBGPUCTScoreCalc
                                    qFillOut: qFill,
                                    out double _,
                                    options: opts,
-                                   nanFallbackQ: node.Q);
+                                   nanFallbackQ: node.Q,
+                                   lambdaPerChild: usePerChildLambda ? lambdaPerChild : default);
 
     bool vBarObservedOnly = paramsSelect.CBGPUCT_BackupVBarObservedOnly;
 
@@ -994,12 +1037,15 @@ internal static class CBGPUCTScoreCalc
           break;
         }
         // Re-solve with the refreshed imputed q's; vRef rebuilt from updated pi_bar/qFill.
+        // Same lambdaPerChild as the initial solve - per-child lambda stays fixed
+        // across fixed-point iterations (it depends only on edge.N, not on q).
         RegularizedPolicyOptimum.Solve(mu, qShrunk, lambdaN, anchor, paramsSelect.RPOBackupRegularization,
                                        yOut: piBar,
                                        qFillOut: qFill,
                                        out double _,
                                        options: opts,
-                                       nanFallbackQ: vRef);
+                                       nanFallbackQ: vRef,
+                                       lambdaPerChild: usePerChildLambda ? lambdaPerChild : default);
         vRef = ComputeVBarChildContribution(piBar, qRaw, qFill, numChildren,
                                             nodeQ, vBarObservedOnly);
       }

@@ -298,6 +298,49 @@ public record ParamsSelect
   /// </summary>
   public bool CBGPUCT_BackupVBarObservedOnly = false;
 
+  /// <summary>
+  /// Exponent for PER-CHILD lambda scaling in the BACKUP phase reverse-KL solve.
+  /// Replaces the scalar lambda_N with a per-action vector
+  ///   lambda_a = lambda_N * (max(N_a, epsilon) / N_max)^p
+  /// where N_max is the max edge.N across the considered children and epsilon is
+  /// a small floor so unvisited / N=0 slots don't multiply lambda by zero.
+  ///
+  /// Mathematical effect:
+  /// Per-action lambda enters the reverse-KL closed form as
+  ///   y(a) = lambda_a * mu(a) / (alpha - q(a))
+  /// i.e. it is effectively a per-action prior re-weighting: lambda_a * mu(a) is
+  /// the action's effective prior contribution.  A LOW lambda_a means LESS pi_bar
+  /// mass on that action - so to suppress low-N children's pi_bar share, we set
+  /// LOW lambda for LOW-N children.  This is the OPPOSITE direction of naive
+  /// "regularization strength" intuition - in reverse-KL, higher lambda = more
+  /// mass, not "more regularization toward mu" (per-action).  Scalar lambda is
+  /// different: there, raising it pulls EVERYTHING toward mu uniformly because
+  /// the sum-to-one normalization cancels.
+  ///
+  /// Practical effect: targets the "pi_bar oligarchy" pathology where a single
+  /// low-N child with a happen-to-be-good observed q hijacks pi_bar at high
+  /// totalN (when scalar lambda_N is small and the bisection approaches argmax-q).
+  /// Per-child lambda gives that child a tiny coefficient, so its (alpha - q)
+  /// denominator can no longer pull a lot of mass even when it is small.
+  ///
+  /// Settings:
+  ///   0 (default)  : ratio^0 = 1 -> uniform lambda = scalar behavior (backward compat).
+  ///   0.5 (sqrt)   : N=1 vs N_max=200 -> lambda_a is 7.1% of lambda_N.
+  ///   1.0 (linear) : N=1 vs N_max=200 -> lambda_a is 0.5% of lambda_N.
+  ///   2.0 (quadr)  : N=1 vs N_max=200 -> lambda_a is 0.0025% of lambda_N.
+  ///
+  /// Caveats:
+  /// - Reverse-KL only (forward-KL closed form does not generalize cleanly).
+  /// - Composes multiplicatively with Q-shrinkage if you enable both, but each
+  ///   alone should be sufficient.  Start with one or the other.
+  /// - Unvisited slots (edge.N == 0, including extended-coverage unexpanded
+  ///   slots when MIN_P_FOR_Q_IF_UNVISITED admits them) get lambda_a near zero
+  ///   for p > 0, so they receive essentially no pi_bar mass.  This effectively
+  ///   nullifies extended coverage's pi_bar effect while keeping its V_bar
+  ///   contribution; treat them as independent knobs.
+  /// </summary>
+  public float CBGPUCT_BackupLambdaPerChildExponent = 0.0f;
+
 
 
   /// <summary>

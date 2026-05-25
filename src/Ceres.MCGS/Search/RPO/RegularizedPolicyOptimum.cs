@@ -55,7 +55,7 @@ public static class RegularizedPolicyOptimum
   /// </summary>
   /// <param name="mu">Prior policy probabilities (length n).  Need not sum to 1.</param>
   /// <param name="q">Per-action values (length n).  NaN entries are imputed.</param>
-  /// <param name="lambda">Regularization strength.  Must be greater than or equal to 0 for reverse KL, greater than 0 for forward KL.</param>
+  /// <param name="lambda">Regularization strength (scalar).  Must be greater than or equal to 0 for reverse KL, greater than 0 for forward KL.</param>
   /// <param name="anchor">Determines the free intercept C(s) for forward-KL imputation.  Must be None for reverse KL.</param>
   /// <param name="regularization">ReverseKL (Grill) or ForwardKLSoftmax (Boltzmann).</param>
   /// <param name="yOut">Output buffer for y* (length greater than or equal to n).  May be empty if y* is not needed.</param>
@@ -63,6 +63,7 @@ public static class RegularizedPolicyOptimum
   /// <param name="vStarOut">Output: v* = sum_a y*(a) q_fill(a).</param>
   /// <param name="options">Tuning knobs.  If the BisectionIterations field is 0, RPOOptions.Default is used.</param>
   /// <param name="nanFallbackQ">Fallback value used for NaN entries in q under reverse KL.  If itself NaN, the mean of the finite q's is used.</param>
+  /// <param name="lambdaPerChild">Optional per-action lambda vector (length n).  When non-empty, replaces the scalar lambda in the per-action coefficient: coeff[i] = lambdaPerChild[i] * mu[i].  When empty, scalar lambda is used.  REVERSE-KL ONLY (forward-KL closed form does not generalize naturally to per-child lambda; an empty span is enforced there).</param>
   public static void Solve(ReadOnlySpan<double> mu,
                            ReadOnlySpan<double> q,
                            double lambda,
@@ -72,7 +73,8 @@ public static class RegularizedPolicyOptimum
                            Span<double> qFillOut,
                            out double vStarOut,
                            RPOOptions options = default,
-                           double nanFallbackQ = double.NaN)
+                           double nanFallbackQ = double.NaN,
+                           ReadOnlySpan<double> lambdaPerChild = default)
   {
     if (mu.Length != q.Length)
     {
@@ -85,6 +87,10 @@ public static class RegularizedPolicyOptimum
     if (!qFillOut.IsEmpty && qFillOut.Length < mu.Length)
     {
       throw new ArgumentException("qFillOut is shorter than mu.");
+    }
+    if (!lambdaPerChild.IsEmpty && lambdaPerChild.Length < mu.Length)
+    {
+      throw new ArgumentException("lambdaPerChild is shorter than mu.");
     }
 
     RPOOptions opts = options.BisectionIterations <= 0 ? RPOOptions.Default : options;
@@ -103,14 +109,18 @@ public static class RegularizedPolicyOptimum
         {
           throw new ArgumentException("Reverse KL solve requires anchor mode = None (the closed form has no intercept freedom).");
         }
-        if (!(lambda >= 0.0))
+        if (lambdaPerChild.IsEmpty && !(lambda >= 0.0))
         {
           throw new ArgumentOutOfRangeException(nameof(lambda), "Reverse KL requires lambda >= 0.");
         }
-        SolveReverseKL(mu, q, lambda, yOut, qFillOut, out vStarOut, opts, nanFallbackQ);
+        SolveReverseKL(mu, q, lambda, lambdaPerChild, yOut, qFillOut, out vStarOut, opts, nanFallbackQ);
         return;
 
       case RPORegularization.ForwardKLSoftmax:
+        if (!lambdaPerChild.IsEmpty)
+        {
+          throw new ArgumentException("ForwardKLSoftmax does not support lambdaPerChild (must be empty).");
+        }
         if (!(lambda > 0.0))
         {
           throw new ArgumentOutOfRangeException(nameof(lambda), "Forward KL requires lambda > 0.");
@@ -131,6 +141,7 @@ public static class RegularizedPolicyOptimum
   private static void SolveReverseKL(ReadOnlySpan<double> mu,
                                      ReadOnlySpan<double> q,
                                      double lambda,
+                                     ReadOnlySpan<double> lambdaPerChild,
                                      Span<double> yOut,
                                      Span<double> qFillOut,
                                      out double vStarOut,
@@ -138,6 +149,7 @@ public static class RegularizedPolicyOptimum
                                      double nanFallbackQ)
   {
     int n = mu.Length;
+    bool perChild = !lambdaPerChild.IsEmpty;
 
     // Scratch buffers: muNorm, qFill, coeff, y (always needed even if outputs are empty).
     double[] rentedMuNorm = null;
@@ -159,6 +171,7 @@ public static class RegularizedPolicyOptimum
 
       double maxQEff = double.NegativeInfinity;
       bool anyPositiveCoeff = false;
+      double maxLambdaEff = 0.0;
       for (int i = 0; i < n; i++)
       {
         double qi = q[i];
@@ -172,7 +185,15 @@ public static class RegularizedPolicyOptimum
         }
         qFill[i] = qi;
 
-        double c = lambda * muNorm[i];
+        // Per-action lambda when supplied; otherwise scalar lambda for all.
+        double lambdaI = perChild ? lambdaPerChild[i] : lambda;
+        if (lambdaI < 0.0 || !IsFinite(lambdaI))
+        {
+          lambdaI = 0.0;
+        }
+        if (lambdaI > maxLambdaEff) maxLambdaEff = lambdaI;
+
+        double c = lambdaI * muNorm[i];
         if (c < 0.0 || !IsFinite(c))
         {
           c = 0.0;
@@ -189,8 +210,10 @@ public static class RegularizedPolicyOptimum
         }
       }
 
-      // Degenerate cases: greedy on q if lambda is 0 or all coefficients are 0.
-      if (!anyPositiveCoeff || lambda <= 1e-12)
+      // Degenerate cases: greedy on q if no positive coefficient or every lambda is tiny.
+      // In per-child mode, the gate is on max(lambdaPerChild); otherwise the scalar lambda.
+      double lambdaForDegen = perChild ? maxLambdaEff : lambda;
+      if (!anyPositiveCoeff || lambdaForDegen <= 1e-12)
       {
         GreedyOnQ(qFill, yLocal);
       }
