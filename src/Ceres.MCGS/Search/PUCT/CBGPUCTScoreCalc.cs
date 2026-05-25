@@ -872,29 +872,86 @@ internal static class CBGPUCTScoreCalc
     ComputePolicyImpliedQ(paramsSelect, mu, anchorForImputation, impliedQ, numChildren);
 
     // Second pass: build qShrunk (used as input to Solve for pi_bar).
-    //   - Visited (qRaw not NaN) with shrinkage: Bayesian shrinkage toward impliedQ.
-    //   - Visited without shrinkage: qShrunk = qRaw passthrough.
+    //   - Visited (qRaw not NaN) with absolute shrinkage: Bayesian shrinkage toward impliedQ.
+    //   - Visited without absolute shrinkage: qShrunk = qRaw passthrough.
+    //   - Visited with BOUNDED RELATIVE shrinkage: additional pull toward scalar v_0
+    //     (= anchorForImputation), applied AFTER the absolute step.  Strength is
+    //     alpha_i = min(1, (N_i/N_max)^p): no shrinkage for the most-visited child(ren),
+    //     heavy shrinkage for under-sampled peers.  Capped at alpha=1 so equal-evidence
+    //     siblings are not shrunk.  See CBGPUCT_BackupQShrinkageBoundedRelativeExponent
+    //     docs for the principle (bounded relative influence, not minimum-MSE).
     //   - Unvisited: pre-fill with the per-child policy-implied Q (= what the SELECT
     //     phase FPU uses).  Solve then sees a finite q and uses it directly, bypassing
     //     the scalar nanFallback path - so pi_bar AND the V_bar dot product see per-
     //     child policy-correlated q for unvisited children, instead of a single
     //     uniform value.
+    //
+    // NOTE: The dual "weighted KL" formulation of the bounded-relative principle would
+    // set per-action beta_i = lambdaN / alpha_i (larger lambda for laggards).  In our
+    // reverse-KL Solve, per-action lambda re-weights the prior rather than acting as a
+    // per-action regularization intensity (see CBGPUCT_BackupLambdaPerChildExponent
+    // doc for the asymmetry), so the dual does not have the intuitive "more pull toward
+    // mu for that action" interpretation.  Operating in q-space (value shrinkage, here)
+    // sidesteps this; a future knob could expose the weighted-KL dual if desired.
+    float boundedRelExp = paramsSelect.CBGPUCT_BackupQShrinkageBoundedRelativeExponent;
+    bool boundedRelActive = boundedRelExp > 0.0f;
+    double nMaxVisited = 0.0;
+    if (boundedRelActive)
+    {
+      for (int i = 0; i < numChildren; i++)
+      {
+        double n = edgeNSpan[i];
+        if (n > nMaxVisited)
+        {
+          nMaxVisited = n;
+        }
+      }
+    }
     for (int i = 0; i < numChildren; i++)
     {
       if (double.IsNaN(qRaw[i]))
       {
         qShrunk[i] = impliedQ[i];
+        continue;
       }
-      else if (fractionAtN1Backup > 0.0f)
+
+      // Stage A: existing absolute Q-shrinkage toward per-child policy-implied Q.
+      double qStage = qRaw[i];
+      if (fractionAtN1Backup > 0.0f)
       {
         double edgeN = edgeNSpan[i];
         double nPow = decayExpBackup == 1.0 ? edgeN : Math.Pow(edgeN, decayExpBackup);
         double precision = nPow / (nPow + kPseudoBackup);
-        qShrunk[i] = qRaw[i] * precision + impliedQ[i] * (1.0 - precision);
+        qStage = qRaw[i] * precision + impliedQ[i] * (1.0 - precision);
+      }
+
+      // Stage B: bounded RELATIVE value-shrinkage toward scalar baseline v_0.
+      // alpha_i is capped at 1 so well-sampled slots are never shrunk; only laggards.
+      if (boundedRelActive && nMaxVisited > 0.0)
+      {
+        double ratio = edgeNSpan[i] / nMaxVisited;
+        double alphaI;
+        if (ratio >= 1.0)
+        {
+          alphaI = 1.0;
+        }
+        else if (boundedRelExp == 1.0f)
+        {
+          alphaI = ratio;
+        }
+        else if (boundedRelExp == 0.5f)
+        {
+          alphaI = Math.Sqrt(ratio);
+        }
+        else
+        {
+          alphaI = Math.Pow(ratio, boundedRelExp);
+        }
+        qShrunk[i] = alphaI * qStage + (1.0 - alphaI) * anchorForImputation;
       }
       else
       {
-        qShrunk[i] = qRaw[i];
+        qShrunk[i] = qStage;
       }
     }
 
