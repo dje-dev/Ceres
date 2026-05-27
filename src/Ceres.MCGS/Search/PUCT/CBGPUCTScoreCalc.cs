@@ -1259,9 +1259,69 @@ internal static class CBGPUCTScoreCalc
       ? node.NodeRef.V
       : (childContribution * (totalN - 1) + node.NodeRef.V) / totalN;
 
+    // Optional greedy override: linearly blend the regularized V_bar with the
+    // minimax-best child Q so that at high effectiveN the returned value is the
+    // best-child Q (mirroring AlphaZero's late-search single-move conviction).
+    // effectiveN is normally totalN, but gets bumped up to min child.N over the
+    // high-P expanded children when transposition visits have given even the
+    // weakest "interesting" child more support than the parent's own visit
+    // count would imply.  See CBGPUCT_BackupGreedyMaxAboveN docs for the design.
+    int greedyMaxAboveN = paramsSelect.CBGPUCT_BackupGreedyMaxAboveN;
+    if (greedyMaxAboveN > 0)
+    {
+      // Best visited-child Q in PARENT perspective.  Unvisited slots (qRaw NaN)
+      // skipped: only observed q values qualify for the minimax-best candidate.
+      double bestChildQ = double.NegativeInfinity;
+      for (int i = 0; i < numChildren; i++)
+      {
+        if (!double.IsNaN(qRaw[i]) && qRaw[i] > bestChildQ)
+        {
+          bestChildQ = qRaw[i];
+        }
+      }
+      if (!double.IsNegativeInfinity(bestChildQ))
+      {
+        // Minimum child.N over expanded children with raw P > 0.02.  Terminals
+        // (no ChildNode) skipped: their values are exact, so they should not
+        // gate the "weakest support" tally.  Unexpanded slots also skipped (no
+        // child node yet).  If no children qualify, the min stays +inf and the
+        // fallback to totalN below applies.
+        const float GREEDY_HIGH_P_THRESHOLD = 0.02f;
+        double minChildNHighP = double.PositiveInfinity;
+        for (int i = 0; i < numExpanded; i++)
+        {
+          GEdge edge = node.ChildEdgeAtIndex(i);
+          if ((float)edge.P > GREEDY_HIGH_P_THRESHOLD
+              && edge.Type == GEdgeStruct.EdgeType.ChildEdge)
+          {
+            double childN = edge.ChildNode.NodeRef.N;
+            if (childN < minChildNHighP)
+            {
+              minChildNHighP = childN;
+            }
+          }
+        }
+        double effectiveN = totalN;
+        if (!double.IsPositiveInfinity(minChildNHighP) && minChildNHighP > effectiveN)
+        {
+          effectiveN = minChildNHighP;
+        }
+        double greedyWeight = effectiveN / greedyMaxAboveN;
+        if (greedyWeight > 1.0)
+        {
+          greedyWeight = 1.0;
+        }
+        else if (greedyWeight < 0.0)
+        {
+          greedyWeight = 0.0;
+        }
+        vBar = greedyWeight * bestChildQ + (1.0 - greedyWeight) * vBar;
+      }
+    }
+
     if (CBGPUCTDumpDiagnostics.DEBUG_DUMP_CBGPUCT_BACKUP_CALCS)
     {
-      CBGPUCTDumpDiagnostics.DumpCBGPUCTBackup(node, mu, qRaw, qShrunk, qFill, piBarPreShrink, piBar, edgeNSpan,
+      CBGPUCTDumpDiagnostics.DumpCBGPUCTBackup(node, paramsSelect, mu, qRaw, qShrunk, qFill, piBarPreShrink, piBar, edgeNSpan,
                                                numChildren, numExpanded, sumN, lambdaN,
                                                childContribution, vBar,
                                                paramsSelect.RPOBackupRegularization);

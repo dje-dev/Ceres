@@ -672,36 +672,85 @@ public record ParamsSelect
 
 
   /// <summary>
-  /// Bayesian-style shrinkage strength applied to pi_bar itself (per child) toward
-  /// the normalized prior mu, weighted by per-child visit count.  For child a with
-  /// per-edge N(a) visits:
-  ///   pi_bar_shrunk(a) = pi_bar(a) * (N(a) / (N(a) + K)) + mu_norm(a) * (K / (N(a) + K))
-  /// then renormalized so sum_a pi_bar_shrunk(a) = 1.
+  /// ABSOLUTE pi_bar influence cap (per-edge N) applied during SELECT.  For each
+  /// visited child a (edge.N(a) > 0):
+  ///   alpha_a = N(a) / (N(a) + K)             (Bayesian precision weight)
+  ///   cap_a   = alpha_a * pi_bar(a) + (1 - alpha_a) * mu_norm_visited(a)
+  ///   pi_bar(a) := min(pi_bar(a), cap_a)
+  /// The freed mass (sum over capped slots of pi_bar_pre - cap) is redistributed
+  /// to the UNCAPPED visited siblings only; capped slots stay at cap; unvisited
+  /// slots are untouched.
   ///
   /// Motivation (distinct from Q-shrinkage): a single high-Q rollout to a low-policy
-  /// child can drive pi_bar to a value near 1.0 for that child, even though the
-  /// estimate has almost no statistical support.  Q-shrinkage attempts to fix this by
-  /// pulling Q toward parentQ, but is ineffective when the outlier's Q happens to be
-  /// near parentQ.  Pi_bar shrinkage attacks the visit-distribution concentration
-  /// directly: low-N children's pi_bar is pulled toward their prior, regardless of
-  /// where their Q sits.  At N >> K the shrinkage decays to near-identity, so the
-  /// RPO solution is preserved for well-visited children.
+  /// child can drive pi_bar to near 1.  Q-shrinkage tries to fix this by pulling
+  /// Q toward parentQ, but is ineffective when the outlier's Q happens to be near
+  /// parentQ.  This cap attacks the visit-distribution concentration directly:
+  /// low-N children's pi_bar is bounded by what their policy share would justify.
+  /// At N == K the cap is the midpoint of pi_bar and mu_norm; at N &gt;&gt; K the
+  /// cap approaches pi_bar so the RPO solution passes through for well-visited
+  /// children.
   ///
-  /// Default 0 disables.  Typical setting: K in [2, 5] gives rapidly-decaying shrinkage
-  /// (50% pull at N=K, less than 10% pull at N=10K).
+  /// WHY ONE-SIDED CAP: a symmetric pi_bar := precision*piBar + (1-precision)*muNorm
+  /// (the older form) systematically drains the leader because (a) it boosts low-piBar
+  /// slots upward toward muNorm (rewarding low-Q slots), and (b) the resulting
+  /// non-conserving sum is then renormalized over the whole vector, scaling the
+  /// leader down despite its high precision.  Compounded across backups this is a
+  /// systematic V_bar pessimism bias.  The one-sided cap leaves the leader (and any
+  /// slot whose pi_bar is at or below its policy share) strictly invariant.
+  ///
+  /// Default 0 disables.  Typical setting: K in [2, 5].  Larger K makes the cap
+  /// tighter (cap closer to muNorm); K decays to no-op as N grows past K.
   /// </summary>
   public float CBGPUCT_SelectPiBarShrinkagePseudoVisits = 0.0f;
 
   /// <summary>
-  /// Same pi_bar shrinkage as the select-phase pair but applied during the BACKUP
-  /// (V_bar) computation in CBGPUCTScoreCalc.ComputeVBar.  Highly recommended when
-  /// using CB-GPUCT backup, because V_bar is otherwise vulnerable to domination by
-  /// single-visit high-Q outliers (V_bar approx 1.0 * q_outlier even when other children
-  /// have far more evidence).
+  /// Same one-sided pi_bar cap as the select-phase pair but applied during the
+  /// BACKUP (V_bar) computation in CBGPUCTScoreCalc.ComputeVBar.  Strongly
+  /// recommended when using CB-GPUCT backup, because V_bar is otherwise vulnerable
+  /// to domination by single-visit high-Q outliers (V_bar approx 1.0 * q_outlier
+  /// even when sibling children have far more evidence and lower q).
+  ///
+  /// Targets the uniformly-undersampled failure mode (e.g. a node with four
+  /// children each visited once where one returned a lucky high q) which the
+  /// bounded-RELATIVE cap by design does not address (alpha=1 across the board
+  /// when N(a) = N_max for all visited a).  The two compose cleanly: the tighter
+  /// cap wins for each slot, since both are one-sided upper bounds toward the
+  /// same muNorm target.
   ///
   /// Default 0 disables.  Typical setting: K in [2, 5].
   /// </summary>
   public float CBGPUCT_BackupPiBarShrinkagePseudoVisits = 0.0f;
+
+
+  /// <summary>
+  /// Linear blend of the regularized V_bar with the minimax-best child Q during
+  /// CB-GPUCT backup.  Default 0 disables (no greedy override; V_bar passes through
+  /// as the regularized closed-form value).  When > 0, the returned value is:
+  ///   greedy_weight = clamp(effectiveN / GreedyMaxAboveN, 0, 1)
+  ///   V_bar := greedy_weight * best_child_Q + (1 - greedy_weight) * V_bar_regularized
+  /// where best_child_Q is the max over VISITED children of qRaw[i] (each child's Q
+  /// in parent perspective - this is what a minimax backup would choose for the
+  /// parent), and effectiveN is normally the parent's totalN.
+  ///
+  /// TRANSPOSITION CREDIT: when the minimum child.N across expanded children with
+  /// raw P > 0.02 exceeds totalN, that minimum is used as effectiveN instead.  The
+  /// idea: if even the lowest-statistical-support "interesting" child has been
+  /// visited many times via OTHER parents (graph mode transpositions), the parent
+  /// has more usable evidence than its own visit count suggests, and the greedy
+  /// weight should ramp up faster.  Terminal edges and very-low-P children are
+  /// excluded from the minimum (the former are exact and the latter are tail moves
+  /// whose statistics we don't want gating the global ramp).
+  ///
+  /// Motivation: at low parentN, V_bar's regularization (lambda_N) is large and
+  /// the pi_bar-weighted value is a sensible compromise.  At high parentN, the
+  /// search has converged enough that the minimax-best child is the trustworthy
+  /// estimate of the node's value (mirroring AlphaZero's late-search behavior of
+  /// effectively committing to a single move).  GreedyMaxAboveN is the parentN at
+  /// which the blend has fully transitioned to the greedy minimax value.
+  ///
+  /// Typical setting: a few hundred (e.g. 200-500).  Set to 0 to disable.
+  /// </summary>
+  public int CBGPUCT_BackupGreedyMaxAboveN = 0;
 
 
   /// <summary>

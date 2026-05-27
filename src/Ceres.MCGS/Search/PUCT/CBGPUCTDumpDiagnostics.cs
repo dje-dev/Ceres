@@ -171,6 +171,154 @@ internal static class CBGPUCTDumpDiagnostics
 
 
   /// <summary>
+  /// Per-search running stats for the CB-GPUCT backup, bucketed by parent totalN
+  /// (node.NodeRef.N at the time of the backup).  Accumulated for every backup
+  /// when DEBUG_DUMP_CBGPUCT_BACKUP_CALCS is true (regardless of ONLY_SHOW_SIGNIFICANT),
+  /// then flushed every BACKUP_STATS_FLUSH_INTERVAL_SECONDS as one line per non-empty
+  /// bucket.  Each flush snapshots-and-zeros the counters so each dump reflects the
+  /// prior interval only, not cumulative history.
+  ///
+  /// Keyed by ParamsSelect via ConditionalWeakTable (mirrors selectStatsByParamsSelect),
+  /// so counters are reclaimed automatically when the search ends.
+  /// </summary>
+  private sealed class BackupStatsCounter
+  {
+    public readonly object Lock = new();
+    public DateTime WindowStartUtc = DateTime.UtcNow;
+    public readonly long[] Count = new long[NumBackupNBuckets];
+    public readonly double[] SumDiff = new double[NumBackupNBuckets];      // signed (V_bar - PUCT_Q)
+    public readonly double[] SumSqDiff = new double[NumBackupNBuckets];    // squared diff for std dev
+    public readonly double[] SumAbsDiff = new double[NumBackupNBuckets];   // |V_bar - PUCT_Q|
+    public readonly double[] SumLambdaN = new double[NumBackupNBuckets];   // per-call lambda_N
+  }
+
+  /// <summary>
+  /// parent-totalN cutpoints for the backup running-stats buckets.  Finer at the low end
+  /// (where lambda_N is largest and V_bar is most likely to diverge from the visit-weighted
+  /// PUCT backup) and coarser at the high end where convergence has set in.  Distinct from
+  /// the select-side 4-bucket scheme so each side can pick the granularity that matches
+  /// the shape of its diagnostic interest.
+  /// </summary>
+  private static readonly double[] backupNBucketCutpoints =
+    { 10.0, 30.0, 100.0, 300.0, 1000.0, 3000.0, 10000.0 };
+  private const int NumBackupNBuckets = 8;
+  private static readonly string[] backupNBucketLabels =
+    { "<10", "10-30", "30-100", "100-300", "300-1k", "1k-3k", "3k-10k", ">=10k" };
+
+  private static readonly ConditionalWeakTable<ParamsSelect, BackupStatsCounter>
+    backupStatsByParamsSelect = new();
+
+  /// <summary>
+  /// Window length for the backup stats flush.  Each DumpCBGPUCTBackup call does a
+  /// cheap unlocked elapsed check; the first thread to observe the window has closed
+  /// claims the flush under stats.Lock, snapshots-and-zeros the counters, then prints.
+  /// </summary>
+  private const double BACKUP_STATS_FLUSH_INTERVAL_SECONDS = 60.0;
+
+
+  /// <summary>
+  /// Returns the bucket index for a given parent totalN.  Cutpoints are
+  /// backupNBucketCutpoints; boundary points belong to the higher bucket
+  /// (e.g. totalN == 10 maps to bucket 1, totalN == 30 to bucket 2).
+  /// </summary>
+  private static int BackupNBucketIndex(double totalN)
+  {
+    for (int i = 0; i < backupNBucketCutpoints.Length; i++)
+    {
+      if (totalN < backupNBucketCutpoints[i])
+      {
+        return i;
+      }
+    }
+    return backupNBucketCutpoints.Length;
+  }
+
+
+  /// <summary>
+  /// Snapshots the bucket counters under stats.Lock (re-checks elapsed time so only
+  /// one thread per window flushes), zeros them and updates WindowStartUtc, then prints
+  /// one line per non-empty bucket under consoleLock.  Reports per bucket:
+  ///   bias          = mean signed (V_bar - PUCT_Q)              -- direction of CB-GPUCT bias
+  ///   mean_abs_diff = mean |V_bar - PUCT_Q|                     -- typical gap size
+  ///   std_dev       = sqrt(max(0, sumSqDiff/n - bias^2))        -- dispersion (clamp for FP safety)
+  ///   mean_lambdaN  = mean lambda_N over the window             -- average regularizer strength
+  /// </summary>
+  private static void FlushBackupStats(BackupStatsCounter stats, DateTime nowUtc)
+  {
+    long[] count = new long[NumBackupNBuckets];
+    double[] sumDiff = new double[NumBackupNBuckets];
+    double[] sumSqDiff = new double[NumBackupNBuckets];
+    double[] sumAbsDiff = new double[NumBackupNBuckets];
+    double[] sumLambdaN = new double[NumBackupNBuckets];
+    double windowSeconds;
+
+    lock (stats.Lock)
+    {
+      windowSeconds = (nowUtc - stats.WindowStartUtc).TotalSeconds;
+      if (windowSeconds < BACKUP_STATS_FLUSH_INTERVAL_SECONDS)
+      {
+        // Another thread already flushed; nothing to do.
+        return;
+      }
+      for (int r = 0; r < NumBackupNBuckets; r++)
+      {
+        count[r] = stats.Count[r];
+        sumDiff[r] = stats.SumDiff[r];
+        sumSqDiff[r] = stats.SumSqDiff[r];
+        sumAbsDiff[r] = stats.SumAbsDiff[r];
+        sumLambdaN[r] = stats.SumLambdaN[r];
+        stats.Count[r] = 0;
+        stats.SumDiff[r] = 0.0;
+        stats.SumSqDiff[r] = 0.0;
+        stats.SumAbsDiff[r] = 0.0;
+        stats.SumLambdaN[r] = 0.0;
+      }
+      stats.WindowStartUtc = nowUtc;
+    }
+
+    long total = 0;
+    int nonEmpty = 0;
+    for (int r = 0; r < NumBackupNBuckets; r++)
+    {
+      if (count[r] > 0)
+      {
+        total += count[r];
+        nonEmpty++;
+      }
+    }
+
+    lock (consoleLock)
+    {
+      ConsoleUtils.WriteLineColored(ConsoleColor.Cyan,
+        $"[CBGPUCT-BAK-STATS] last {windowSeconds:F1}s ({nonEmpty} bucket(s), {total} backups)");
+      for (int r = 0; r < NumBackupNBuckets; r++)
+      {
+        long n = count[r];
+        if (n == 0)
+        {
+          continue;
+        }
+        double bias = sumDiff[r] / n;
+        double meanAbsDiff = sumAbsDiff[r] / n;
+        double variance = sumSqDiff[r] / n - bias * bias;
+        if (variance < 0.0)
+        {
+          variance = 0.0;
+        }
+        double stdDev = Math.Sqrt(variance);
+        double meanLambdaN = sumLambdaN[r] / n;
+        ConsoleUtils.WriteLineColored(ConsoleColor.Cyan,
+          $"  bucket={backupNBucketLabels[r],-8} n={n,8} "
+          + $"bias={bias,+8:+0.0000;-0.0000} "
+          + $"mean_abs_diff={meanAbsDiff,7:F4} "
+          + $"std_dev={stdDev,7:F4} "
+          + $"mean_lambdaN={meanLambdaN,7:F4}");
+      }
+    }
+  }
+
+
+  /// <summary>
   /// Formats a single row of per-child values with a '|' separator inserted
   /// after the expanded/unexpanded boundary (i.e. after index boundaryIndex-1).
   /// If boundaryIndex is &lt;= 0 or &gt;= count, no separator is inserted.
@@ -577,6 +725,7 @@ internal static class CBGPUCTDumpDiagnostics
   /// visited slots).
   /// </summary>
   public static void DumpCBGPUCTBackup(GNode node,
+                                       ParamsSelect paramsSelect,
                                        ReadOnlySpan<double> mu,
                                        ReadOnlySpan<double> qRaw,
                                        ReadOnlySpan<double> qShrunk,
@@ -627,6 +776,30 @@ internal static class CBGPUCTDumpDiagnostics
     // the side-by-side comparison fair to the legacy backup, which never imputes.
     double puctQ = ComputeStandardBackupQ(qRaw, edgeN, numChildren, selfV, totalN, nodeQ);
     double backupDelta = Math.Abs(vBar - puctQ);
+
+    // Accumulate running stats by parent totalN bucket BEFORE the ONLY_SHOW_SIGNIFICANT
+    // gate, so the windowed summary reflects every backup -- not just the ones loud
+    // enough to print individually.  Cheap unlocked elapsed-time check then claims the
+    // flush via FlushBackupStats (which re-checks under the lock so only one thread per
+    // window actually prints).
+    BackupStatsCounter stats = backupStatsByParamsSelect.GetValue(
+      paramsSelect, _ => new BackupStatsCounter());
+    int backupBucket = BackupNBucketIndex(totalN);
+    double signedDiff = vBar - puctQ;
+    lock (stats.Lock)
+    {
+      stats.Count[backupBucket]++;
+      stats.SumDiff[backupBucket] += signedDiff;
+      stats.SumSqDiff[backupBucket] += signedDiff * signedDiff;
+      stats.SumAbsDiff[backupBucket] += backupDelta;
+      stats.SumLambdaN[backupBucket] += lambdaN;
+    }
+    DateTime nowUtc = DateTime.UtcNow;
+    if ((nowUtc - stats.WindowStartUtc).TotalSeconds >= BACKUP_STATS_FLUSH_INTERVAL_SECONDS)
+    {
+      FlushBackupStats(stats, nowUtc);
+    }
+
     bool significant = backupDelta > BACKUP_DIFF_THRESHOLD;
     if (ONLY_SHOW_SIGNIFICANT && !significant)
     {
