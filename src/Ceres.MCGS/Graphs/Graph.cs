@@ -295,7 +295,7 @@ public unsafe partial class Graph : IDisposable
   private void Initialize(int maxNodes)
   {
     // Try to size Dictionary based on maxNodes but don't allow to be too large.
-    const int MAX_DICTIONARY_SIZE_HINT = 2_000_000; 
+    const int MAX_DICTIONARY_SIZE_HINT = 2_000_000;
     int dictionarySizeHint = Math.Min(maxNodes, MAX_DICTIONARY_SIZE_HINT);
     const int DICTIONARY_CONCURRENCY = 16;
 
@@ -318,7 +318,7 @@ public unsafe partial class Graph : IDisposable
 
     // Ensure NodeIndexSetStore is cached locally before we use it
     NodeIndexSetStore = Store.NodeIndexSetStore;
-    
+
     // Initialize the root node with basic information.
     MGPosition initialPos = Store.NodesStore.PositionHistory.FinalPosMG;
     PosHash64 hash64 = MGPositionHashing.Hash64(in initialPos);
@@ -906,8 +906,8 @@ public unsafe partial class Graph : IDisposable
     thisEdgeRef.P = thisEdgeHeader.P;
     thisEdgeRef.Move = thisEdgeHeader.Move;
 #if ACTION_ENABLED
-      thisEdgeRef.ActionV = thisEdgeHeader.ActionV;
-      thisEdgeRef.ActionU = thisEdgeHeader.ActionU;
+    thisEdgeRef.ActionV = thisEdgeHeader.ActionV;
+    thisEdgeRef.ActionU = thisEdgeHeader.ActionU;
 #endif
     thisEdgeRef.ChildNodeIndex = childNode.Index;
 
@@ -920,14 +920,20 @@ public unsafe partial class Graph : IDisposable
   }
 
 
-  static bool haveWarned = false;
+  static bool haveWarnedEdgeOutOfOrder = false;
 
   private ref GEdgeStruct InitializeNewEdge(GNode parentNode, int indexOfChildInParent, out GEdgeHeaderStruct thisEdgeHeader)
   {
-    if (!haveWarned && indexOfChildInParent != parentNode.NumEdgesExpanded)
+    // Edges expected to be expanded strictly in index order: creating edge k relies on edge k-1's
+    // block index being set.  An out-of-order expansion (a "hole" left by selection) would
+    // otherwise read a garbage block index below and corrupt memory.
+    if (!parentNode.IsGraphRoot 
+      && indexOfChildInParent != parentNode.NumEdgesExpanded 
+      && !haveWarnedEdgeOutOfOrder)
     {
-      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"Warning: indexOfchildInParent = {indexOfChildInParent} but NumEdgesExpanded = {parentNode.NumEdgesExpanded} for {parentNode}");
-      haveWarned = true;
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"Out-of-order edge expansion: indexOfChildInParent={indexOfChildInParent} "
+                                                       + $"but NumEdgesExpanded={parentNode.NumEdgesExpanded} for {parentNode}");
+      haveWarnedEdgeOutOfOrder = true;
     }
     Debug.Assert(indexOfChildInParent < parentNode.NumPolicyMoves);
 
@@ -1139,7 +1145,7 @@ public unsafe partial class Graph : IDisposable
     Span<double> w = stats.W.Span;
     Span<double> uv = stats.UV.Span;
 #if ACTION_ENABLED
-      Span<double> a = stats.A.Span;
+    Span<double> a = stats.A.Span;
 #endif
 
     int numEdgesExpanded = node.NumEdgesExpanded;
@@ -1470,7 +1476,7 @@ public unsafe partial class Graph : IDisposable
           if (!child.IsExpanded)
           {
 #if ACTION_ENABLED
-              Console.WriteLine($"    {(isWhite ? child.Move.Flipped : child.Move)}  P={child.P,5:F3}  AV={child.ActionV,5:F3}  AU={child.ActionU,5:F3}");
+            Console.WriteLine($"    {(isWhite ? child.Move.Flipped : child.Move)}  P={child.P,5:F3}  AV={child.ActionV,5:F3}  AU={child.ActionU,5:F3}");
 #else
             Console.WriteLine($"    {(isWhite ? child.Move.Flipped : child.Move)}  P={child.P,5:F3}");
 #endif
@@ -1479,7 +1485,7 @@ public unsafe partial class Graph : IDisposable
           {
             GEdge childEdge = node.ChildEdgeAtIndex(childIndex);
 #if ACTION_ENABLED
-              Console.WriteLine($"  --> {childEdge.ChildNodeIndex.Index}  {(isWhite ? childEdge.Move.Flipped : childEdge.Move)}  P={childEdge.P,5:F3}  AV={childEdge.ActionV,5:F3}  AU={childEdge.ActionU,5:F3}");
+            Console.WriteLine($"  --> {childEdge.ChildNodeIndex.Index}  {(isWhite ? childEdge.Move.Flipped : childEdge.Move)}  P={childEdge.P,5:F3}  AV={childEdge.ActionV,5:F3}  AU={childEdge.ActionU,5:F3}");
 #else
             Console.WriteLine($"  --> {childEdge.ChildNodeIndex.Index}  {(isWhite ? childEdge.Move.Flipped : childEdge.Move)}  P={childEdge.P,5:F3}");
 #endif
