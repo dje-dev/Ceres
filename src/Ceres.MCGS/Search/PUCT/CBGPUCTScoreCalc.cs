@@ -940,9 +940,10 @@ internal static class CBGPUCTScoreCalc
     Span<double> edgeNSpan = stackalloc double[numChildren];
     // Per-child statistical support: in graph mode with transpositions, child.N
     // accumulates across all parents while edge.N counts only visits via THIS edge.
-    // The Q estimate's statistical support is the child-side count.  Used by the
-    // bounded-relative pi_bar shrinkage; for terminal edges (no child node) we fall
-    // back to edge.N since the Q is exact anyway.
+    // The Q estimate (qRaw = -edge.Q) is a copy of the child node's aggregate Q, so its
+    // statistical support is the child-side count.  Used by the Q-shrinkage and both
+    // pi_bar shrinkage mechanisms; for terminal edges (no child node) we fall back to
+    // edge.N since the Q is exact anyway.
     Span<double> childNSpan = stackalloc double[numChildren];
 
     double sumN = 0.0;
@@ -1052,8 +1053,13 @@ internal static class CBGPUCTScoreCalc
       }
       else if (fractionAtN1Backup > 0.0f)
       {
-        double edgeN = edgeNSpan[i];
-        double nPow = decayExpBackup == 1.0 ? edgeN : Math.Pow(edgeN, decayExpBackup);
+        // Statistical support of qRaw (= -edge.Q, a copy of the child node's aggregate Q)
+        // is the CHILD NODE's total visit count, not the per-edge count.  Using edge.N
+        // here would over-shrink transposition children that are reliably evaluated via
+        // other parents but reached only a few times via this edge.  childNSpan already
+        // falls back to edge.N for terminal edges (whose Q is exact).
+        double nSupport = childNSpan[i];
+        double nPow = decayExpBackup == 1.0 ? nSupport : Math.Pow(nSupport, decayExpBackup);
         double precision = nPow / (nPow + kPseudoBackup);
         qShrunk[i] = qRaw[i] * precision + impliedQ[i] * (1.0 - precision);
       }
@@ -1225,10 +1231,11 @@ internal static class CBGPUCTScoreCalc
 
     // Pi_bar shrinkage toward the normalized prior, by per-child N.  Highly recommended
     // for backup: prevents a single high-Q low-N rollout from dominating V_bar.  Disabled
-    // when CBGPUCT_PiBarShrinkageBackupPseudoVisits == 0.  Uses edge.N (legacy semantics).
+    // when CBGPUCT_PiBarShrinkageBackupPseudoVisits == 0.  Uses child.N (the statistical
+    // support of the child's Q estimate), matching the Q-shrinkage and bounded-relative cap.
     if (paramsSelect.CBGPUCT_BackupPiBarShrinkagePseudoVisits > 0.0f)
     {
-      ApplyPiBarShrinkage(piBar, mu, edgeNSpan,
+      ApplyPiBarShrinkage(piBar, mu, childNSpan,
                           paramsSelect.CBGPUCT_BackupPiBarShrinkagePseudoVisits, numChildren);
     }
 
