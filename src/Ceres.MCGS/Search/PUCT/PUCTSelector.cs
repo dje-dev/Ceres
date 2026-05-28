@@ -75,7 +75,7 @@ public static class PUCTSelector
   /// <param name="cpuctMultiplier"></param>
   /// <param name="temperatureMultiplier"></param>
   public static NodeSelectAccumulator ComputeTopChildScores(Graph graph, GNode node,
-                                                            ParamsSearch paramsSearch, ParamsSelect paramsSelect, 
+                                                            ParamsSearch paramsSearch, ParamsSelect paramsSelect,
                                                             int selectorID, bool refreshStaleEdges,
                                                             MCGSFutilityPruningStatus[] rootMovePruningStatus,
                                                             float dualCollisionFraction,
@@ -95,7 +95,7 @@ public static class PUCTSelector
 
     ref readonly GNodeStruct nodeRef = ref node.NodeRef;
 
-    int numToProcess = Math.Min(Math.Min(maxChildIndex + 1, nodeRef.NumPolicyMoves), 
+    int numToProcess = Math.Min(Math.Min(maxChildIndex + 1, nodeRef.NumPolicyMoves),
                                 PUCTScoreCalcVector.MAX_CHILDREN);
 
     if (numToProcess == 0)
@@ -257,7 +257,7 @@ public static class PUCTSelector
       {
         thresholdPUCTSuboptimalityReject = paramsSearch.VisitSuboptimalityRejectThreshold.Value;
       }
-      
+
       numVisitsAccepted = PUCTScoreCalcVector.ScoreCalcMulti(paramsSelect,
                                                               node.IsSearchRoot, nodeRef.N,
                                                               parentNumInFlight,
@@ -272,13 +272,17 @@ public static class PUCTSelector
       // Some scoring paths can produce allocations that violate the sequential-expansion
       // invariant ("no child gets a visit before all of its left siblings have at least
       // one visit"):
-      //   - ActionHead FPU: per-child q from the network is not monotonic in policy.
+      //   - Per-child FPU (ActionHead or PolicyImputedRPO): the imputed per-child q is not
+      //     monotonic in policy, so a later unvisited child can outscore an earlier one.
+      //     qWhenNoChildrenComposite is non-null exactly when per-child FPU was built above.
       //   - CB-GPUCT: the visit-target pi_bar reflects (mu, q) jointly, so cross-parent
       //     N skew, per-child FPU, and (rarely) fixed-point iteration with clamp-induced
       //     ties can produce a non-monotonic deficit ordering among unvisited children.
-      // The fixup is cheap and only relocates visits when an actual hole is present.
+      // Leaving a hole (an unexpanded slot before another that got a visit) corrupts memory
+      // in Graph.InitializeNewEdge, so the fixup must run for every per-child path.  It is
+      // cheap and only relocates visits when an actual hole is present.
       if (numTargetVisits > 0
-          && (paramsSelect.FPUMode == ParamsSelect.FPUType.ActionHead
+          && (qWhenNoChildrenComposite != null
               || paramsSelect.CBGPUCTSelectActive))
       {
         FillInSequentialVisitHoles(childVisitCounts, ref node.NodeRef, numToProcess);
@@ -400,8 +404,8 @@ public static class PUCTSelector
   /// <param name="childVisitCounts"></param>
   /// <param name="nodeRef"></param>
   /// <param name="numToProcess"></param>
-  private static void FillInSequentialVisitHoles(Span<short> childVisitCounts, 
-                                                 ref readonly GNodeStruct nodeRef, 
+  private static void FillInSequentialVisitHoles(Span<short> childVisitCounts,
+                                                 ref readonly GNodeStruct nodeRef,
                                                  int numToProcess)
   {
     // Fixup any holes
