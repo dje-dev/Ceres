@@ -555,11 +555,11 @@ internal static class CBGPUCTScoreCalc
 
   /// <summary>
   /// Minimum raw network policy P for an unvisited child (either expanded with edge.N==0
-  /// or unexpanded entirely) to be included in the V_bar dot-product.  Expanded children
-  /// at indices [0, NumEdgesExpanded) are always included regardless of P; unexpanded
-  /// children at indices [NumEdgesExpanded, NumPolicyMoves) are included only when
-  /// header.P meets this threshold.  Set to float.MaxValue to recover the legacy
-  /// behavior where V_bar is computed over the expanded children only.
+  /// or unexpanded entirely) to be included in the V_bar dot-product.  
+  /// Expanded children at indices [0, NumEdgesExpanded) are always included regardless of P; 
+  /// unexpanded children at indices [NumEdgesExpanded, NumPolicyMoves) 
+  /// are included only when header.P meets this threshold.  
+  /// Set to float.MaxValue to compute V_bar is computed over the expanded children only.
   /// </summary>
   private const float MIN_P_FOR_Q_IF_UNVISITED = 0.01f;
 
