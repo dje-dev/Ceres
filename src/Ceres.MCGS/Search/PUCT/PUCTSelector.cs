@@ -372,9 +372,9 @@ public static class PUCTSelector
       else if (v > 1.0) result[i] = 1.0;
     }
 
-    // Cap Q values for unexpanded children to not exceed defaultFPU + 0.30.
+    // Cap Q values for unexpanded children to not exceed defaultFPU + 0.20.
     double defaultFPU = paramsSelect.CalcQWhenNoChildren(node.IsSearchRoot, node.Q, stats.SumPVisited);
-    double maxQ = 0.30 + defaultFPU;
+    double maxQ = 0.20 + defaultFPU;
     for (int i = numExpanded; i < numToProcess; i++)
     {
       if (result[i] > maxQ)

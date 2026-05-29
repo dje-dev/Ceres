@@ -379,6 +379,16 @@ internal static class CBGPUCTDumpDiagnostics
 
 
   /// <summary>
+  /// Formats an integer-valued visit count (edge.N / child.N) with no decimal point,
+  /// 6-char field to stay column-aligned with the other rows.
+  /// </summary>
+  private static string FmtNInt(double v)
+  {
+    return v.ToString("0").PadLeft(6);
+  }
+
+
+  /// <summary>
   /// Simulates a standard (non-CBGPUCT) PUCT visit allocation from the same
   /// per-child inputs used by CB-GPUCT.  Uses the canonical PUCT formula
   ///   score(i) = q(i) + cpuct * P(i) * sqrt(sumN) / (1 + n(i))
@@ -720,9 +730,15 @@ internal static class CBGPUCTDumpDiagnostics
   /// separator is drawn after the boundary so the two sub-blocks are visually distinct.
   ///
   /// qFill is Solve's NaN-imputed q vector; it lets the Q_raw row show the imputed value
-  /// for unvisited slots (so the row is never NaN), and lets the contribution row exactly
-  /// match the V_bar dot product (which uses qFill[i] for NaN-qRaw slots and qRaw[i] for
-  /// visited slots).
+  /// for unvisited slots (so the row is never NaN), and IS what the contribution row and
+  /// V_bar dot product consume (qFill[i] = q_hat[i] for every slot: the shrunk observation
+  /// for visited children, the policy-shaped prior for unvisited ones).
+  ///
+  /// nSupport is each child's child.N (the statistical support that drives both the
+  /// shrinkage precision and the default consensus weight); it is shown as its own row
+  /// because edge.N alone hides transposition support (a child with edge.N=1 but large
+  /// child.N can dominate the consensus).  consensusQ is the support-weighted child Q the
+  /// shrinkage prior is anchored at; it appears in the header.
   /// </summary>
   public static void DumpCBGPUCTBackup(GNode node,
                                        ParamsSelect paramsSelect,
@@ -733,8 +749,9 @@ internal static class CBGPUCTDumpDiagnostics
                                        ReadOnlySpan<double> piBarPreShrink,
                                        ReadOnlySpan<double> piBar,
                                        ReadOnlySpan<double> edgeN,
+                                       ReadOnlySpan<double> nSupport,
                                        int numChildren, int numExpanded, double sumN, double lambdaN,
-                                       double childContribution, double vBar,
+                                       double childContribution, double consensusQ, double vBar,
                                        RPORegularization regularization)
   {
     if (!DEBUG_DUMP_CBGPUCT_BACKUP_CALCS)
@@ -754,21 +771,26 @@ internal static class CBGPUCTDumpDiagnostics
     double[] piPost = new double[numChildren];
     double[] contrib = new double[numChildren];
     double[] en = new double[numChildren];
+    double[] ns = new double[numChildren];
     for (int i = 0; i < numChildren; i++)
     {
       m[i] = mu[i];
-      // Q_raw row shows the actual value the dot product used: raw observation for
-      // visited slots, Solve's imputation (qFill) for unvisited slots.  Combined with
-      // the edgeN row (0 indicates imputed), the reader can still distinguish them.
+      // Q_raw row shows the raw per-child input: raw observation (child node Q) for visited
+      // slots, Solve's imputation (qFill) for unvisited slots.  This is NOT what the dot
+      // product consumed for visited slots (that is Q_shrunk / Q_fill); it is shown so the
+      // shrinkage effect (Q_raw vs Q_shrunk) is visible.  Combined with the edgeN row
+      // (0 indicates imputed), the reader can still distinguish visited from imputed.
       qrDisplay[i] = double.IsNaN(qRaw[i]) ? qFill[i] : qRaw[i];
       qs[i] = qShrunk[i];
       qf[i] = qFill[i];
       piPre[i] = piBarPreShrink[i];
       piPost[i] = piBar[i];
       en[i] = edgeN[i];
-      // Contribution uses post-shrinkage piBar (what the dot product actually consumed).
-      double qForAvg = double.IsNaN(qRaw[i]) ? qFill[i] : qRaw[i];
-      contrib[i] = piBar[i] * qForAvg;
+      ns[i] = nSupport[i];
+      // Contribution = piBar * qFill, exactly the term the V_bar dot product sums (qFill[i]
+      // = q_hat[i] for every slot: shrunk observation for visited, prior for unvisited).
+      // Using qFill (not raw qRaw) here makes this row sum to childContrib.
+      contrib[i] = piBar[i] * qFill[i];
     }
 
     // PUCT_Q comparison uses the truly-raw qRaw (with NaN intact for unvisited) so that
@@ -816,9 +838,10 @@ internal static class CBGPUCTDumpDiagnostics
       Console.WriteLine();
       WriteHeaderLine($"[CBGPUCT-BAK] numChildren={numChildren} (expanded={numExpanded}) " +
                       $"sumN={sumN:F1} lambda_N={lambdaN:F4} " +
-                      $"nodeQ={nodeQ:F3} selfV={selfV:F3} N={totalN} reg={regularization} " +
+                      $"nodeQ={nodeQ:F3} selfV={selfV:F3} consensusQ={consensusQ:F3} N={totalN} reg={regularization} " +
                       $"delta={backupDelta:F3}", significant);
-      Console.WriteLine(FormatRow("edgeN:", numChildren, boundary, i => FmtN(en[i])));
+      Console.WriteLine(FormatRow("edgeN:", numChildren, boundary, i => FmtNInt(en[i])));
+      Console.WriteLine(FormatRow("childN:", numChildren, boundary, i => FmtNInt(ns[i])));
       Console.WriteLine(FormatRow("Q_raw:", numChildren, boundary, i => FmtQ(qrDisplay[i])));
       Console.WriteLine(FormatRow("Q_shrunk:", numChildren, boundary, i => FmtQ(qs[i])));
       Console.WriteLine(FormatRow("Q_fill:", numChildren, boundary, i => FmtQ(qf[i])));

@@ -229,213 +229,6 @@ internal static class CBGPUCTScoreCalc
 
 
   /// <summary>
-  /// Per-child Bayesian-style shrinkage of pi_bar toward the normalized prior mu, by
-  /// visit count N.  For each child:
-  ///   pi_bar[i] := pi_bar[i] * (N_i/(N_i+K)) + mu_norm[i] * (K/(N_i+K))
-  /// then renormalize so the result sums to 1.  Children with N >= K are barely shrunk;
-  /// children with N == 0 collapse fully to mu_norm.  Pass k = 0 to disable.
-  ///
-  /// Motivation: a single noisy high-Q rollout to a low-policy child can drive its pi_bar
-  /// to a value near 1, even without statistical support.  This shrinkage caps the
-  /// concentration on low-N children by pulling them back toward the prior.
-  /// </summary>
-  private static void ApplyPiBarShrinkage(Span<double> piBar, ReadOnlySpan<double> mu,
-                                          ReadOnlySpan<double> nValues, double k, int n)
-  {
-    if (n <= 0 || !(k > 0.0))
-    {
-      return;
-    }
-
-    // Normalize mu over the considered subset so the shrinkage target is a proper
-    // distribution.  Skip the work entirely if mu is degenerate.
-    double muSum = 0.0;
-    for (int i = 0; i < n; i++)
-    {
-      double m = mu[i];
-      if (m > 0.0)
-      {
-        muSum += m;
-      }
-    }
-    if (!(muSum > 0.0))
-    {
-      return;
-    }
-    double invMuSum = 1.0 / muSum;
-
-    // Apply shrinkage in place and accumulate the new sum for renormalization.
-    double piSum = 0.0;
-    for (int i = 0; i < n; i++)
-    {
-      double nI = nValues[i];
-      double precision = nI / (nI + k);
-      double muNorm = (mu[i] > 0.0 ? mu[i] : 0.0) * invMuSum;
-      double v = piBar[i] * precision + muNorm * (1.0 - precision);
-      piBar[i] = v;
-      piSum += v;
-    }
-    if (piSum > 0.0)
-    {
-      double inv = 1.0 / piSum;
-      for (int i = 0; i < n; i++)
-      {
-        piBar[i] *= inv;
-      }
-    }
-  }
-
-
-  /// <summary>
-  /// BOUNDED RELATIVE pi_bar shrinkage: caps the influence of low-N (relative to
-  /// peers) visited children whose pi_bar exceeds what their statistical support
-  /// would justify, then redistributes the freed mass to the UNCAPPED visited
-  /// siblings.  For each visited child (qRaw[i] not NaN):
-  ///   alpha_i = min(1, (N_i / N_max_visited)^p)
-  ///   cap_i   = alpha_i * pi_bar[i] + (1 - alpha_i) * mu_norm_visited[i]
-  ///   pi_bar[i] := min(pi_bar[i], cap_i)
-  /// where mu_norm_visited is mu normalized over the visited subset.  The freed
-  /// mass (sum over capped slots of pi_bar - cap) is distributed proportionally
-  /// across the uncapped visited slots so they get a uniform multiplicative
-  /// boost; capped slots STAY at their cap (the influence bound is preserved
-  /// strictly, not partially undone by a global rescale).  Unvisited slots are
-  /// never touched.
-  ///
-  /// WHY ONE-SIDED CAP, NOT SYMMETRIC SHRINKAGE: the principle is bounded
-  /// RELATIVE INFLUENCE, not minimum-MSE estimation.  Symmetric shrinkage
-  /// (mixing pi_bar toward muNorm in both directions) has two failure modes:
-  ///   1. For slots whose pi_bar is BELOW muNorm because Q legitimately said
-  ///      the move is unattractive, the symmetric mixture spuriously BOOSTS
-  ///      them - rewarding low-Q slots is the opposite of what we want.
-  ///   2. With visited's mu_norm summing to 1.0 but visited's pi_bar summing
-  ///      to visitedSumPre, any rescale that preserves visitedSumPre also
-  ///      scales the alpha=1 "leader" slot, violating the documented invariant
-  ///      that fully-supported slots are untouched.  Compounded across backups
-  ///      this becomes a systematic V_bar pessimism bias proportional to
-  ///      (pi_bar_leader - muNorm_leader).
-  /// The one-sided cap is invariant for any slot whose pi_bar is at or below
-  /// cap (which always includes the leader), so the only V_bar effect comes
-  /// from actually-overconcentrated slots being pulled back.
-  ///
-  /// MASS PRESERVATION: total visited mass is preserved exactly because the
-  /// excess from capped slots is added back to uncapped visited slots only.
-  /// Unvisited slots are neither capped nor scaled, so the visited-vs-unvisited
-  /// split also matches what Solve produced.
-  ///
-  /// Set exponent = 0 to disable (no-op return).
-  /// </summary>
-  private static void ApplyPiBarShrinkageBoundedRelative(Span<double> piBar, ReadOnlySpan<double> mu,
-                                                         ReadOnlySpan<double> nValues,
-                                                         ReadOnlySpan<double> qRaw,
-                                                         double exponent, int n)
-  {
-    if (n <= 0 || !(exponent > 0.0))
-    {
-      return;
-    }
-
-    // Find N_max over VISITED slots only.  Unvisited slots have qRaw == NaN and
-    // their nValues entries (typically 0) must not skew the ratio denominator.
-    double nMax = 0.0;
-    for (int i = 0; i < n; i++)
-    {
-      if (!double.IsNaN(qRaw[i]) && nValues[i] > nMax)
-      {
-        nMax = nValues[i];
-      }
-    }
-    if (!(nMax > 0.0))
-    {
-      return;
-    }
-
-    // Normalize mu over the VISITED subset only.  Sum-to-1 over visited makes
-    // mu_norm[i] a proper per-slot share that can be directly compared to
-    // pi_bar[i] when deciding whether a slot is overconcentrated.
-    double muSumVisited = 0.0;
-    for (int i = 0; i < n; i++)
-    {
-      if (!double.IsNaN(qRaw[i]) && mu[i] > 0.0)
-      {
-        muSumVisited += mu[i];
-      }
-    }
-    if (!(muSumVisited > 0.0))
-    {
-      return;
-    }
-    double invMuSumVisited = 1.0 / muSumVisited;
-
-    // Single pass: compute cap per visited slot, apply min(piBar, cap), and
-    // track which slots ended up capped vs uncapped.  Capped slots contribute
-    // their excess (piBar - cap) to cappedFreedMass; uncapped slots' current
-    // mass goes into uncappedMass so we can compute the redistribute factor.
-    Span<bool> isCapped = stackalloc bool[n];
-    double cappedFreedMass = 0.0;
-    double uncappedMass = 0.0;
-    for (int i = 0; i < n; i++)
-    {
-      isCapped[i] = false;
-      if (double.IsNaN(qRaw[i]))
-      {
-        continue;   // unvisited slot: untouched throughout
-      }
-
-      double ratio = nValues[i] / nMax;
-      double alphaI;
-      if (ratio >= 1.0)
-      {
-        alphaI = 1.0;
-      }
-      else if (exponent == 1.0)
-      {
-        alphaI = ratio;
-      }
-      else if (exponent == 0.5)
-      {
-        alphaI = Math.Sqrt(ratio);
-      }
-      else
-      {
-        alphaI = Math.Pow(ratio, exponent);
-      }
-
-      double muNorm = (mu[i] > 0.0 ? mu[i] : 0.0) * invMuSumVisited;
-      double cap = alphaI * piBar[i] + (1.0 - alphaI) * muNorm;
-      if (piBar[i] > cap)
-      {
-        cappedFreedMass += piBar[i] - cap;
-        piBar[i] = cap;
-        isCapped[i] = true;
-      }
-      else
-      {
-        uncappedMass += piBar[i];
-      }
-    }
-
-    // Redistribute freed mass uniformly across the uncapped visited slots ONLY.
-    // Capped slots remain strictly at their cap value (the influence bound is
-    // preserved), unvisited slots remain untouched.  When all visited slots
-    // happen to be uncapped (cappedFreedMass == 0), nothing to do; same when
-    // nothing is uncapped (degenerate; would only happen if every visited slot
-    // were over-cap, which can't happen because the leader's cap equals its own
-    // pi_bar and so the leader is always uncapped).
-    if (cappedFreedMass > 0.0 && uncappedMass > 0.0)
-    {
-      double factor = (uncappedMass + cappedFreedMass) / uncappedMass;
-      for (int i = 0; i < n; i++)
-      {
-        if (!double.IsNaN(qRaw[i]) && !isCapped[i])
-        {
-          piBar[i] *= factor;
-        }
-      }
-    }
-  }
-
-
-  /// <summary>
   /// Applies a minimum floor to pi_bar so that no child is functionally starved when its
   /// imputed Q and policy are jointly low.  Two passes: first counts how many entries are
   /// below the floor and the mass they hold; second applies the floor (and conditionally
@@ -625,31 +418,44 @@ internal static class CBGPUCTScoreCalc
     Span<double> qInOriginal = stackalloc double[numChildren];
     qIn.CopyTo(qInOriginal);
 
-    // Bayesian Q-shrinkage toward the per-child POLICY-IMPLIED Q: pulls low-N (noisy)
-    // Q estimates toward the value implied by the policy alone, not toward the parent's
-    // average Q.  This is policy-aware: a 0.2%-policy child is shrunk toward a low
-    // imputed Q (the network thinks the move is bad), while a high-policy child is
-    // shrunk toward a higher value.
-    //
-    // Schedule: shrink(N) = K / (N^p + K) where K = f/(1-f) and p is the decay exponent.
-    // p = 1 is the standard Bayesian (1/N) decay; p > 1 gives faster decay past N=1
-    // while preserving shrink(1) = f.  Unvisited children (N == 0) pass through unchanged
-    // so they remain selectable.
-    float fractionAtN1Select = paramsSelect.CBGPUCT_SelectQShrinkageFractionAtN1;
-    if (fractionAtN1Select > 0.0f)
+    // Support-shrinkage of visited children's q toward the policy-shaped empirical-Bayes
+    // consensus prior - the select-phase analogue of the backup ComputeVBar mechanism.
+    // The select q is the per-edge average (-W/N), so its statistical support is edge.N;
+    // visited children are shrunk toward the consensus by edge.N, while unvisited children
+    // keep their FPU value (the exploration signal) untouched.  Disabled when K == 0.
+    float selectShrinkK = paramsSelect.CBGPUCT_SelectSupportShrinkageK;
+    if (selectShrinkK > 0.0f)
     {
-      double kPseudo = fractionAtN1Select / (1.0 - fractionAtN1Select);
-      double decayExp = paramsSelect.CBGPUCT_SelectQShrinkageDecayExponent;
-      Span<double> impliedQ = stackalloc double[numChildren];
-      ComputePolicyImpliedQ(paramsSelect, mu, qParent, impliedQ, numChildren);
+      // Consensus q_bar over visited children, weighted per CBGPUCT_ConsensusWeight.  In
+      // select the q is the per-edge average whose support is edge.N, so ChildN and EdgeN
+      // both resolve to edge.N here (Policy uses mu).  Falls back to qParent if none visited.
+      var consensusMode = paramsSelect.CBGPUCT_ConsensusWeight;
+      double sumW = 0.0;
+      double sumWQ = 0.0;
+      for (int i = 0; i < numChildren; i++)
+      {
+        if (nEdge[i] > 0.0)
+        {
+          double w = consensusMode == ParamsSelect.CBGPUCTConsensusWeightType.Policy ? mu[i] : nEdge[i];
+          sumW += w;
+          sumWQ += w * qIn[i];
+        }
+      }
+      double consensusQ = sumW > 0.0 ? sumWQ / sumW : qParent;
+
+      // Policy-shaped prior anchored at the consensus (reuses the FPU forward-KL imputation).
+      Span<double> priorSelect = stackalloc double[numChildren];
+      ComputePolicyImpliedQ(paramsSelect, mu, consensusQ, priorSelect, numChildren);
+
+      double decayExpSelect = paramsSelect.CBGPUCT_SelectSupportShrinkageDecayExponent;
       for (int i = 0; i < numChildren; i++)
       {
         double nI = nEdge[i];
         if (nI > 0.0)
         {
-          double nPow = decayExp == 1.0 ? nI : Math.Pow(nI, decayExp);
-          double precision = nPow / (nPow + kPseudo);
-          qIn[i] = qIn[i] * precision + impliedQ[i] * (1.0 - precision);
+          double nPow = decayExpSelect == 1.0 ? nI : Math.Pow(nI, decayExpSelect);
+          double precision = nPow / (nPow + selectShrinkK);
+          qIn[i] = qIn[i] * precision + priorSelect[i] * (1.0 - precision);
         }
       }
     }
@@ -678,80 +484,6 @@ internal static class CBGPUCTScoreCalc
                                    out double vStar,
                                    options: opts,
                                    nanFallbackQ: qParent);
-
-    // Optional Sinkhorn-style fixed-point refinement: for unvisited children, refresh
-    // the imputed q via
-    //     q(a) = v_parent + lambda * (1 - mu_norm(a) / pi_bar(a))
-    // and re-solve.  At convergence v* (= E_y[q]) equals v_parent, enforcing the
-    // soft-Bellman expectation that the parent's value is consistent with the
-    // regularized aggregate of its children.  q and pi_bar are then mutually
-    // self-consistent under this external constraint.  This is the reverse-KL
-    // analogue of the MatchValue forward-KL anchor.
-    //
-    // Skipped when CBGPUCT_SelectFixedPointIterations == 0 - zero overhead.  Default
-    // is 2 iterations.  Only valid for reverse KL; the forward-KL MatchValue anchor
-    // handles this case directly without iteration.
-    int fpIters = paramsSelect.CBGPUCT_SelectFixedPointIterations;
-    if (fpIters > 0 && paramsSelect.RPOSelectRegularization == RPORegularization.ReverseKL)
-    {
-      // Normalize mu once for the identity (Solve internally normalizes, but we
-      // need the normalized values here for the q-update step).
-      Span<double> muNorm = stackalloc double[numChildren];
-      double sumMu = 0.0;
-      for (int i = 0; i < numChildren; i++)
-      {
-        sumMu += mu[i];
-      }
-      double invSumMu = sumMu > 0.0 ? 1.0 / sumMu : 1.0 / numChildren;
-      for (int i = 0; i < numChildren; i++)
-      {
-        muNorm[i] = sumMu > 0.0 ? mu[i] * invSumMu : 1.0 / numChildren;
-      }
-
-      double convergenceTol = paramsSelect.RPOSelectFixedPointTol;
-      for (int iter = 0; iter < fpIters; iter++)
-      {
-        double maxDelta = 0.0;
-        for (int i = 0; i < numChildren; i++)
-        {
-          if (nEdge[i] != 0)
-          {
-            continue;
-          }
-          double piBarI = piBar[i];
-          if (!(piBarI > 1e-12))
-          {
-            continue;
-          }
-          double qNew = qParent + lambdaN * (1.0 - muNorm[i] / piBarI);
-          // Clamp for numerical stability.
-          if (qNew < -1.0) qNew = -1.0;
-          else if (qNew > 1.0) qNew = 1.0;
-          double delta = Math.Abs(qNew - qIn[i]);
-          if (delta > maxDelta) maxDelta = delta;
-          qIn[i] = qNew;
-        }
-        if (maxDelta < convergenceTol)
-        {
-          break;
-        }
-        RegularizedPolicyOptimum.Solve(mu, qIn, lambdaN, anchor, paramsSelect.RPOSelectRegularization,
-                                       yOut: piBar,
-                                       qFillOut: default,
-                                       out vStar,
-                                       options: opts,
-                                       nanFallbackQ: qParent);
-      }
-    }
-
-    // Pi_bar shrinkage toward the normalized prior, by per-child N.  Caps the
-    // concentration on low-N children whose pi_bar can run away on a single noisy
-    // high-Q rollout.  Disabled when CBGPUCT_PiBarShrinkageSelectPseudoVisits == 0.
-    if (paramsSelect.CBGPUCT_SelectPiBarShrinkagePseudoVisits > 0.0f)
-    {
-      ApplyPiBarShrinkage(piBar, mu, nEdge,
-                          paramsSelect.CBGPUCT_SelectPiBarShrinkagePseudoVisits, numChildren);
-    }
 
     // Robustness floor on pi_bar.  Combining low policy (mu) with a low imputed Q
     // (e.g., PolicyImputed FPU pulling unvisited Q way down for low-mu children)
@@ -829,95 +561,41 @@ internal static class CBGPUCTScoreCalc
 
 
   /// <summary>
-  /// Computes the V_bar pre-blend child contribution:
-  ///   sum_i pi_bar[i] * q_used[i]
-  /// where q_used is qRaw for visited slots and qFill for unvisited slots in
-  /// the default (full-coverage) mode.  In observedOnly mode the sum is restricted
-  /// to visited slots and pi_bar is renormalized over that subset, so the result
-  /// depends only on observed q values (selfV is still blended in by the caller).
-  /// Returns nodeQFallback when observedOnly is set but no slot is visited.
-  /// </summary>
-  private static double ComputeVBarChildContribution(ReadOnlySpan<double> piBar,
-                                                     ReadOnlySpan<double> qRaw,
-                                                     ReadOnlySpan<double> qFill,
-                                                     int numChildren,
-                                                     double nodeQFallback,
-                                                     bool observedOnly)
-  {
-    if (!observedOnly)
-    {
-      double sumAll = 0.0;
-      for (int i = 0; i < numChildren; i++)
-      {
-        sumAll += piBar[i] * (double.IsNaN(qRaw[i]) ? qFill[i] : qRaw[i]);
-      }
-      return sumAll;
-    }
-
-    double piVisited = 0.0;
-    for (int i = 0; i < numChildren; i++)
-    {
-      if (!double.IsNaN(qRaw[i]))
-      {
-        piVisited += piBar[i];
-      }
-    }
-    if (!(piVisited > 0.0))
-    {
-      return nodeQFallback;
-    }
-    double inv = 1.0 / piVisited;
-    double sumObs = 0.0;
-    for (int i = 0; i < numChildren; i++)
-    {
-      if (!double.IsNaN(qRaw[i]))
-      {
-        sumObs += piBar[i] * inv * qRaw[i];
-      }
-    }
-    return sumObs;
-  }
-
-
-  /// <summary>
-  /// Computes V_bar(node) via the regularized policy improvement closed form over the
-  /// children's q values, then blends in the node's own network value V using the
-  /// standard Ceres convention (self-V counts as 1 visit out of N total).
+  /// Computes V_bar(node): the support-shrinkage regularized backup value.  Forms ONE
+  /// posterior-mean Q estimate per child,
+  ///   q_hat(a) = (N_a^p * q_obs(a) + K * m_a) / (N_a^p + K)   (visited),  m_a (unvisited),
+  /// and uses it consistently for both the pi_bar weights and the V_bar dot product, then
+  /// blends in the node's own network value V (self-V counts as 1 visit out of N total).
+  /// N_a = child.N (statistical support; cross-parent in graph mode), m_a = policy-shaped
+  /// empirical-Bayes prior anchored at the support-weighted child consensus q_bar (node.V
+  /// when none visited), K = CBGPUCT_BackupSupportShrinkageK, p =
+  /// CBGPUCT_BackupSupportShrinkageDecayExponent.  K == 0 disables shrinkage (plain Grill
+  /// V_bar with policy-imputed unvisited children).
   ///
   /// Action-set coverage: always includes every expanded child (i &lt; NumEdgesExpanded),
   /// plus any unexpanded child whose header.P is at least MIN_P_FOR_Q_IF_UNVISITED.
-  /// Unvisited slots in the considered range have qRaw = NaN and are imputed by Solve
-  /// via the standard RPO inverse closed form (parameterized by RPOBackupRegularization);
-  /// the imputed value is captured in qFill and used in the V_bar dot product, so the
-  /// imputation source is consistent between pi_bar and V_bar.
+  /// Unvisited slots take the prior m_a directly (the N_a = 0 limit).
   /// </summary>
   internal static double ComputeVBar(GNode node, ParamsSelect paramsSelect)
   {
     int numExpanded = node.NumEdgesExpanded;
     if (numExpanded == 0)
     {
-      // No expanded children yet: V_bar is just the network value.  We do not extend
-      // coverage to unexpanded children here because every imputed Q would equal nodeQ
-      // (which equals selfV at N==1), making the result equivalent to selfV anyway.
+      // No expanded children yet: V_bar is just the network value (same as legacy).
       return node.NodeRef.V;
     }
 
-    // Determine the considered action set.  Always include all expanded children; then
-    // additionally include unexpanded children with raw policy P at or above
-    // MIN_P_FOR_Q_IF_UNVISITED.  Unexpanded headers are sorted by P descending so the
-    // contiguous run of high-P unexpanded slots starts immediately after NumEdgesExpanded;
-    // a single linear pass is sufficient.  We do not early-break because move-ordering
-    // rearrangement (GNode.CheckMoveOrderRearrangeAtIndex) can leave the unexpanded
-    // segment slightly non-monotonic.
+    // Considered action set: all expanded children plus any unexpanded child whose raw
+    // policy P meets MIN_P_FOR_Q_IF_UNVISITED (identical coverage rule to the legacy path).
     int numChildren = numExpanded;
     int numPolicyMoves = node.NumPolicyMoves;
     if (MIN_P_FOR_Q_IF_UNVISITED < 1.0f && numPolicyMoves > numExpanded)
     {
-      Span<GEdgeHeaderStruct> headers = node.EdgeHeadersSpan;
+      Span<GEdgeHeaderStruct> coverageHeaders = node.EdgeHeadersSpan;
       int maxKeptIndex = numExpanded - 1;
       for (int i = numExpanded; i < numPolicyMoves; i++)
       {
-        if ((float)headers[i].P >= MIN_P_FOR_Q_IF_UNVISITED)
+        if ((float)coverageHeaders[i].P >= MIN_P_FOR_Q_IF_UNVISITED)
         {
           maxKeptIndex = i;
         }
@@ -925,41 +603,15 @@ internal static class CBGPUCTScoreCalc
       numChildren = maxKeptIndex + 1;
     }
 
-    // Build the q vectors.  Two separate vectors are needed when Bayesian shrinkage is
-    // active so that pi_bar uses shrunk Q (for noise robustness) while the final dot
-    // product uses raw Q for visited children (the unbiased visit-weighted child Q):
-    //   pi_bar : weights computed from q_shrunk, so low-N (noisy) children get
-    //            downweighted.
-    //   V_bar  : visited contributions use raw qRaw[i] (avoids double-counting the
-    //            shrinkage prior); unvisited contributions use qFill[i] from Solve
-    //            (the same value Solve used internally for pi_bar so the imputation
-    //            is internally consistent).
-    Span<double> mu = stackalloc double[numChildren];
-    Span<double> qShrunk = stackalloc double[numChildren];
-    Span<double> qRaw = stackalloc double[numChildren];
-    Span<double> edgeNSpan = stackalloc double[numChildren];
-    // Per-child statistical support: in graph mode with transpositions, child.N
-    // accumulates across all parents while edge.N counts only visits via THIS edge.
-    // The Q estimate (qRaw = -edge.Q) is a copy of the child node's aggregate Q, so its
-    // statistical support is the child-side count.  Used by the Q-shrinkage and both
-    // pi_bar shrinkage mechanisms; for terminal edges (no child node) we fall back to
-    // edge.N since the Q is exact anyway.
-    Span<double> childNSpan = stackalloc double[numChildren];
+    Span<double> mu = stackalloc double[numChildren];        // prior policy
+    Span<double> qRaw = stackalloc double[numChildren];      // observed Q (parent persp), NaN if unvisited
+    Span<double> edgeNSpan = stackalloc double[numChildren]; // per-edge visits (lambda schedule + diagnostics)
+    Span<double> nSupport = stackalloc double[numChildren];  // child.N: statistical support of qRaw
 
-    double sumN = 0.0;
-    double nodeQ = node.Q;
-    float fractionAtN1Backup = paramsSelect.CBGPUCT_BackupQShrinkageFractionAtN1;
-    // Convert fraction at N=1 to pseudo-visit count K (the actual coefficient in the
-    // standard shrinkage formula).  Computed once; reused per child.  decayExpBackup
-    // controls the rate of decay past N=1: p=1 is Bayesian 1/N, p>1 decays faster.
-    double kPseudoBackup = fractionAtN1Backup > 0.0f ? fractionAtN1Backup / (1.0 - fractionAtN1Backup) : 0.0;
-    double decayExpBackup = paramsSelect.CBGPUCT_BackupQShrinkageDecayExponent;
-
-    // First pass: build mu, qRaw (raw observed Q in this node's perspective), edgeNSpan,
-    // and childNSpan (child-node N for bounded-relative pi_bar shrinkage).
-    // Expanded slots read from the edge (P / N / Q); unexpanded slots read header.P only
-    // and contribute qRaw = NaN, edgeN = 0 to the Solve.  sumN counts visited edges only
-    // (unvisited contribute 0), matching the lambda_N input domain.
+    // First pass: gather mu / qRaw / edge.N / child.N (mirrors the legacy first pass).
+    // sumEdgeN feeds the lambda_N schedule (kept on per-edge N for comparability); the
+    // shrinkage and the consensus use child.N (the true support of each Q estimate).
+    double sumEdgeN = 0.0;
     Span<GEdgeHeaderStruct> headersSpan = node.EdgeHeadersSpan;
     for (int i = 0; i < numChildren; i++)
     {
@@ -969,108 +621,80 @@ internal static class CBGPUCTScoreCalc
         mu[i] = edge.P;
         int edgeN = edge.N;
         edgeNSpan[i] = edgeN;
-        if (edgeN == 0)
-        {
-          // Expanded but never backed up: Solve imputes via the qFill closed form.
-          qRaw[i] = double.NaN;
-        }
-        else
-        {
-          // Edge.Q is in child perspective; negate for this node's perspective.
-          qRaw[i] = -edge.Q;
-        }
-        sumN += edgeN;
-        // Statistical support = child node's total visit count (across all parents).
-        // Terminal edges have no child node; use edge.N (their Q is exact).
-        childNSpan[i] = edge.Type == GEdgeStruct.EdgeType.ChildEdge
+        qRaw[i] = edgeN == 0 ? double.NaN : -edge.Q;   // child perspective -> parent perspective
+        sumEdgeN += edgeN;
+        nSupport[i] = edge.Type == GEdgeStruct.EdgeType.ChildEdge
           ? edge.ChildNode.NodeRef.N
-          : edgeN;
+          : edgeN;                                     // terminal edges: Q exact, use edge.N
       }
       else
       {
-        // Unexpanded slot (no edge object): use header policy, no observed Q.
         mu[i] = (double)headersSpan[i].P;
         edgeNSpan[i] = 0;
-        childNSpan[i] = 0;
         qRaw[i] = double.NaN;
+        nSupport[i] = 0;
       }
     }
 
-    // Stage 1: pick the base anchor according to CBGPUCT_QAnchorTypeBackup.
-    // Stage 2: blend that base anchor with the visit-weighted observed-child Q
-    // (parent perspective) using CBGPUCT_BackupImputationAnchorK as the pseudo-visit
-    // count.  Together these two knobs control where the imputation is calibrated.
-    //
-    // nodeQ under CBGPUCT backup is the previous V_bar (selfV-blended and possibly
-    // stale w.r.t. recent search observations); pinning imputed q's to it can keep
-    // anchoring the imputation at a value the children's observed q's already
-    // disagree with.  The N-dependent blend lets evidence override the prior as N
-    // grows.  See CBGPUCT_BackupImputationAnchorK docs for the calibration rationale.
-    double anchorForImputation = ComputeImputationAnchor(paramsSelect.CBGPUCT_QAnchorTypeBackup,
-                                                         node, qRaw, numChildren);
-    float anchorK = paramsSelect.CBGPUCT_BackupImputationAnchorK;
-    if (anchorK < float.MaxValue && sumN > 0)
+    // Empirical-Bayes anchor: the weighted consensus of the visited children,
+    // q_bar = sum_a w_a q_a / sum_a w_a, falling back to the node's own network value
+    // when nothing is visited.  Anchoring the shrinkage target on what search has
+    // actually found - rather than on the possibly stale/optimistic parent value - is
+    // what lets a single global K stay unbiased when the parent and the child evidence
+    // disagree (no anchorK blend needed).  The weight basis w_a is selectable via
+    // CBGPUCT_ConsensusWeight: child.N (precision pooling), edge.N (local,
+    // transposition-free), or mu (policy).  NOTE: only the consensus WEIGHT varies; the
+    // shrinkage PRECISION below always uses child.N (nSupport) - the true reliability of
+    // each q, which transpositions sharpen rather than bias.
+    var consensusMode = paramsSelect.CBGPUCT_ConsensusWeight;
+    double sumSupport = 0.0;
+    double sumSupportQ = 0.0;
+    for (int i = 0; i < numChildren; i++)
     {
-      double sumWQ = 0.0;
-      for (int i = 0; i < numChildren; i++)
+      if (!double.IsNaN(qRaw[i]) && nSupport[i] > 0.0)
       {
-        if (!double.IsNaN(qRaw[i]))
+        double w = consensusMode switch
         {
-          sumWQ += edgeNSpan[i] * qRaw[i];
-        }
+          ParamsSelect.CBGPUCTConsensusWeightType.EdgeN => edgeNSpan[i],
+          ParamsSelect.CBGPUCTConsensusWeightType.Policy => mu[i],
+          _ => nSupport[i],   // ChildN (default)
+        };
+        sumSupport += w;
+        sumSupportQ += w * qRaw[i];
       }
-      double observedAvg = sumWQ / sumN;
-      double w = sumN / (sumN + anchorK);
-      anchorForImputation = (1.0 - w) * anchorForImputation + w * observedAvg;
     }
+    double consensusQ = sumSupport > 0.0 ? sumSupportQ / sumSupport : node.NodeRef.V;
 
-    // Per-child policy-implied Q targets - used as the shrinkage target for visited
-    // q's (when fractionAtN1Backup > 0) and as the imputation source for unvisited
-    // slots (unconditionally).  Shrinking visited q's toward these policy-aware
-    // values (rather than the scalar nodeQ) makes the shrinkage prior depend on each
-    // child's policy mass: low-mu children get pulled toward a low target, high-mu
-    // children toward a higher target.  Unvisited slots receive the per-child value
-    // directly, mirroring the FPU imputation already used during selection.
-    Span<double> impliedQ = stackalloc double[numChildren];
-    ComputePolicyImpliedQ(paramsSelect, mu, anchorForImputation, impliedQ, numChildren);
+    // Policy-shaped prior m_a anchored at the consensus.  Reuses the exact forward-KL
+    // imputation used by the FPU path (tau = PolicyImputationTau): low-policy children
+    // get a lower prior, high-policy children a higher one, with E_mu[m] = consensusQ.
+    Span<double> prior = stackalloc double[numChildren];
+    ComputePolicyImpliedQ(paramsSelect, mu, consensusQ, prior, numChildren);
 
-    // Second pass: build qShrunk (used as input to Solve for pi_bar).
-    //   - Visited (qRaw not NaN) with absolute shrinkage: Bayesian shrinkage toward impliedQ.
-    //   - Visited without absolute shrinkage: qShrunk = qRaw passthrough.
-    //   - Unvisited: pre-fill with the per-child policy-implied Q (= what the SELECT
-    //     phase FPU uses).  Solve then sees a finite q and uses it directly, bypassing
-    //     the scalar nanFallback path - so pi_bar AND the V_bar dot product see per-
-    //     child policy-correlated q for unvisited children, instead of a single
-    //     uniform value.
-    //
-    // Bounded-relative robustness is applied at the pi_bar (not q) layer downstream;
-    // see CBGPUCT_BackupPiBarShrinkageBoundedRelativeExponent / ApplyPiBarShrinkageBoundedRelative.
+    // Posterior-mean Q estimate q_hat, used CONSISTENTLY below for both pi_bar and V_bar.
+    // Visited:   q_hat = (N^p q_obs + K m) / (N^p + K)   (conjugate / James-Stein shrinkage).
+    // Unvisited: q_hat = m                               (the N = 0 limit; no special case).
+    float kShrink = paramsSelect.CBGPUCT_BackupSupportShrinkageK;
+    double decayExp = paramsSelect.CBGPUCT_BackupSupportShrinkageDecayExponent;
+    Span<double> qHat = stackalloc double[numChildren];
     for (int i = 0; i < numChildren; i++)
     {
       if (double.IsNaN(qRaw[i]))
       {
-        qShrunk[i] = impliedQ[i];
-      }
-      else if (fractionAtN1Backup > 0.0f)
-      {
-        // Statistical support of qRaw (= -edge.Q, a copy of the child node's aggregate Q)
-        // is the CHILD NODE's total visit count, not the per-edge count.  Using edge.N
-        // here would over-shrink transposition children that are reliably evaluated via
-        // other parents but reached only a few times via this edge.  childNSpan already
-        // falls back to edge.N for terminal edges (whose Q is exact).
-        double nSupport = childNSpan[i];
-        double nPow = decayExpBackup == 1.0 ? nSupport : Math.Pow(nSupport, decayExpBackup);
-        double precision = nPow / (nPow + kPseudoBackup);
-        qShrunk[i] = qRaw[i] * precision + impliedQ[i] * (1.0 - precision);
+        qHat[i] = prior[i];
       }
       else
       {
-        qShrunk[i] = qRaw[i];
+        double nPow = decayExp == 1.0 ? nSupport[i] : Math.Pow(nSupport[i], decayExp);
+        double precision = nPow / (nPow + kShrink);
+        qHat[i] = qRaw[i] * precision + prior[i] * (1.0 - precision);
       }
     }
 
-    double lambdaN = ComputeLambdaNForBackup(paramsSelect, sumN, numChildren, mu);
-
+    // pi_bar from the denoised q_hat.  q_hat has no NaN entries, so Solve performs no
+    // imputation; qFill echoes q_hat (clamped to [-1, 1]) and is what the weights were
+    // actually computed against, so we use it in the dot product for exact consistency.
+    double lambdaN = ComputeLambdaNForBackup(paramsSelect, sumEdgeN, numChildren, mu);
     RPOOptions opts = new(bisectionIterations: 20,
                           bisectionResidualTol: 1e-6,
                           clampQToUnitInterval: true,
@@ -1079,262 +703,117 @@ internal static class CBGPUCTScoreCalc
       ? RPOAnchor.None
       : new RPOAnchor(RPOAnchorMode.MatchValue, -1, node.Q);
 
-    // Per-child lambda vector, built only when the exponent knob is positive AND we're
-    // in reverse-KL mode (forward-KL Solve does not support per-child lambda).  Formula:
-    //   lambda_a = lambdaN * (max(N_a, N_FLOOR) / N_max)^p
-    // The floor prevents N_a=0 (unvisited slots, including extended-coverage admittees)
-    // from collapsing lambda_a to zero; we don't want them at exactly zero either since
-    // the bisection then ignores them entirely.  When lambdaPerChild stays empty Solve
-    // uses scalar lambdaN (existing behavior).
-    float perChildExp = paramsSelect.CBGPUCT_BackupLambdaPerChildExponent;
-    bool usePerChildLambda = perChildExp > 0.0f
-                          && paramsSelect.RPOBackupRegularization == RPORegularization.ReverseKL;
-    Span<double> lambdaPerChild = stackalloc double[numChildren];
-    if (usePerChildLambda)
-    {
-      double nMax = 0.0;
-      for (int i = 0; i < numChildren; i++)
-      {
-        if (edgeNSpan[i] > nMax)
-        {
-          nMax = edgeNSpan[i];
-        }
-      }
-      if (nMax > 0.0)
-      {
-        const double N_FLOOR = 0.5;
-        for (int i = 0; i < numChildren; i++)
-        {
-          double effN = edgeNSpan[i] >= N_FLOOR ? edgeNSpan[i] : N_FLOOR;
-          double ratio = effN / nMax;
-          double scale = perChildExp == 1.0f ? ratio : Math.Pow(ratio, perChildExp);
-          lambdaPerChild[i] = lambdaN * scale;
-        }
-      }
-      else
-      {
-        // No visited children at all - per-child can't discriminate; fall back to uniform.
-        for (int i = 0; i < numChildren; i++)
-        {
-          lambdaPerChild[i] = lambdaN;
-        }
-      }
-    }
-
     Span<double> piBar = stackalloc double[numChildren];
-    // qFill captures Solve's NaN-imputed q vector so the V_bar dot product can use the
-    // SAME imputed values Solve internally used for pi_bar (avoiding the prior silent
-    // mismatch in ForwardKL where Solve would impute via lambda*log(mu)+C(s) but V_bar
-    // would substitute scalar nodeQ).  For visited slots qFill[i] equals the input
-    // (subject to clamping); we still use qRaw[i] for those in the dot product to keep
-    // the existing anti-double-count behavior for shrinkage.
     Span<double> qFill = stackalloc double[numChildren];
-    RegularizedPolicyOptimum.Solve(mu, qShrunk, lambdaN, anchor, paramsSelect.RPOBackupRegularization,
+    RegularizedPolicyOptimum.Solve(mu, qHat, lambdaN, anchor, paramsSelect.RPOBackupRegularization,
                                    yOut: piBar,
                                    qFillOut: qFill,
                                    out double _,
                                    options: opts,
-                                   nanFallbackQ: node.Q,
-                                   lambdaPerChild: usePerChildLambda ? lambdaPerChild : default);
+                                   nanFallbackQ: consensusQ);
 
-    bool vBarObservedOnly = paramsSelect.CBGPUCT_BackupVBarObservedOnly;
-
-    // Optional Sinkhorn-style fixed-point refinement for BACKUP.  Same algebraic
-    // identity as the select-side iteration:
-    //     q(a) = vRef + lambda * (1 - mu_norm(a) / pi_bar(a))
-    // but with vRef set to the current V_bar pre-blend rather than the constant
-    // qParent used in selection.  At convergence E_y[q] equals V_bar, making V_bar
-    // the self-consistent regularized value (the soft-Bellman fixed point), rather
-    // than a one-shot computation anchored to the previous backup's node.Q via the
-    // imputation.
-    //
-    // When CBGPUCT_BackupVBarObservedOnly is set, vRef is computed observed-only
-    // (renormalized pi_bar over visited slots, summed against qRaw only).  The
-    // iteration then converges to a DIFFERENT fixed point: vRef equals the
-    // observed-only V_bar, not the Grill-style E_y[q] over all actions.  Imputed
-    // q's for unvisited slots still get refreshed (and pi_bar still shifts), but
-    // those imputed q's no longer enter the value target.  See
-    // CBGPUCT_BackupVBarObservedOnly docs for the rationale and recommended usage.
-    //
-    // Skipped when CBGPUCT_BackupFixedPointIterations == 0 (default) - zero overhead,
-    // behavior identical to legacy.  Only valid for reverse KL (the forward-KL
-    // MatchValue anchor enforces the equivalent constraint in closed form).
-    int backupFpIters = paramsSelect.CBGPUCT_BackupFixedPointIterations;
-    if (backupFpIters > 0 && paramsSelect.RPOBackupRegularization == RPORegularization.ReverseKL)
+    double childContribution = 0.0;
+    for (int i = 0; i < numChildren; i++)
     {
-      // Normalize mu once for the identity (Solve internally normalizes, but we need
-      // the normalized values here for the q-update step).
-      Span<double> muNorm = stackalloc double[numChildren];
-      double sumMu = 0.0;
-      for (int i = 0; i < numChildren; i++)
-      {
-        sumMu += mu[i];
-      }
-      double invSumMu = sumMu > 0.0 ? 1.0 / sumMu : 1.0 / numChildren;
-      for (int i = 0; i < numChildren; i++)
-      {
-        muNorm[i] = sumMu > 0.0 ? mu[i] * invSumMu : 1.0 / numChildren;
-      }
-
-      // Initial reference value (full-coverage OR observed-only per knob).
-      double vRef = ComputeVBarChildContribution(piBar, qRaw, qFill, numChildren,
-                                                 nodeQ, vBarObservedOnly);
-
-      double convergenceTol = paramsSelect.RPOBackupFixedPointTol;
-      for (int iter = 0; iter < backupFpIters; iter++)
-      {
-        double maxDelta = 0.0;
-        for (int i = 0; i < numChildren; i++)
-        {
-          if (!double.IsNaN(qRaw[i]))
-          {
-            // Visited slot: keep its shrunk q (the iteration only refines imputed q's).
-            continue;
-          }
-          double piBarI = piBar[i];
-          if (!(piBarI > 1e-12))
-          {
-            continue;
-          }
-          double qNew = vRef + lambdaN * (1.0 - muNorm[i] / piBarI);
-          if (qNew < -1.0) qNew = -1.0;
-          else if (qNew > 1.0) qNew = 1.0;
-          double delta = Math.Abs(qNew - qShrunk[i]);
-          if (delta > maxDelta) maxDelta = delta;
-          qShrunk[i] = qNew;
-        }
-        if (maxDelta < convergenceTol)
-        {
-          break;
-        }
-        // Re-solve with the refreshed imputed q's; vRef rebuilt from updated pi_bar/qFill.
-        // Same lambdaPerChild as the initial solve - per-child lambda stays fixed
-        // across fixed-point iterations (it depends only on edge.N, not on q).
-        RegularizedPolicyOptimum.Solve(mu, qShrunk, lambdaN, anchor, paramsSelect.RPOBackupRegularization,
-                                       yOut: piBar,
-                                       qFillOut: qFill,
-                                       out double _,
-                                       options: opts,
-                                       nanFallbackQ: vRef,
-                                       lambdaPerChild: usePerChildLambda ? lambdaPerChild : default);
-        vRef = ComputeVBarChildContribution(piBar, qRaw, qFill, numChildren,
-                                            nodeQ, vBarObservedOnly);
-      }
+      childContribution += piBar[i] * qFill[i];
     }
 
-    // Snapshot pi_bar from Solve BEFORE any shrinkage, so the dump can show both the
-    // raw Solve output and the shrunk version that actually drives V_bar.  Tiny cost
-    // (numChildren doubles); always taken so diagnostics stay consistent whether the
-    // dump is enabled or not.
-    Span<double> piBarPreShrink = stackalloc double[numChildren];
-    piBar[..numChildren].CopyTo(piBarPreShrink);
-
-    // Pi_bar shrinkage toward the normalized prior, by per-child N.  Highly recommended
-    // for backup: prevents a single high-Q low-N rollout from dominating V_bar.  Disabled
-    // when CBGPUCT_PiBarShrinkageBackupPseudoVisits == 0.  Uses child.N (the statistical
-    // support of the child's Q estimate), matching the Q-shrinkage and bounded-relative cap.
-    if (paramsSelect.CBGPUCT_BackupPiBarShrinkagePseudoVisits > 0.0f)
-    {
-      ApplyPiBarShrinkage(piBar, mu, childNSpan,
-                          paramsSelect.CBGPUCT_BackupPiBarShrinkagePseudoVisits, numChildren);
-    }
-
-    // BOUNDED RELATIVE pi_bar shrinkage: pulls low-N (relative to peers) children's
-    // pi_bar toward the normalized prior mu.  Uses child.N (statistical support).
-    // See CBGPUCT_BackupPiBarShrinkageBoundedRelativeExponent docs for the principle.
-    // Layers on top of the absolute shrinkage above when both are active (mu target
-    // is the same in both, so order does not affect the algebraic fixed point modulo
-    // the per-step renormalizations).
-    if (paramsSelect.CBGPUCT_BackupPiBarShrinkageBoundedRelativeExponent > 0.0f)
-    {
-      ApplyPiBarShrinkageBoundedRelative(piBar, mu, childNSpan, qRaw,
-                                         paramsSelect.CBGPUCT_BackupPiBarShrinkageBoundedRelativeExponent,
-                                         numChildren);
-    }
-
-    // V_bar dot product (helper applies observed-only renormalization when knob is set).
-    // Default mode: visited slots contribute qRaw, unvisited contribute qFill (Solve's
-    // imputation).  Observed-only mode: only visited slots contribute (qRaw only), with
-    // pi_bar renormalized over the visited subset so weights sum to 1.  Uses the post-
-    // shrinkage piBar (the one we actually committed to).
-    double childContribution = ComputeVBarChildContribution(piBar, qRaw, qFill, numChildren,
-                                                            nodeQ, vBarObservedOnly);
-
-    // Blend self-V (counts as 1 visit) with regularized child contribution (counts as totalN - 1).
+    // Blend self-V (counts as 1 visit) with the regularized child contribution.
     int totalN = node.NodeRef.N;
     double vBar = totalN <= 0
       ? node.NodeRef.V
       : (childContribution * (totalN - 1) + node.NodeRef.V) / totalN;
 
-    // Optional greedy override: linearly blend the regularized V_bar with the
-    // minimax-best child Q so that at high effectiveN the returned value is the
-    // best-child Q (mirroring AlphaZero's late-search single-move conviction).
-    // effectiveN is normally totalN, but gets bumped up to min child.N over the
-    // high-P expanded children when transposition visits have given even the
-    // weakest "interesting" child more support than the parent's own visit
-    // count would imply.  See CBGPUCT_BackupGreedyMaxAboveN docs for the design.
-    int greedyMaxAboveN = paramsSelect.CBGPUCT_BackupGreedyMaxAboveN;
-    if (greedyMaxAboveN > 0)
-    {
-      // Best visited-child Q in PARENT perspective.  Unvisited slots (qRaw NaN)
-      // skipped: only observed q values qualify for the minimax-best candidate.
-      double bestChildQ = double.NegativeInfinity;
-      for (int i = 0; i < numChildren; i++)
-      {
-        if (!double.IsNaN(qRaw[i]) && qRaw[i] > bestChildQ)
-        {
-          bestChildQ = qRaw[i];
-        }
-      }
-      if (!double.IsNegativeInfinity(bestChildQ))
-      {
-        // Minimum child.N over expanded children with raw P > 0.02.  Terminals
-        // (no ChildNode) skipped: their values are exact, so they should not
-        // gate the "weakest support" tally.  Unexpanded slots also skipped (no
-        // child node yet).  If no children qualify, the min stays +inf and the
-        // fallback to totalN below applies.
-        const float GREEDY_HIGH_P_THRESHOLD = 0.02f;
-        double minChildNHighP = double.PositiveInfinity;
-        for (int i = 0; i < numExpanded; i++)
-        {
-          GEdge edge = node.ChildEdgeAtIndex(i);
-          if ((float)edge.P > GREEDY_HIGH_P_THRESHOLD
-              && edge.Type == GEdgeStruct.EdgeType.ChildEdge)
-          {
-            double childN = edge.ChildNode.NodeRef.N;
-            if (childN < minChildNHighP)
-            {
-              minChildNHighP = childN;
-            }
-          }
-        }
-        double effectiveN = totalN;
-        if (!double.IsPositiveInfinity(minChildNHighP) && minChildNHighP > effectiveN)
-        {
-          effectiveN = minChildNHighP;
-        }
-        double greedyWeight = effectiveN / greedyMaxAboveN;
-        if (greedyWeight > 1.0)
-        {
-          greedyWeight = 1.0;
-        }
-        else if (greedyWeight < 0.0)
-        {
-          greedyWeight = 0.0;
-        }
-        vBar = greedyWeight * bestChildQ + (1.0 - greedyWeight) * vBar;
-      }
-    }
+    // Orthogonal late-search greedy override (no-op when CBGPUCT_BackupGreedyMaxAboveN == 0).
+    vBar = ApplyBackupGreedyOverride(node, paramsSelect, qRaw, numChildren, numExpanded, totalN, vBar);
 
     if (CBGPUCTDumpDiagnostics.DEBUG_DUMP_CBGPUCT_BACKUP_CALCS)
     {
-      CBGPUCTDumpDiagnostics.DumpCBGPUCTBackup(node, paramsSelect, mu, qRaw, qShrunk, qFill, piBarPreShrink, piBar, edgeNSpan,
-                                               numChildren, numExpanded, sumN, lambdaN,
-                                               childContribution, vBar,
+      // q_hat appears in both the Q_shrunk and Q_fill rows; there is no separate pi_bar
+      // shrink stage so pre/post pi_bar are identical.  childContribution is passed
+      // explicitly (correct), so the V_bar / bias line is faithful.
+      CBGPUCTDumpDiagnostics.DumpCBGPUCTBackup(node, paramsSelect, mu, qRaw, qHat, qFill, piBar, piBar, edgeNSpan,
+                                               nSupport,
+                                               numChildren, numExpanded, sumEdgeN, lambdaN,
+                                               childContribution, consensusQ, vBar,
                                                paramsSelect.RPOBackupRegularization);
     }
 
     return vBar;
+  }
+
+
+  /// <summary>
+  /// Orthogonal late-search greedy override: linearly blends the regularized V_bar with
+  /// the minimax-best visited-child Q so that at high effectiveN the returned value is
+  /// the best-child Q (mirroring AlphaZero's late-search single-move conviction).
+  /// effectiveN is normally totalN, but gets bumped up to the min child.N over the
+  /// high-P expanded children when transposition visits have given even the weakest
+  /// "interesting" child more support than the parent's own visit count would imply.
+  /// No-op (returns vBar unchanged) when CBGPUCT_BackupGreedyMaxAboveN == 0.
+  /// See CBGPUCT_BackupGreedyMaxAboveN docs.
+  /// </summary>
+  private static double ApplyBackupGreedyOverride(GNode node, ParamsSelect paramsSelect,
+                                                  ReadOnlySpan<double> qRaw,
+                                                  int numChildren, int numExpanded,
+                                                  int totalN, double vBar)
+  {
+    int greedyMaxAboveN = paramsSelect.CBGPUCT_BackupGreedyMaxAboveN;
+    if (greedyMaxAboveN <= 0)
+    {
+      return vBar;
+    }
+
+    // Best visited-child Q in PARENT perspective.  Unvisited slots (qRaw NaN)
+    // skipped: only observed q values qualify for the minimax-best candidate.
+    double bestChildQ = double.NegativeInfinity;
+    for (int i = 0; i < numChildren; i++)
+    {
+      if (!double.IsNaN(qRaw[i]) && qRaw[i] > bestChildQ)
+      {
+        bestChildQ = qRaw[i];
+      }
+    }
+    if (double.IsNegativeInfinity(bestChildQ))
+    {
+      return vBar;
+    }
+
+    // Minimum child.N over expanded children with raw P > 0.02.  Terminals
+    // (no ChildNode) skipped: their values are exact, so they should not
+    // gate the "weakest support" tally.  Unexpanded slots also skipped (no
+    // child node yet).  If no children qualify, the min stays +inf and the
+    // fallback to totalN below applies.
+    const float GREEDY_HIGH_P_THRESHOLD = 0.02f;
+    double minChildNHighP = double.PositiveInfinity;
+    for (int i = 0; i < numExpanded; i++)
+    {
+      GEdge edge = node.ChildEdgeAtIndex(i);
+      if ((float)edge.P > GREEDY_HIGH_P_THRESHOLD
+          && edge.Type == GEdgeStruct.EdgeType.ChildEdge)
+      {
+        double childN = edge.ChildNode.NodeRef.N;
+        if (childN < minChildNHighP)
+        {
+          minChildNHighP = childN;
+        }
+      }
+    }
+    double effectiveN = totalN;
+    if (!double.IsPositiveInfinity(minChildNHighP) && minChildNHighP > effectiveN)
+    {
+      effectiveN = minChildNHighP;
+    }
+    double greedyWeight = effectiveN / greedyMaxAboveN;
+    if (greedyWeight > 1.0)
+    {
+      greedyWeight = 1.0;
+    }
+    else if (greedyWeight < 0.0)
+    {
+      greedyWeight = 0.0;
+    }
+    return greedyWeight * bestChildQ + (1.0 - greedyWeight) * vBar;
   }
 
 
