@@ -74,7 +74,7 @@ internal static class CBGPUCTDumpDiagnostics
   /// red).  Useful for surfacing just the cases where the CB-GPUCT / RPO
   /// machinery actually diverges from the prior algorithm.  Default false.
   /// </summary>
-  public const bool ONLY_SHOW_SIGNIFICANT = false;
+  public const bool ONLY_SHOW_SIGNIFICANT = true;
 
 
   /// <summary>
@@ -562,6 +562,13 @@ internal static class CBGPUCTDumpDiagnostics
   /// Dump for CBGPUCTScoreCalc.ScoreCalc (visit-target selection).
   /// Also computes (for visual comparison) the visit allocation that vanilla
   /// PUCT would have produced from the same per-child inputs.
+  ///
+  /// The childN row reports each child's child.N (the child node's total visit count). In
+  /// graph search this can exceed the per-edge nEdge when the child is reached via OTHER parents
+  /// (transpositions); it is the statistical support behind the child's Q and the quantity the
+  /// cross-parent blend (CBGPUCT_SelectCrossParentNFraction) folds into currentN.  It is shown as
+  /// its own row because neither nEdge nor currentN reveals it (currentN folds in only a fraction
+  /// of the surplus, and only when that knob is positive).
   /// </summary>
   public static void DumpCBGPUCTSelect(ParamsSelect paramsSelect,
                                        GNode parentNode,
@@ -572,6 +579,7 @@ internal static class CBGPUCTDumpDiagnostics
                                        ReadOnlySpan<double> firstStepDeficits,
                                        ReadOnlySpan<double> currentN,
                                        ReadOnlySpan<double> nEdge,
+                                       ReadOnlySpan<double> childN,
                                        ReadOnlySpan<double> nInFlight,
                                        ReadOnlySpan<short> visitsAdded,
                                        int numChildren, int numVisitsToCompute,
@@ -594,6 +602,7 @@ internal static class CBGPUCTDumpDiagnostics
     double[] dfc = new double[numChildren];
     double[] cn = new double[numChildren];
     double[] ne = new double[numChildren];
+    double[] chn = new double[numChildren];
     double[] nf = new double[numChildren];
     int[] va = new int[numChildren];
     bool anyQDelta = false;
@@ -610,6 +619,7 @@ internal static class CBGPUCTDumpDiagnostics
       dfc[i] = firstStepDeficits[i];
       cn[i] = currentN[i];
       ne[i] = nEdge[i];
+      chn[i] = childN[i];
       nf[i] = nInFlight[i];
       va[i] = visitsAdded[i];
     }
@@ -706,6 +716,7 @@ internal static class CBGPUCTDumpDiagnostics
       }
       Console.WriteLine(FormatRow("Q_in (post-shrink):", numChildren, numExpanded, i => FmtQ(q[i])));
       Console.WriteLine(FormatRow("nEdge:", numChildren, numExpanded, i => FmtN(ne[i])));
+      Console.WriteLine(FormatRow("childN:", numChildren, numExpanded, i => FmtN(chn[i])));
       Console.WriteLine(FormatRow("nInFlight:", numChildren, numExpanded, i => FmtN(nf[i])));
       Console.WriteLine(FormatRow("currentN:", numChildren, numExpanded, i => FmtN(cn[i])));
       Console.WriteLine(FormatRow("P:", numChildren, numExpanded, i => FmtP(p[i])));

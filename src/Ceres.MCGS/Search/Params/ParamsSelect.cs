@@ -372,10 +372,11 @@ public record ParamsSelect
   /// analogue of CBGPUCT_BackupSupportShrinkageK.  Each visited child's per-edge q (-W/N)
   /// is shrunk toward the policy-shaped consensus prior by edge.N (the per-edge q's
   /// statistical support); unvisited children keep their FPU value untouched (the FPU
-  /// exploration signal is not altered).  The shrunk q then feeds the pi_bar visit-target
-  /// Solve.  0 disables (plain RPO select).  Default 3.
+  /// exploration signal is not altered).  The shrunk q then feeds the pi_bar visit-target Solve.
+  /// 0 disables (plain RPO select).  
+  /// Default 1 (tests suggest needs less shrinkaage than Backup uses by default).
   /// </summary>
-  public float CBGPUCT_SelectSupportShrinkageK = 3.0f;
+  public float CBGPUCT_SelectSupportShrinkageK = 1.0f;
 
   /// <summary>
   /// Decay exponent p for the SELECT support-shrinkage (see
@@ -515,7 +516,7 @@ public record ParamsSelect
   /// Default Ten approximates a "soft effective branching factor" without literally tying
   /// to per-node |A|.
   /// </summary>
-  public CBGPUCTLambdaDenominatorBaseType CBGPUCT_SelectLambdaDenominatorBase = CBGPUCTLambdaDenominatorBaseType.Ten;
+  public CBGPUCTLambdaDenominatorBaseType CBGPUCT_SelectLambdaDenominatorBase = CBGPUCTLambdaDenominatorBaseType.One;
 
   /// <summary>
   /// Constant offset in the BACKUP-phase lambda_N denominator.  Backup is not allocating
@@ -530,14 +531,14 @@ public record ParamsSelect
   /// <summary>
   /// Lambda schedule for the SELECTION phase (visit-target deficit pi_bar).
   /// </summary>
-  public CBGPUCTLambdaScheduleType CBGPUCT_SelectLambdaSchedule = CBGPUCTLambdaScheduleType.AlphaZero;
+  public CBGPUCTLambdaScheduleType CBGPUCT_SelectLambdaSchedule = CBGPUCTLambdaScheduleType.Pow;
 
   /// <summary>
   /// Multiplicative scale on lambda_N for the SELECTION phase.
   /// Larger values keep pi_bar closer to the prior P (more exploration);
   /// smaller values let pi_bar concentrate on high-Q actions.
   /// </summary>
-  public float CBGPUCT_SelectLambdaC = 1.75f;
+  public float CBGPUCT_SelectLambdaC = 0.3f;
 
   /// <summary>
   /// Exponent on (sum N_a) in the Pow lambda_N schedule for the SELECTION phase.

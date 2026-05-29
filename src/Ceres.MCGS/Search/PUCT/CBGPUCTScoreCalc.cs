@@ -536,8 +536,30 @@ internal static class CBGPUCTScoreCalc
 
     if (CBGPUCTDumpDiagnostics.DEBUG_DUMP_CBGPUCT_SELECT_CALCS)
     {
+      // Gather each child's child.N (the child node's total visit count) for the diagnostic.
+      // In graph search this can exceed the per-edge nEdge when the child is reached via OTHER
+      // parents (transpositions); it is the statistical support behind the child's Q and the
+      // quantity the cross-parent blend (CBGPUCT_SelectCrossParentNFraction) folds into currentN.
+      // Terminal edges have no child node, so their support is edge.N; unexpanded slots are 0.
+      Span<double> childN = stackalloc double[numChildren];
+      int numExpandedForDump = parentNode.NumEdgesExpanded;
+      for (int i = 0; i < numChildren; i++)
+      {
+        if (i < numExpandedForDump)
+        {
+          GEdge edge = parentNode.ChildEdgeAtIndex(i);
+          childN[i] = edge.Type == GEdgeStruct.EdgeType.ChildEdge
+            ? edge.ChildNode.NodeRef.N
+            : nEdge[i];
+        }
+        else
+        {
+          childN[i] = 0;
+        }
+      }
+
       CBGPUCTDumpDiagnostics.DumpCBGPUCTSelect(paramsSelect, parentNode, pSpan, qInOriginal, qIn, piBar,
-                                               firstStepDeficits, currentN, nEdge, nInFlight,
+                                               firstStepDeficits, currentN, nEdge, childN, nInFlight,
                                                outputChildVisitCounts,
                                                numChildren, numVisitsToCompute, lambdaN, sumNStart,
                                                vStar, paramsSelect.RPOSelectRegularization);
