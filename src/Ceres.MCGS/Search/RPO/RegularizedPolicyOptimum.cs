@@ -156,11 +156,17 @@ public static class RegularizedPolicyOptimum
     double[] rentedQFill = null;
     double[] rentedCoeff = null;
     double[] rentedY = null;
+    double[] rentedNewtD = null;
+    double[] rentedNewtRatio = null;
 
     Span<double> muNorm = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedMuNorm = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
     Span<double> qFill  = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedQFill  = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
     Span<double> coeff  = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedCoeff  = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
     Span<double> yLocal = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedY      = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
+
+    // Scratch for the vectorized Newton evaluator (TrySolveAlphaNewton / EvalSumAndDeriv).
+    Span<double> newtD     = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedNewtD     = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
+    Span<double> newtRatio = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedNewtRatio = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
 
     try
     {
@@ -217,10 +223,10 @@ public static class RegularizedPolicyOptimum
       {
         GreedyOnQ(qFill, yLocal);
       }
-      else if (!TrySolveAlphaBisection(coeff, qFill, maxQEff, opts.BisectionIterations,
-                                       opts.BisectionResidualTol, out double alpha))
+      else if (!TrySolveAlphaNewton(coeff, qFill, maxQEff, opts.BisectionIterations,
+                                    opts.BisectionResidualTol, newtD, newtRatio, out double alpha))
       {
-        // Bisection failed: fall back to normalized prior (closest to greedy-prior choice).
+        // Root-find failed to bracket: fall back to normalized prior (closest to greedy-prior choice).
         WriteNormalizedPrior(muNorm, yLocal);
       }
       else
@@ -259,20 +265,13 @@ public static class RegularizedPolicyOptimum
           if (sumRenorm > 0.0 && IsFinite(sumRenorm))
           {
             double invRenorm = 1.0 / sumRenorm;
-            for (int i = 0; i < n; i++)
-            {
-              yLocal[i] *= invRenorm;
-            }
+            TensorPrimitives.Multiply(yLocal, invRenorm, yLocal);
           }
         }
       }
 
-      // Copy outputs and compute vStar.
-      vStarOut = 0.0;
-      for (int i = 0; i < n; i++)
-      {
-        vStarOut += yLocal[i] * qFill[i];
-      }
+      // Copy outputs and compute vStar = sum_i y_i * qFill_i (vectorized dot product).
+      vStarOut = TensorPrimitives.Dot(yLocal, qFill);
       if (!yOut.IsEmpty)
       {
         yLocal.CopyTo(yOut);
@@ -284,10 +283,12 @@ public static class RegularizedPolicyOptimum
     }
     finally
     {
-      if (rentedMuNorm != null) ArrayPool<double>.Shared.Return(rentedMuNorm);
-      if (rentedQFill  != null) ArrayPool<double>.Shared.Return(rentedQFill);
-      if (rentedCoeff  != null) ArrayPool<double>.Shared.Return(rentedCoeff);
-      if (rentedY      != null) ArrayPool<double>.Shared.Return(rentedY);
+      if (rentedMuNorm    != null) ArrayPool<double>.Shared.Return(rentedMuNorm);
+      if (rentedQFill     != null) ArrayPool<double>.Shared.Return(rentedQFill);
+      if (rentedCoeff     != null) ArrayPool<double>.Shared.Return(rentedCoeff);
+      if (rentedY         != null) ArrayPool<double>.Shared.Return(rentedY);
+      if (rentedNewtD     != null) ArrayPool<double>.Shared.Return(rentedNewtD);
+      if (rentedNewtRatio != null) ArrayPool<double>.Shared.Return(rentedNewtRatio);
     }
   }
 
@@ -527,89 +528,159 @@ public static class RegularizedPolicyOptimum
 
 
   /// <summary>
-  /// Solves  sum_i coeff_i / (alpha - qEff_i) = 1  for alpha &gt; maxQEff via bisection.
-  /// Returns true on success.  Halts early once the residual |sum - 1| is below
-  /// residualTol or once the iteration cap is reached.
+  /// Solves  S(alpha) = sum_i coeff_i / (alpha - qEff_i) = 1  for alpha &gt; maxQEff using a
+  /// safeguarded Newton iteration, exiting as soon as the residual |S(alpha) - 1| falls below
+  /// residualTol (or the iteration cap maxIterations is reached).  Returns true on success.
+  ///
+  /// On (maxQEff, +inf) the objective S is smooth, strictly decreasing, and convex, so Newton
+  /// converges quadratically - typically in a handful of steps versus the ~20 a bisection to the
+  /// same tolerance needs.  This is the Numerical-Recipes "rtsafe" hybrid working on the strictly
+  /// increasing g(a) = 1 - S(a): a Newton step is taken only when it stays inside the maintained
+  /// bracket [xl, xh] AND would at least halve the previous step; otherwise a bisection step is
+  /// taken.  That second guard is what makes convergence provably no slower than pure bisection
+  /// (a plain "Newton-in-bracket-else-bisect" loop can accept tiny Newton steps and end up worse
+  /// than bisection at a fixed iteration budget).
+  ///
+  /// d and ratio are caller-provided scratch buffers (length n) consumed by the vectorized
+  /// evaluator EvalSumAndDeriv.
   /// </summary>
-  private static bool TrySolveAlphaBisection(ReadOnlySpan<double> coeff,
-                                             ReadOnlySpan<double> qEff,
-                                             double maxQEff,
-                                             int iterations,
-                                             double residualTol,
-                                             out double alpha)
+  private static bool TrySolveAlphaNewton(ReadOnlySpan<double> coeff,
+                                          ReadOnlySpan<double> qEff,
+                                          double maxQEff,
+                                          int maxIterations,
+                                          double residualTol,
+                                          Span<double> d,
+                                          Span<double> ratio,
+                                          out double alpha)
   {
     const double EPS = 1e-12;
-    double aLo = maxQEff + EPS;
-    double aHi = maxQEff + 1.0;
-    if (!(aHi > aLo))
+    const double STEP_TOL = 1e-13;     // alpha-resolution at which further refinement is pointless
+
+    // Bracket [xl, xh] for the strictly-increasing g(a) = 1 - S(a):
+    //   xl just above the largest active qEff, where S -> +inf  => g(xl) < 0
+    //   xh grown (doubling the span above maxQEff) until S(xh) < 1 => g(xh) > 0
+    double xl = maxQEff + EPS;
+    double xh = maxQEff + 1.0;
+    if (!(xh > xl))
     {
-      aHi = aLo + 1.0;
+      xh = xl + 1.0;
     }
 
-    // Expand aHi until sum at aHi is below 1.
-    double sumAtHi = SumCoeffOverAlphaMinusQ(coeff, qEff, aHi);
+    EvalSumAndDeriv(coeff, qEff, xh, d, ratio, out double sHi, out _);
     int expand = 0;
-    while (sumAtHi > 1.0 && expand < 64 && IsFinite(aHi))
+    while (sHi > 1.0 && expand < 64 && IsFinite(xh))
     {
-      double span = aHi - maxQEff;
+      double span = xh - maxQEff;
       if (!(span > 0.0) || !IsFinite(span))
       {
         span = 1.0;
       }
-      aHi = maxQEff + (span * 2.0);
-      sumAtHi = SumCoeffOverAlphaMinusQ(coeff, qEff, aHi);
+      xh = maxQEff + (span * 2.0);
+      EvalSumAndDeriv(coeff, qEff, xh, d, ratio, out sHi, out _);
       expand++;
     }
-    if (!(sumAtHi < 1.0) || !IsFinite(sumAtHi) || !IsFinite(aHi))
+    if (!(sHi < 1.0) || !IsFinite(sHi) || !IsFinite(xh))
     {
       alpha = 0.0;
       return false;
     }
 
-    // Bisect.
-    for (int it = 0; it < iterations; it++)
+    // rtsafe on g(a) = 1 - S(a), g'(a) = -S'(a) > 0, seeded at the bracket midpoint.
+    // Eval-first ordering (evaluate rts, fold it into the bracket, then step) means K iterations
+    // perform K bracket halvings in the worst case - exactly matching pure bisection, so the
+    // hybrid is never slower - while Newton acceleration kicks in wherever the function is tame.
+    double rts = 0.5 * (xl + xh);
+    double dx = xh - xl;
+    double dxOld = dx;
+
+    for (int it = 0; it < maxIterations; it++)
     {
-      double mid = 0.5 * (aLo + aHi);
-      double s = SumCoeffOverAlphaMinusQ(coeff, qEff, mid);
-      if (!IsFinite(s))
+      EvalSumAndDeriv(coeff, qEff, rts, d, ratio, out double s, out double sPrime);
+      double g = 1.0 - s;
+      double gp = -sPrime;
+
+      // Fold this evaluation into the bracket (g increasing: g < 0 -> raise xl, else lower xh),
+      // then exit if the residual is within tolerance.
+      if (IsFinite(g))
       {
-        aLo = mid;
-        continue;
+        if (g < 0.0)
+        {
+          xl = rts;
+        }
+        else
+        {
+          xh = rts;
+        }
+
+        if (Math.Abs(g) < residualTol)
+        {
+          alpha = rts;
+          return rts > maxQEff && IsFinite(rts);
+        }
       }
-      if (Math.Abs(s - 1.0) < residualTol)
+
+      // Choose the next iterate: a Newton step only when it stays inside [xl, xh] AND would at
+      // least halve the prior step; otherwise a bisection step (which always makes progress).
+      bool useBisection =
+           !IsFinite(g) || !IsFinite(gp)
+        || (((rts - xh) * gp - g) * ((rts - xl) * gp - g) > 0.0)
+        || (Math.Abs(2.0 * g) > Math.Abs(dxOld * gp));
+
+      dxOld = dx;
+      double prev = rts;
+      bool noProgress;
+      if (useBisection)
       {
-        alpha = mid;
-        return alpha > maxQEff && IsFinite(alpha);
-      }
-      if (s > 1.0)
-      {
-        aLo = mid;
+        dx = 0.5 * (xh - xl);
+        rts = xl + dx;
+        noProgress = (rts == xl);     // bracket collapsed to a point
       }
       else
       {
-        aHi = mid;
+        dx = g / gp;
+        rts = prev - dx;
+        noProgress = (rts == prev);   // Newton step underflowed (no change in alpha)
+      }
+
+      if (noProgress || Math.Abs(dx) < STEP_TOL)
+      {
+        alpha = rts;
+        return rts > maxQEff && IsFinite(rts);
       }
     }
 
-    alpha = aHi;
-    return alpha > maxQEff && IsFinite(alpha);
+    // Iteration cap reached: rts is still bracketed and finite, so return it as the estimate.
+    alpha = rts;
+    return rts > maxQEff && IsFinite(rts);
   }
 
 
   /// <summary>
-  /// Scalar evaluation of  sum_i coeff_i / (alpha - qEff_i).  Assumes all coeff &gt;= 0
-  /// and alpha &gt; max(qEff) so denominators are positive.
+  /// Evaluates, at a given alpha, both the constraint LHS and its derivative:
+  ///   S(alpha)  =  sum_i coeff_i / (alpha - qEff_i)
+  ///   S'(alpha) = -sum_i coeff_i / (alpha - qEff_i)^2
+  /// Vectorized with TensorPrimitives.  Assumes coeff_i &gt;= 0 and alpha &gt; max(qEff_i : coeff_i &gt; 0)
+  /// so that every active denominator is positive (entries with coeff_i == 0 contribute 0).
+  ///
+  /// Works in terms of d_i = qEff_i - alpha (= -(alpha - qEff_i)) so the scalar-minus-vector can
+  /// use the available Subtract(span, scalar) overload; the sign is folded into the two reductions.
+  /// Because (alpha - qEff_i)^2 == d_i^2, the derivative needs no extra sign handling.
   /// </summary>
   [MethodImpl(MethodImplOptions.AggressiveInlining)]
-  private static double SumCoeffOverAlphaMinusQ(ReadOnlySpan<double> coeff, ReadOnlySpan<double> qEff, double alpha)
+  private static void EvalSumAndDeriv(ReadOnlySpan<double> coeff, ReadOnlySpan<double> qEff, double alpha,
+                                      Span<double> d, Span<double> ratio,
+                                      out double s, out double sPrime)
   {
-    double sum = 0.0;
-    int n = coeff.Length;
-    for (int i = 0; i < n; i++)
-    {
-      sum += coeff[i] / (alpha - qEff[i]);
-    }
-    return sum;
+    // d_i = qEff_i - alpha
+    TensorPrimitives.Subtract(qEff, alpha, d);
+
+    // ratio_i = coeff_i / d_i ;  S = sum_i coeff_i/(alpha - qEff_i) = -sum_i ratio_i
+    TensorPrimitives.Divide(coeff, d, ratio);
+    s = -TensorPrimitives.Sum(ratio);
+
+    // ratio_i <- ratio_i / d_i = coeff_i / d_i^2 = coeff_i/(alpha - qEff_i)^2 ;  S' = -sum_i ratio_i
+    TensorPrimitives.Divide(ratio, d, ratio);
+    sPrime = -TensorPrimitives.Sum(ratio);
   }
 
 
