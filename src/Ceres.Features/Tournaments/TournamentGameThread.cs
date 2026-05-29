@@ -397,9 +397,29 @@ namespace Ceres.Features.Tournaments
       string engine1ID = engine2White ? thisResult.PlayerBlack : thisResult.PlayerWhite;
       string engine2ID = engine2White ? thisResult.PlayerWhite : thisResult.PlayerBlack;
 
+      bool shutDownRequested = false;
       lock (ParentStats)
       {
         ParentStats.UpdateTournamentStats(thisResult, engine1ID, engine2ID);
+
+        // Record this game in the overall list (performed under the lock since
+        // multiple threads may be recording game results concurrently).
+        ParentStats.GameInfos.Add(thisResult);
+
+        // Notify any registered per-game callback that a game has been processed,
+        // passing the results accumulated so far. The callback runs while holding the
+        // statistics lock so the stats it observes remain stable for the duration of the call.
+        // A return value of true requests that the tournament begin an orderly shutdown.
+        Func<TournamentResultStats, bool> perGameCallback = Def.parentDef.PerGameCallback;
+        if (perGameCallback != null)
+        {
+          shutDownRequested = perGameCallback(ParentStats);
+        }
+      }
+
+      if (shutDownRequested)
+      {
+        Def.parentDef.ShouldShutDown = true;
       }
 
       // Only show headers first time for first thread
@@ -418,7 +438,8 @@ namespace Ceres.Features.Tournaments
       string engine1ID = engine2White ? thisResult.PlayerBlack : thisResult.PlayerWhite;
       string engine2ID = engine2White ? thisResult.PlayerWhite : thisResult.PlayerBlack;
 
-      ParentStats.GameInfos.Add(thisResult);
+      // Note: thisResult was already added to ParentStats.GameInfos (under the statistics lock)
+      // in UpdateStatsAndOutputSummaryFromGameResult before this method was called.
 
       PlayerStat player = engine2White ?
         ParentStats.GetPlayer(opponentID, engineID) :
