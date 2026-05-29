@@ -771,12 +771,6 @@ internal static class CBGPUCTScoreCalc
                                                   int numChildren, int numExpanded,
                                                   int totalN, double vBar)
   {
-    int greedyMaxAboveN = paramsSelect.CBGPUCT_BackupGreedyMaxAboveN;
-    if (greedyMaxAboveN <= 0)
-    {
-      return vBar;
-    }
-
     // Best visited-child Q in PARENT perspective.  Unvisited slots (qRaw NaN)
     // skipped: only observed q values qualify for the minimax-best candidate.
     double bestChildQ = double.NegativeInfinity;
@@ -812,21 +806,8 @@ internal static class CBGPUCTScoreCalc
         }
       }
     }
-    double effectiveN = totalN;
-    if (!double.IsPositiveInfinity(minChildNHighP) && minChildNHighP > effectiveN)
-    {
-      effectiveN = minChildNHighP;
-    }
-    double greedyWeight = effectiveN / greedyMaxAboveN;
-    if (greedyWeight > 1.0)
-    {
-      greedyWeight = 1.0;
-    }
-    else if (greedyWeight < 0.0)
-    {
-      greedyWeight = 0.0;
-    }
-    return greedyWeight * bestChildQ + (1.0 - greedyWeight) * vBar;
+
+    return vBar;
   }
 
 

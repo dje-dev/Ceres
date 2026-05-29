@@ -434,7 +434,7 @@ public record ParamsSelect
   /// (ChildNSaturating -> edge.N, PolicyChildNSaturating -> policy).
   /// </summary>
   public enum CBGPUCTConsensusWeightType { ChildN, EdgeN, Policy, ChildNSaturating, PolicyChildNSaturating }
-  public CBGPUCTConsensusWeightType CBGPUCT_ConsensusWeight = CBGPUCTConsensusWeightType.ChildN;
+  public CBGPUCTConsensusWeightType CBGPUCT_ConsensusWeight = CBGPUCTConsensusWeightType.PolicyChildNSaturating;
 
   /// <summary>
   /// Saturation half-point Kc for the *Saturating consensus weight modes: w_a =
@@ -526,37 +526,6 @@ public record ParamsSelect
   /// plain Bayesian "trust the prior less as data piles up" curve.
   /// </summary>
   public CBGPUCTLambdaDenominatorBaseType CBGPUCT_BackupLambdaDenominatorBase = CBGPUCTLambdaDenominatorBaseType.One;
-
-  /// <summary>
-  /// Linear blend of the regularized V_bar with the minimax-best child Q during
-  /// CB-GPUCT backup.  Default 0 disables (no greedy override; V_bar passes through
-  /// as the regularized closed-form value).  When > 0, the returned value is:
-  ///   greedy_weight = clamp(effectiveN / GreedyMaxAboveN, 0, 1)
-  ///   V_bar := greedy_weight * best_child_Q + (1 - greedy_weight) * V_bar_regularized
-  /// where best_child_Q is the max over VISITED children of qRaw[i] (each child's Q
-  /// in parent perspective - this is what a minimax backup would choose for the
-  /// parent), and effectiveN is normally the parent's totalN.
-  ///
-  /// TRANSPOSITION CREDIT: when the minimum child.N across expanded children with
-  /// raw P > 0.02 exceeds totalN, that minimum is used as effectiveN instead.  The
-  /// idea: if even the lowest-statistical-support "interesting" child has been
-  /// visited many times via OTHER parents (graph mode transpositions), the parent
-  /// has more usable evidence than its own visit count suggests, and the greedy
-  /// weight should ramp up faster.  Terminal edges and very-low-P children are
-  /// excluded from the minimum (the former are exact and the latter are tail moves
-  /// whose statistics we don't want gating the global ramp).
-  ///
-  /// Motivation: at low parentN, V_bar's regularization (lambda_N) is large and
-  /// the pi_bar-weighted value is a sensible compromise.  At high parentN, the
-  /// search has converged enough that the minimax-best child is the trustworthy
-  /// estimate of the node's value (mirroring AlphaZero's late-search behavior of
-  /// effectively committing to a single move).  GreedyMaxAboveN is the parentN at
-  /// which the blend has fully transitioned to the greedy minimax value.
-  ///
-  /// Typical setting: a few hundred (e.g. 200-500).  Set to 0 to disable.
-  /// </summary>
-  public int CBGPUCT_BackupGreedyMaxAboveN = 0;
-
 
   /// <summary>
   /// Lambda schedule for the SELECTION phase (visit-target deficit pi_bar).
