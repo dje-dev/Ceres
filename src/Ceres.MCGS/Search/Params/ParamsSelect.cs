@@ -400,20 +400,54 @@ public record ParamsSelect
   /// its own merits), so the consensus's only remaining job is to prime the prior for
   /// UNDER-EXPLORED local moves - for which the locally-revealed preference (edge.N) is
   /// the more relevant weight.
-  ///   ChildN : weight by child.N (textbook empirical-Bayes precision pooling).  A BAD
-  ///            transposition hub can drag the target and over-shrink a good but
-  ///            low-support local move.  Matches the originally-validated behavior.
+  /// WHY RAW child.N IS BIASED: under the hierarchical model q_a | theta_a ~ N(theta_a,
+  /// s^2/N_a), theta_a ~ N(mu0, tau^2), the posterior-mean estimate of the anchor mu0 is
+  /// q_bar = sum_a w_a q_a / sum_a w_a with w_a = 1/(tau^2 + s^2/N_a) proportional to
+  /// N_a/(N_a + Kc), Kc = s^2/tau^2.  Weighting by raw N_a (the ChildN mode) is the
+  /// Kc -> infinity limit, i.e. it assumes tau^2 -> 0: that every sibling MOVE has the
+  /// same true value.  For chess that is false (moves differ a lot -> tau^2 large -> Kc
+  /// SMALL), so the correct weights SATURATE: once a child is out of the high-noise
+  /// region, extra N_a (e.g. from incidental transposition density) should not keep
+  /// increasing its pull on the anchor.  The *Saturating modes implement that.
+  ///   ChildN : weight by child.N (textbook precision pooling; the tau^2 = 0 limit).  A
+  ///            BAD transposition hub - or even a benign low-policy one - can drag the
+  ///            target and over-shrink a good but moderately-supported local move.
+  ///            Matches the originally-validated behavior.
   ///   EdgeN  : weight by per-edge N (this parent's revealed preference; transposition-
   ///            free; reduces to ChildN exactly when there are no transpositions).
-  ///            Recommended when the transposition contamination is a concern.
   ///   Policy : weight by the prior policy mu (i.e. anchor at E_mu[q]); fully N-free but
   ///            trusts the network prior, which is fragile when the policy is miscalibrated.
+  ///   ChildNSaturating : weight by child.N / (child.N + Kc), Kc =
+  ///            CBGPUCT_ConsensusReliabilityK.  The principled finite-tau^2 estimator:
+  ///            low-N children are still suppressed proportional to their reliability, but
+  ///            any sufficiently-explored child counts ~once, so a single huge-N
+  ///            transposition can no longer dominate the anchor.
+  ///   PolicyChildNSaturating : weight by mu * child.N / (child.N + Kc).  As above, plus
+  ///            an importance term so the anchor is set by the moves the policy actually
+  ///            prioritizes - a reliable but LOW-policy drawish transposition then
+  ///            contributes little even though its gate is ~1.  Most robust for backup.
   /// Default ChildN (no behavior change vs. the initial implementation; identical to
   /// EdgeN whenever there are no transpositions).  Only used when
-  /// CBGPUCT_BackupSupportShrinkageK &gt; 0.
+  /// CBGPUCT_BackupSupportShrinkageK &gt; 0.  NOTE: the saturating gate is applied in the
+  /// BACKUP consensus only; the SELECT consensus (whose q support is edge.N, already
+  /// transposition-free) maps the *Saturating modes to their non-saturating equivalents
+  /// (ChildNSaturating -> edge.N, PolicyChildNSaturating -> policy).
   /// </summary>
-  public enum CBGPUCTConsensusWeightType { ChildN, EdgeN, Policy }
+  public enum CBGPUCTConsensusWeightType { ChildN, EdgeN, Policy, ChildNSaturating, PolicyChildNSaturating }
   public CBGPUCTConsensusWeightType CBGPUCT_ConsensusWeight = CBGPUCTConsensusWeightType.ChildN;
+
+  /// <summary>
+  /// Saturation half-point Kc for the *Saturating consensus weight modes: w_a =
+  /// child.N / (child.N + Kc) (optionally times mu).  Interpretable as Kc = s^2/tau^2 =
+  /// (per-visit Q noise variance) / (between-move value variance); a child reaches half
+  /// its asymptotic weight at child.N = Kc.  SMALL Kc (moves differ a lot, the chess
+  /// regime) flattens the weights quickly toward equal/importance weighting; LARGE Kc
+  /// recovers raw precision pooling (the ChildN mode in the limit).  Single digits are
+  /// expected for chess; defaults to the shrinkage K (3).  No effect unless
+  /// CBGPUCT_ConsensusWeight is one of the *Saturating modes.  Kc &lt;= 0 makes the gate
+  /// degenerate to 1 (uniform for ChildNSaturating, pure policy for PolicyChildNSaturating).
+  /// </summary>
+  public float CBGPUCT_ConsensusReliabilityK = 3.0f;
 
   #endregion
 

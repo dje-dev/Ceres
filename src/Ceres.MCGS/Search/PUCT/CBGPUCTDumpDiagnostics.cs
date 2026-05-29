@@ -838,7 +838,10 @@ internal static class CBGPUCTDumpDiagnostics
       Console.WriteLine();
       WriteHeaderLine($"[CBGPUCT-BAK] numChildren={numChildren} (expanded={numExpanded}) " +
                       $"sumN={sumN:F1} lambda_N={lambdaN:F4} " +
-                      $"nodeQ={nodeQ:F3} selfV={selfV:F3} consensusQ={consensusQ:F3} N={totalN} reg={regularization} " +
+                      $"nodeQ={nodeQ:F3} selfV={selfV:F3} " +
+                      $"consensusQ={consensusQ:F3} (consW={paramsSelect.CBGPUCT_ConsensusWeight} " +
+                      $"Kc={paramsSelect.CBGPUCT_ConsensusReliabilityK:F1}) " +
+                      $"N={totalN} reg={regularization} " +
                       $"delta={backupDelta:F3}", significant);
       Console.WriteLine(FormatRow("edgeN:", numChildren, boundary, i => FmtNInt(en[i])));
       Console.WriteLine(FormatRow("childN:", numChildren, boundary, i => FmtNInt(ns[i])));

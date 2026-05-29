@@ -427,16 +427,20 @@ internal static class CBGPUCTScoreCalc
     if (selectShrinkK > 0.0f)
     {
       // Consensus q_bar over visited children, weighted per CBGPUCT_ConsensusWeight.  In
-      // select the q is the per-edge average whose support is edge.N, so ChildN and EdgeN
-      // both resolve to edge.N here (Policy uses mu).  Falls back to qParent if none visited.
+      // select the q is the per-edge average whose support is edge.N (already transposition-
+      // free), so the saturating gate is NOT applied here: the policy-family modes (Policy,
+      // PolicyChildNSaturating) use mu, and the ChildN-family modes (ChildN, EdgeN,
+      // ChildNSaturating) all resolve to edge.N.  Falls back to qParent if none visited.
       var consensusMode = paramsSelect.CBGPUCT_ConsensusWeight;
+      bool policyWeight = consensusMode == ParamsSelect.CBGPUCTConsensusWeightType.Policy
+                       || consensusMode == ParamsSelect.CBGPUCTConsensusWeightType.PolicyChildNSaturating;
       double sumW = 0.0;
       double sumWQ = 0.0;
       for (int i = 0; i < numChildren; i++)
       {
         if (nEdge[i] > 0.0)
         {
-          double w = consensusMode == ParamsSelect.CBGPUCTConsensusWeightType.Policy ? mu[i] : nEdge[i];
+          double w = policyWeight ? mu[i] : nEdge[i];
           sumW += w;
           sumWQ += w * qIn[i];
         }
@@ -643,20 +647,29 @@ internal static class CBGPUCTScoreCalc
     // what lets a single global K stay unbiased when the parent and the child evidence
     // disagree (no anchorK blend needed).  The weight basis w_a is selectable via
     // CBGPUCT_ConsensusWeight: child.N (precision pooling), edge.N (local,
-    // transposition-free), or mu (policy).  NOTE: only the consensus WEIGHT varies; the
-    // shrinkage PRECISION below always uses child.N (nSupport) - the true reliability of
-    // each q, which transpositions sharpen rather than bias.
+    // transposition-free), mu (policy), or the saturating-gate forms child.N/(child.N+Kc)
+    // [+ mu], which cap the influence of any single high-N child (the principled
+    // finite-between-move-variance estimator; see the CBGPUCT_ConsensusWeight docs).
+    // NOTE: only the consensus WEIGHT varies; the shrinkage PRECISION below always uses
+    // child.N (nSupport) - the true reliability of each q, which transpositions sharpen
+    // rather than bias.
     var consensusMode = paramsSelect.CBGPUCT_ConsensusWeight;
+    double consensusKc = paramsSelect.CBGPUCT_ConsensusReliabilityK;
     double sumSupport = 0.0;
     double sumSupportQ = 0.0;
     for (int i = 0; i < numChildren; i++)
     {
       if (!double.IsNaN(qRaw[i]) && nSupport[i] > 0.0)
       {
+        // Saturating reliability gate g = N/(N+Kc) in [0,1): -> N/Kc (proportional to
+        // precision) at low N, -> 1 (saturated) at high N.  Kc <= 0 disables it (g = 1).
+        double gate = consensusKc > 0.0 ? nSupport[i] / (nSupport[i] + consensusKc) : 1.0;
         double w = consensusMode switch
         {
           ParamsSelect.CBGPUCTConsensusWeightType.EdgeN => edgeNSpan[i],
           ParamsSelect.CBGPUCTConsensusWeightType.Policy => mu[i],
+          ParamsSelect.CBGPUCTConsensusWeightType.ChildNSaturating => gate,
+          ParamsSelect.CBGPUCTConsensusWeightType.PolicyChildNSaturating => mu[i] * gate,
           _ => nSupport[i],   // ChildN (default)
         };
         sumSupport += w;
