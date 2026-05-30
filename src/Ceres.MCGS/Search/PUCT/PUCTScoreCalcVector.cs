@@ -98,7 +98,7 @@ public unsafe static class PUCTScoreCalcVector
     Debug.Assert(outputScores.IsEmpty || outputScores.Length >= numChildren);
     Debug.Assert(numVisitsToCompute == 0 || outputChildVisitCounts.Length >= numChildren);
 
-    if (paramsSelect.CBGPUCTSelectActive
+    if (paramsSelect.CBGPUCTSelectActiveAtN(parentN)
         && MCGSParamsFixed.DEBUG_CBGPUCT
         && parentNode.IsSearchRoot
         && numVisitsToCompute > 1)
@@ -109,7 +109,7 @@ public unsafe static class PUCTScoreCalcVector
                           cpuctMultiplier, parentNode);
     }
 
-    if (paramsSelect.CBGPUCTSelectActive)
+    if (paramsSelect.CBGPUCTSelectActiveAtN(parentN))
     {
       return CBGPUCTScoreCalc.ScoreCalc(paramsSelect, parentNode, childStats,
                                         qParent, parentSumPVisited,

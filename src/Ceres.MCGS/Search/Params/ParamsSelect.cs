@@ -306,6 +306,19 @@ public record ParamsSelect
                                   || CBGPUCT_Mode == CBGPUCTModeType.SelectAndBackup;
 
   /// <summary>
+  /// Convenience predicate: visit-target pi_bar selection is active for a parent node
+  /// with the specified visit count <paramref name="n"/>.
+  ///
+  /// This is true only when CB-GPUCT select is enabled (see CBGPUCTSelectActive) AND the
+  /// parent N has not exceeded CBGPUCT_PUCTAboveN.  Once the parent N grows strictly larger
+  /// than CBGPUCT_PUCTAboveN the selection falls back to standard PUCT for that node.
+  /// </summary>
+  /// <param name="n">Parent node visit count N.</param>
+  /// <returns>True if CB-GPUCT visit-target selection should run for this parent; false to fall back to PUCT.</returns>
+  public bool CBGPUCTSelectActiveAtN(int n) => CBGPUCTSelectActive && n <= CBGPUCT_PUCTAboveN;
+
+
+  /// <summary>
   /// Convenience predicate: V_bar regularized backup is active.
   /// </summary>
   public bool CBGPUCTBackupActive => CBGPUCT_Mode == CBGPUCTModeType.BackupOnly
@@ -366,6 +379,76 @@ public record ParamsSelect
   /// CBGPUCT_BackupSupportShrinkageK &gt; 0.
   /// </summary>
   public float CBGPUCT_BackupSupportShrinkageDecayExponent = 1.0f;
+
+  /// <summary>
+  /// Master toggle + strength (beta) of the BACKUP BREADTH BONUS: an additive max-entropy
+  /// style credit that makes a node with multiple good moves back up a slightly higher
+  /// value than an otherwise-equal node resting on a SINGLE good move.
+  ///
+  /// Why needed: the plain regularized value V_bar = sum_a pi_bar(a) q_hat(a) is an
+  /// expected-q (a weighted average bounded by max_a q_hat).  Near-best alternatives drag
+  /// that average DOWN, so V_bar actually mildly penalizes breadth; and as lambda_N -&gt; 0
+  /// at high N, pi_bar collapses onto the single argmax child and V_bar -&gt; max_a q_hat,
+  /// erasing any multi-move distinction entirely.  This term restores (and makes explicit)
+  /// the dropped max-entropy bonus  -lambda*KL(pi_bar||mu)  from the soft-value identity
+  ///   lambda*log sum_a mu_a exp(q_a/lambda) = E_pi[q] - lambda*KL(pi_bar||mu),
+  /// the part the energy-only V_bar discards.
+  ///
+  /// HIGH-N PERSISTENCE: breadth is measured on a value-softmax at a fixed temperature
+  /// CBGPUCT_BackupBreadthTemperature (NOT lambda_N), so unlike H(pi_bar) - which -&gt; 0 as
+  /// lambda_N collapses - this signal survives at large N, exactly where the plain
+  /// mechanism's benefit was observed to fade.
+  ///
+  /// ADVERSARIAL ASYMMETRY (free, no parity knob): the bonus is added in the node's OWN
+  /// (side-to-move) perspective.  Through the existing negamax edge negation (-edge.Q) an
+  /// ancestor reads it with alternating sign, so it rewards the mover's own optionality and
+  /// penalizes the opponent's reply breadth (prophylaxis / "pose the opponent problems").
+  ///
+  /// SAFETY: gated by (1 - |V_bar|) so it fades to 0 at decided/terminal/won-lost nodes
+  /// (proven mates already short-circuit before ComputeVBar), and hard-capped at
+  /// CBGPUCT_BackupBreadthBonusMax so it can never override a genuinely winning narrow move
+  /// (forced tactics / only-moves).  It is a tie-breaker among near-equal candidates, not a
+  /// dominant term.
+  ///
+  /// 0 disables (default; no behavior change).  Suggested starting point when enabling:
+  /// beta ~ 0.03-0.06 with the cap ~ 0.02-0.03.
+  /// Related literature: maximum-entropy MCTS (MENTS, Xiao et al. 2019), soft Q / SAC
+  /// (Haarnoja et al. 2018), MCTS-as-regularized-policy-optimization (Grill et al. 2020),
+  /// convex/Tsallis regularization (Dam et al. 2021); "empowerment differential" for the
+  /// adversarial framing.
+  /// </summary>
+  public float CBGPUCT_BackupBreadthBonusBeta = 0.0f; // 0.03 is reasonable value to enable
+
+  /// <summary>
+  /// Fixed softmax temperature tau_b used to measure breadth for the backup breadth bonus
+  ///   w(a) proportional to mu(a) * exp((q_hat(a) - max_a q_hat) / tau_b),
+  /// whose normalized entropy H(w)/log(#contributing) in [0,1] is the breadth fraction.
+  /// Deliberately decoupled from lambda_N: this is what keeps the bonus alive at high N
+  /// (a lambda_N-based measure would vanish as pi_bar sharpens).  SMALL tau_b -&gt; only
+  /// children within ~tau_b of the best count as "good" (strict); LARGE tau_b -&gt; more
+  /// children count (lenient).  Comparable in scale to the spread of the top children's Q
+  /// (single digits of a centipawn-equivalent up to ~0.3). 
+  /// Only used when CBGPUCT_BackupBreadthBonusBeta &gt; 0; tau_b &lt;= 0 disables the bonus.
+  /// </summary>
+  public float CBGPUCT_BackupBreadthTemperature = 0.02f;
+
+  /// <summary>
+  /// Hard cap on the magnitude of the backup breadth bonus (in Q units, [-1,1] value
+  /// scale).  The bonus beta*breadthFrac*(1-|V_bar|) is clamped to [0, this] before being
+  /// added to V_bar, guaranteeing it can never flip a decision dominated by a real value
+  /// gap (e.g. a winning single move stays winning).  Default 0.03 (~a few centipawns).
+  /// Only used when CBGPUCT_BackupBreadthBonusBeta &gt; 0.
+  /// </summary>
+  public float CBGPUCT_BackupBreadthBonusMax = 0.03f;
+
+  /// <summary>
+  /// Parent-N upper bound for CB-GPUCT visit-target SELECTION.  
+  /// When the parent node's visit count N is strictly greater than this value, 
+  /// CB-GPUCT selection is bypassed for that node and standard PUCT selection runs instead.
+  /// Default int.MaxValue (never bypass on the high side).  
+  /// Affects selection only; the V_bar backup (if active) is unchanged.
+  /// </summary>
+  public int CBGPUCT_PUCTAboveN = int.MaxValue;
 
   /// <summary>
   /// Prior strength K for the SELECT support-shrinkage in ScoreCalc - the select-phase

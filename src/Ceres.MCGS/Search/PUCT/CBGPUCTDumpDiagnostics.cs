@@ -74,7 +74,7 @@ internal static class CBGPUCTDumpDiagnostics
   /// red).  Useful for surfacing just the cases where the CB-GPUCT / RPO
   /// machinery actually diverges from the prior algorithm.  Default false.
   /// </summary>
-  public const bool ONLY_SHOW_SIGNIFICANT = true;
+  public const bool ONLY_SHOW_SIGNIFICANT = false;
 
 
   /// <summary>
@@ -763,6 +763,7 @@ internal static class CBGPUCTDumpDiagnostics
                                        ReadOnlySpan<double> nSupport,
                                        int numChildren, int numExpanded, double sumN, double lambdaN,
                                        double childContribution, double consensusQ, double vBar,
+                                       double breadthFrac, double breadthBonus,
                                        RPORegularization regularization)
   {
     if (!DEBUG_DUMP_CBGPUCT_BACKUP_CALCS)
@@ -853,6 +854,7 @@ internal static class CBGPUCTDumpDiagnostics
                       $"consensusQ={consensusQ:F3} (consW={paramsSelect.CBGPUCT_ConsensusWeight} " +
                       $"Kc={paramsSelect.CBGPUCT_ConsensusReliabilityK:F1}) " +
                       $"N={totalN} reg={regularization} " +
+                      $"breadthFrac={breadthFrac:F3} breadthBonus={breadthBonus:F4} " +
                       $"delta={backupDelta:F3}", significant);
       Console.WriteLine(FormatRow("edgeN:", numChildren, boundary, i => FmtNInt(en[i])));
       Console.WriteLine(FormatRow("childN:", numChildren, boundary, i => FmtNInt(ns[i])));

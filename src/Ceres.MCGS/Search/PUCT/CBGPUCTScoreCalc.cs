@@ -759,6 +759,19 @@ internal static class CBGPUCTScoreCalc
       ? node.NodeRef.V
       : (childContribution * (totalN - 1) + node.NodeRef.V) / totalN;
 
+    // Breadth bonus: additive max-entropy credit for nodes with MULTIPLE good moves,
+    // measured on a fixed-temperature value-softmax (decoupled from lambda_N so the signal
+    // persists at high N, where pi_bar collapses to one-hot and its own entropy -> 0).
+    // No-op when beta <= 0.  Added in the node's OWN (side-to-move) perspective, so through
+    // the negamax edge negation an ancestor reads it with alternating sign: it rewards the
+    // mover's own optionality and penalizes the opponent's reply breadth (prophylaxis).
+    double breadthBonus = ComputeBreadthBonus(paramsSelect, mu, qHat, numChildren, vBar,
+                                              out double breadthFrac);
+    if (breadthBonus != 0.0)
+    {
+      vBar = Math.Clamp(vBar + breadthBonus, -1.0, 1.0);
+    }
+
     // Orthogonal late-search greedy override (no-op when CBGPUCT_BackupGreedyMaxAboveN == 0).
     vBar = ApplyBackupGreedyOverride(node, paramsSelect, qRaw, numChildren, numExpanded, totalN, vBar);
 
@@ -766,15 +779,117 @@ internal static class CBGPUCTScoreCalc
     {
       // q_hat appears in both the Q_shrunk and Q_fill rows; there is no separate pi_bar
       // shrink stage so pre/post pi_bar are identical.  childContribution is passed
-      // explicitly (correct), so the V_bar / bias line is faithful.
+      // explicitly (correct), so the V_bar / bias line is faithful.  breadthFrac/breadthBonus
+      // expose the breadth-bonus contribution (both 0 when the bonus is disabled).
       CBGPUCTDumpDiagnostics.DumpCBGPUCTBackup(node, paramsSelect, mu, qRaw, qHat, qFill, piBar, piBar, edgeNSpan,
                                                nSupport,
                                                numChildren, numExpanded, sumEdgeN, lambdaN,
                                                childContribution, consensusQ, vBar,
+                                               breadthFrac, breadthBonus,
                                                paramsSelect.RPOBackupRegularization);
     }
 
     return vBar;
+  }
+
+
+  /// <summary>
+  /// Computes the additive BACKUP BREADTH BONUS (see CBGPUCT_BackupBreadthBonusBeta).
+  /// Rewards nodes with multiple good moves by measuring how much "good-move mass" is
+  /// spread across the children, using a value-softmax at the FIXED temperature
+  /// CBGPUCT_BackupBreadthTemperature:
+  ///   w(a) proportional to mu(a) * exp((q_hat(a) - max_a q_hat) / tau_b),
+  ///   breadthFrac = H(w) / ln(#contributing)  in [0, 1],
+  ///   bonus = clamp( beta * breadthFrac * (1 - |vBar|), 0, CBGPUCT_BackupBreadthBonusMax ).
+  /// The fixed temperature (NOT lambda_N) is what keeps the signal alive at high N; the
+  /// (1 - |vBar|) gate fades it out at decided/terminal nodes; the cap keeps it a tie-
+  /// breaker that can never override a real value gap.  q_hat / mu are the SAME per-child
+  /// vectors the V_bar dot product consumes, so the bonus is consistent with the value it
+  /// augments.  Returns 0 (breadthFrac 0) when disabled or fewer than two children carry
+  /// positive weight.
+  /// </summary>
+  private static double ComputeBreadthBonus(ParamsSelect paramsSelect,
+                                            ReadOnlySpan<double> mu, ReadOnlySpan<double> qHat,
+                                            int numChildren, double vBar, out double breadthFrac)
+  {
+    breadthFrac = 0.0;
+    double beta = paramsSelect.CBGPUCT_BackupBreadthBonusBeta;
+    double tau = paramsSelect.CBGPUCT_BackupBreadthTemperature;
+    if (beta <= 0.0 || tau <= 0.0 || numChildren < 2)
+    {
+      return 0.0;
+    }
+
+    // Decided-ness gate first (cheap): no bonus at won/lost/terminal nodes.
+    double gate = 1.0 - Math.Abs(vBar);
+    if (gate <= 0.0)
+    {
+      return 0.0;
+    }
+
+    // max q_hat for numerical stability of the exp.
+    double maxQ = double.NegativeInfinity;
+    for (int i = 0; i < numChildren; i++)
+    {
+      if (qHat[i] > maxQ)
+      {
+        maxQ = qHat[i];
+      }
+    }
+    if (double.IsInfinity(maxQ))
+    {
+      return 0.0;
+    }
+
+    // Unnormalized value-softmax weights w(a) = mu(a) * exp((q_hat(a) - maxQ) / tau).
+    double z = 0.0;
+    int contributing = 0;
+    Span<double> wUn = stackalloc double[numChildren];
+    for (int i = 0; i < numChildren; i++)
+    {
+      double m = mu[i];
+      if (m <= 0.0)
+      {
+        wUn[i] = 0.0;
+        continue;
+      }
+      double wi = m * Math.Exp((qHat[i] - maxQ) / tau);
+      wUn[i] = wi;
+      z += wi;
+      if (wi > 0.0)
+      {
+        contributing++;
+      }
+    }
+    if (z <= 0.0 || contributing < 2)
+    {
+      return 0.0;
+    }
+
+    // Normalized Shannon entropy H(w) / ln(#contributing) in [0, 1].
+    double h = 0.0;
+    for (int i = 0; i < numChildren; i++)
+    {
+      double p = wUn[i] / z;
+      if (p > 0.0)
+      {
+        h -= p * Math.Log(p);
+      }
+    }
+    double hMax = Math.Log(contributing);
+    breadthFrac = hMax > 0.0 ? h / hMax : 0.0;
+    if (breadthFrac <= 0.0)
+    {
+      return 0.0;
+    }
+
+    double bonus = beta * breadthFrac * gate;
+    double cap = paramsSelect.CBGPUCT_BackupBreadthBonusMax;
+    if (cap > 0.0 && bonus > cap)
+    {
+      bonus = cap;
+    }
+    return bonus;
   }
 
 

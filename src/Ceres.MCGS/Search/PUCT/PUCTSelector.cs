@@ -283,7 +283,7 @@ public static class PUCTSelector
       // cheap and only relocates visits when an actual hole is present.
       if (numTargetVisits > 0
           && (qWhenNoChildrenComposite != null
-              || paramsSelect.CBGPUCTSelectActive))
+              || paramsSelect.CBGPUCTSelectActiveAtN(nodeRef.N)))
       {
         FillInSequentialVisitHoles(childVisitCounts, ref node.NodeRef, numToProcess);
       }
