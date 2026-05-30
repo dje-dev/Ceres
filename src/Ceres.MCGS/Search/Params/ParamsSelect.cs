@@ -661,13 +661,13 @@ public record ParamsSelect
   /// <summary>
   /// Multiplicative scale on lambda_N for the BACKUP phase.
   /// </summary>
-  public float CBGPUCT_BackupLambdaC = 0.8f;
+  public float CBGPUCT_BackupLambdaC = 0.75f; // use 1.0 for AlphaZero schedule
 
   /// <summary>
   /// Exponent on (sum N_a) in the Pow lambda_N schedule for the BACKUP phase.
   /// Smaller values cause more rapid decay of lambda_N and thus weaker regularization of Q higher visit counts.
   /// </summary>
-  public float CBGPUCT_BackupLambdaExp = 0.4f;
+  public float CBGPUCT_BackupLambdaExp = 0.45f; // use 0.5 for AlphaZero schedule
 
 
   /// <summary>
