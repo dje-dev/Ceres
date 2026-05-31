@@ -747,11 +747,9 @@ internal static class CBGPUCTScoreCalc
                                    options: opts,
                                    nanFallbackQ: consensusQ);
 
-    double childContribution = 0.0;
-    for (int i = 0; i < numChildren; i++)
-    {
-      childContribution += piBar[i] * qFill[i];
-    }
+
+    // SIMD weighted child value: sum_i piBar_i * qFill_i.  
+    double childContribution = System.Numerics.Tensors.TensorPrimitives.Dot<double>(piBar, qFill);
 
     // Blend self-V (counts as 1 visit) with the regularized child contribution.
     int totalN = node.NodeRef.N;

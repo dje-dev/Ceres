@@ -349,14 +349,7 @@ public static class RegularizedPolicyOptimum
 
       // Compute y_i proportional to mu_i * exp(q_i / lambda) with numerically-stable shift.
       // exp((q - qMax) / lambda) stays in [0, 1], avoiding overflow when lambda is small.
-      double maxQ = double.NegativeInfinity;
-      for (int i = 0; i < n; i++)
-      {
-        if (qFill[i] > maxQ)
-        {
-          maxQ = qFill[i];
-        }
-      }
+      double maxQ = TensorPrimitives.Max(qFill);
       double invLambda = 1.0 / lambda;
       double sumW = 0.0;
       for (int i = 0; i < n; i++)
@@ -372,21 +365,14 @@ public static class RegularizedPolicyOptimum
       if (sumW > 0.0 && IsFinite(sumW))
       {
         double inv = 1.0 / sumW;
-        for (int i = 0; i < n; i++)
-        {
-          yLocal[i] *= inv;
-        }
+        TensorPrimitives.Multiply(yLocal, inv, yLocal);
       }
       else
       {
         WriteNormalizedPrior(muNorm, yLocal);
       }
 
-      vStarOut = 0.0;
-      for (int i = 0; i < n; i++)
-      {
-        vStarOut += yLocal[i] * qFill[i];
-      }
+      vStarOut = TensorPrimitives.Dot(yLocal, qFill);
 
       if (!yOut.IsEmpty)
       {
@@ -423,11 +409,8 @@ public static class RegularizedPolicyOptimum
     {
       case RPOAnchorMode.MatchValue:
       {
-        double entropy = 0.0;
-        for (int i = 0; i < muNorm.Length; i++)
-        {
-          entropy -= muNorm[i] * logMu[i];
-        }
+        // entropy = -E_mu[log mu] = -sum_i muNorm_i * logMu_i  (vectorized dot product).
+        double entropy = -TensorPrimitives.Dot(muNorm, logMu);
         return anchor.Value + lambda * entropy;
       }
 
@@ -481,18 +464,12 @@ public static class RegularizedPolicyOptimum
     if (sum > 0.0 && IsFinite(sum))
     {
       double inv = 1.0 / sum;
-      for (int i = 0; i < n; i++)
-      {
-        muNorm[i] *= inv;
-      }
+      TensorPrimitives.Multiply(muNorm, inv, muNorm);
     }
     else
     {
       double uni = 1.0 / n;
-      for (int i = 0; i < n; i++)
-      {
-        muNorm[i] = uni;
-      }
+      muNorm.Fill(uni);
     }
   }
 
