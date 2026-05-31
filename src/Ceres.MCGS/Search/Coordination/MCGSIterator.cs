@@ -171,7 +171,7 @@ public class MCGSIterator : IDisposable
 
     int maxBatchSize = Engine.Manager.ParamsSearch.Execution.MaxBatchSize;
     PathsSet = new(this, maxBatchSize);
-    paths = new MCGSPath[maxBatchSize];
+    paths = new MCGSPath[maxBatchSize + 5];
 
     pathVisitPool = new ArraySegmentPool<MCGSPathVisit>();
   }
