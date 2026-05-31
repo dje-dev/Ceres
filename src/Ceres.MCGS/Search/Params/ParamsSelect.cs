@@ -448,7 +448,7 @@ public record ParamsSelect
   /// Default int.MaxValue (never bypass on the high side).  
   /// Affects selection only; the V_bar backup (if active) is unchanged.
   /// </summary>
-  public int CBGPUCT_PUCTAboveN = int.MaxValue;
+  public int CBGPUCT_PUCTAboveN = 50;
 
   /// <summary>
   /// Prior strength K for the SELECT support-shrinkage in ScoreCalc - the select-phase
@@ -599,7 +599,7 @@ public record ParamsSelect
   /// Default Ten approximates a "soft effective branching factor" without literally tying
   /// to per-node |A|.
   /// </summary>
-  public CBGPUCTLambdaDenominatorBaseType CBGPUCT_SelectLambdaDenominatorBase = CBGPUCTLambdaDenominatorBaseType.One;
+  public CBGPUCTLambdaDenominatorBaseType CBGPUCT_SelectLambdaDenominatorBase = CBGPUCTLambdaDenominatorBaseType.Thirty;
 
   /// <summary>
   /// Constant offset in the BACKUP-phase lambda_N denominator.  Backup is not allocating
@@ -614,14 +614,14 @@ public record ParamsSelect
   /// <summary>
   /// Lambda schedule for the SELECTION phase (visit-target deficit pi_bar).
   /// </summary>
-  public CBGPUCTLambdaScheduleType CBGPUCT_SelectLambdaSchedule = CBGPUCTLambdaScheduleType.Pow;
+  public CBGPUCTLambdaScheduleType CBGPUCT_SelectLambdaSchedule = CBGPUCTLambdaScheduleType.AlphaZero;
 
   /// <summary>
   /// Multiplicative scale on lambda_N for the SELECTION phase.
   /// Larger values keep pi_bar closer to the prior P (more exploration);
   /// smaller values let pi_bar concentrate on high-Q actions.
   /// </summary>
-  public float CBGPUCT_SelectLambdaC = 0.3f;
+  public float CBGPUCT_SelectLambdaC = 1f;
 
   /// <summary>
   /// Exponent on (sum N_a) in the Pow lambda_N schedule for the SELECTION phase.
@@ -656,7 +656,7 @@ public record ParamsSelect
   /// <summary>
   /// Lambda schedule for the BACKUP phase (V_bar regularized value computation).
   /// </summary>
-  public CBGPUCTLambdaScheduleType CBGPUCT_BackupLambdaSchedule = CBGPUCTLambdaScheduleType.Pow;
+  public CBGPUCTLambdaScheduleType CBGPUCT_BackupLambdaSchedule = CBGPUCTLambdaScheduleType.AlphaZero;
 
   /// <summary>
   /// Multiplicative scale on lambda_N for the BACKUP phase.
@@ -690,7 +690,7 @@ public record ParamsSelect
   /// When fraction &gt; 0 some visits may not be placeable (all children over-quota);
   /// MCGSSelect absorbs those visits at the parent.
   /// </summary>
-  public float CBGPUCT_SelectCrossParentNFraction = 0.5f;
+  public float CBGPUCT_SelectCrossParentNFraction = 0.3f;
 
   /// <summary>
   /// Convenience predicate: true iff any cross-parent N contribution is folded into
