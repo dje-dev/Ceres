@@ -457,9 +457,9 @@ public record ParamsSelect
   /// statistical support); unvisited children keep their FPU value untouched (the FPU
   /// exploration signal is not altered).  The shrunk q then feeds the pi_bar visit-target Solve.
   /// 0 disables (plain RPO select).  
-  /// Default 1 (tests suggest needs less shrinkaage than Backup uses by default).
+  /// Default 0 or 1 (tests suggest needs less shrinkaage than Backup uses by default).
   /// </summary>
-  public float CBGPUCT_SelectSupportShrinkageK = 1.0f;
+  public float CBGPUCT_SelectSupportShrinkageK = 0;
 
   /// <summary>
   /// Decay exponent p for the SELECT support-shrinkage (see
@@ -651,7 +651,7 @@ public record ParamsSelect
   /// policy.
   /// </summary>
   public float CBGPUCT_SelectLambdaCLogBase = DEFAULT_LOG_GROWTH_BASE;
-  public float CBGPUCT_SelectLambdaCLogFactor = DEFAULT_LOG_GROWTH_FACTOR;
+  public float CBGPUCT_SelectLambdaCLogFactor = 0;// DEFAULT_LOG_GROWTH_FACTOR;
 
   /// <summary>
   /// Lambda schedule for the BACKUP phase (V_bar regularized value computation).
