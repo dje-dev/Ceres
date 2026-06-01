@@ -344,12 +344,12 @@ public record ParamsSelect
   /// defaults to child.N but is selectable via CBGPUCT_ConsensusWeight (e.g. edge.N
   /// for transposition-robustness); the shrinkage PRECISION below always uses child.N.
   ///
-  /// WHY ONE KNOB SUFFICES: the bias being controlled (reverse-KL pi_bar over-weights
+  /// Why one knob suffices: the bias being controlled (reverse-KL pi_bar over-weights
   /// high-q children, so V_bar is a soft-max of noisy child Q's -> winner's-curse /
   /// max-operator overestimation that compounds toward the root) is driven by the NOISE
   /// in each q_obs(a), which scales as 1/sqrt(N_a).  Shrinking each estimate toward the
   /// prior in proportion to its own support (the conjugate / James-Stein posterior mean)
-  /// denoises it by exactly that amount, and using the SAME denoised value in the dot
+  /// denoises it by exactly that amount, and using the same denoised value in the dot
   /// product bounds its contribution at the source.  A single-visit outlier (e.g. 12,553
   /// visits elsewhere, one new child returning a lucky +0.8) is shrunk hard toward the
   /// consensus so it "moves the needle a little, not a lot"; as consistent evidence
@@ -358,9 +358,9 @@ public record ParamsSelect
   ///
   /// This is the SOLE backup robustness mechanism (the legacy Q-shrinkage, pi_bar caps,
   /// mean-preserve control variate, observed-only, anchor-type/anchorK blend, fixed-point
-  /// iteration, and per-child lambda have all been removed in favor of it).  STILL ACTIVE
+  /// iteration, and per-child lambda have all been removed in favor of it).  Still active
   /// alongside it: the lambda_N schedule (CBGPUCT_BackupLambda*), RPOBackupRegularization,
-  /// the greedy override (CBGPUCT_BackupGreedyMaxAboveN), and PolicyImputationTau.
+  /// and PolicyImputationTau.
   ///
   /// 0 disables shrinkage (plain Grill V_bar: q_hat = q_obs for visited children, the
   /// policy-implied prior for unvisited).  Typical setting 3-10; behavior is insensitive
@@ -469,28 +469,28 @@ public record ParamsSelect
   public float CBGPUCT_SelectSupportShrinkageDecayExponent = 1.0f;
 
   /// <summary>
-  /// Weight basis for the children when forming the empirical-Bayes CONSENSUS ANCHOR
+  /// Weight basis for the children when forming the empirical-Bayes consensus anchor
   ///   q_bar = sum_a w_a q_a / sum_a w_a
   /// that the shrinkage prior m_a is built around.  Shared by both the select and backup
-  /// support-shrinkage.  ONLY the consensus weight is affected by this knob - the per-child
-  /// shrinkage PRECISION N_a^p / (N_a^p + K) uses child.N in backup and edge.N in select
+  /// support-shrinkage. Only the consensus weight is affected by this knob - the per-child
+  /// shrinkage precision N_a^p / (N_a^p + K) uses child.N in backup and edge.N in select
   /// (the genuine statistical support of each phase's q - reliability, not preference,
-  /// which transpositions SHARPEN rather than bias).
+  /// which transpositions sharpen rather than bias).
   ///
   /// The choice matters only in graph mode with transpositions, where child.N is
   /// inflated by transposition density - an exogenous graph property, not a sign that
-  /// search preferred the move FROM THIS PARENT.  A heavily-transposed child still
+  /// search preferred the move from this parent.  A heavily-transposed child still
   /// drives V_bar directly through pi_bar (it is barely shrunk and wins the weight on
   /// its own merits), so the consensus's only remaining job is to prime the prior for
   /// UNDER-EXPLORED local moves - for which the locally-revealed preference (edge.N) is
   /// the more relevant weight.
-  /// WHY RAW child.N IS BIASED: under the hierarchical model q_a | theta_a ~ N(theta_a,
+  /// WHY RAW child.N IS biased: under the hierarchical model q_a | theta_a ~ N(theta_a,
   /// s^2/N_a), theta_a ~ N(mu0, tau^2), the posterior-mean estimate of the anchor mu0 is
   /// q_bar = sum_a w_a q_a / sum_a w_a with w_a = 1/(tau^2 + s^2/N_a) proportional to
   /// N_a/(N_a + Kc), Kc = s^2/tau^2.  Weighting by raw N_a (the ChildN mode) is the
-  /// Kc -> infinity limit, i.e. it assumes tau^2 -> 0: that every sibling MOVE has the
+  /// Kc -> infinity limit, i.e. it assumes tau^2 -> 0: that every sibling move has the
   /// same true value.  For chess that is false (moves differ a lot -> tau^2 large -> Kc
-  /// SMALL), so the correct weights SATURATE: once a child is out of the high-noise
+  /// SMALL), so the correct weights sature: once a child is out of the high-noise
   /// region, extra N_a (e.g. from incidental transposition density) should not keep
   /// increasing its pull on the anchor.  The *Saturating modes implement that.
   ///   ChildN : weight by child.N (textbook precision pooling; the tau^2 = 0 limit).  A
@@ -501,11 +501,10 @@ public record ParamsSelect
   ///            free; reduces to ChildN exactly when there are no transpositions).
   ///   Policy : weight by the prior policy mu (i.e. anchor at E_mu[q]); fully N-free but
   ///            trusts the network prior, which is fragile when the policy is miscalibrated.
-  ///   ChildNSaturating : weight by child.N / (child.N + Kc), Kc =
-  ///            CBGPUCT_ConsensusReliabilityK.  The principled finite-tau^2 estimator:
-  ///            low-N children are still suppressed proportional to their reliability, but
-  ///            any sufficiently-explored child counts ~once, so a single huge-N
-  ///            transposition can no longer dominate the anchor.
+  ///   ChildNSaturating : weight by child.N / (child.N + Kc), Kc = CBGPUCT_ConsensusReliabilityK.
+  ///            The principled finite-tau^2 estimator: low-N children are still suppressed 
+  ///            proportional to their reliability, any sufficiently-explored child counts ~once, 
+  ///            so a single huge-N transposition can no longer dominate the anchor.
   ///   PolicyChildNSaturating : weight by mu * child.N / (child.N + Kc).  As above, plus
   ///            an importance term so the anchor is set by the moves the policy actually
   ///            prioritizes - a reliable but LOW-policy drawish transposition then
