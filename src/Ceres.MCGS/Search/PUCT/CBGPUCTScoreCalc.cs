@@ -39,6 +39,51 @@ namespace Ceres.MCGS.Search.PUCT;
 /// </summary>
 internal static class CBGPUCTScoreCalc
 {
+  #region ComputeVBar thread-local scratch buffers
+
+  // Per-thread scratch reused across ComputeVBar calls in place of per-call stackalloc.
+  // Each buffer is allocated once (lazily, per thread) to the maximum possible child
+  // count (PUCTScoreCalcVector.MAX_CHILDREN); every call slices it to the live
+  // numChildren.  [ThreadStatic] gives each search thread its own set, so there is no
+  // cross-thread sharing (mirrors PUCTSelector / PUCTScoreCalcVector).  Correctness note:
+  // every element in [0, numChildren) is fully written before it is read on each call, so
+  // the loss of stackalloc's implicit zero-initialization is immaterial; slicing to exactly
+  // numChildren also preserves RegularizedPolicyOptimum.Solve's length validations and the
+  // V_bar dot-product semantics.
+  [ThreadStatic] private static double[] bufferMu;
+  [ThreadStatic] private static double[] bufferQRaw;
+  [ThreadStatic] private static double[] bufferEdgeN;
+  [ThreadStatic] private static double[] bufferNSupport;
+  [ThreadStatic] private static double[] bufferPrior;
+  [ThreadStatic] private static double[] bufferQHat;
+  [ThreadStatic] private static double[] bufferPiBar;
+  [ThreadStatic] private static double[] bufferQFill;
+  [ThreadStatic] private static double[] bufferBreadthW;
+  [ThreadStatic] private static double[] bufferPolicyImpliedQNaN;
+
+  #endregion
+
+  #region Solver options (process-wide constants)
+
+  // Solver options are all compile-time literals and identical on every call, so build
+  // each once at class load instead of materializing a ~32-byte struct on the stack per
+  // ComputeVBar / ScoreCalc / ComputePolicyImpliedQ call.  Kept per-purpose (not merged)
+  // so the select / backup paths stay independently tunable even though their values
+  // coincide today.
+  private static readonly RPOOptions SolveOptionsSelect =
+    new(bisectionIterations: 20, bisectionResidualTol: 1e-6,
+        clampQToUnitInterval: true, minPriorProbability: 0.0);
+
+  private static readonly RPOOptions SolveOptionsBackup =
+    new(bisectionIterations: 20, bisectionResidualTol: 1e-6,
+        clampQToUnitInterval: true, minPriorProbability: 0.0);
+
+  private static readonly RPOOptions SolveOptionsPolicyImputation =
+    new(bisectionIterations: 12, bisectionResidualTol: 1e-6,
+        clampQToUnitInterval: true, minPriorProbability: 0.0);
+
+  #endregion
+
   /// <summary>
   /// Computes lambda_N for the SELECTION phase (visit-target deficit pi_bar).  The
   /// effective coefficient that scales the base schedule grows with sumN via the
@@ -308,11 +353,10 @@ internal static class CBGPUCTScoreCalc
                                             ReadOnlySpan<double> mu, double referenceQ,
                                             Span<double> output, int n)
   {
-    Span<double> qNaN = stackalloc double[n];
-    for (int i = 0; i < n; i++)
-    {
-      qNaN[i] = double.NaN;
-    }
+    // Reused per-thread scratch; this helper is also reached from the SELECT path, so it
+    // initializes its own buffer independently of ComputeVBar.
+    Span<double> qNaN = (bufferPolicyImpliedQNaN ??= new double[PUCTScoreCalcVector.MAX_CHILDREN]).AsSpan(0, n);
+    qNaN.Fill(double.NaN);
 
     RPORegularization regularization = paramsSelect.RPOFPURegularization;
     // ReverseKL uses no anchor (level set via nanFallbackQ); forward-KL family uses
@@ -322,16 +366,12 @@ internal static class CBGPUCTScoreCalc
       : new RPOAnchor(RPOAnchorMode.MatchValue, -1, referenceQ);
 
     double lambda = paramsSelect.PolicyImputationTau;
-    RPOOptions opts = new(bisectionIterations: 12,
-                          bisectionResidualTol: 1e-6,
-                          clampQToUnitInterval: true,
-                          minPriorProbability: 0.0);
 
     RegularizedPolicyOptimum.Solve(mu, qNaN, lambda, anchor, regularization,
                                    yOut: default,
                                    qFillOut: output,
                                    out double _,
-                                   options: opts,
+                                   options: SolveOptionsPolicyImputation,
                                    nanFallbackQ: referenceQ);
   }
 
@@ -474,10 +514,6 @@ internal static class CBGPUCTScoreCalc
 
     // Solve for pi_bar.  q is fully filled (no NaN); anchor is ignored for reverse KL.
     Span<double> piBar = stackalloc double[numChildren];
-    RPOOptions opts = new(bisectionIterations: 20,
-                          bisectionResidualTol: 1e-6,
-                          clampQToUnitInterval: true,
-                          minPriorProbability: 0.0);
     RPOAnchor anchor = paramsSelect.RPOSelectRegularization == RPORegularization.ReverseKL
       ? RPOAnchor.None
       : new RPOAnchor(RPOAnchorMode.MatchValue, -1, qParent);
@@ -486,7 +522,7 @@ internal static class CBGPUCTScoreCalc
                                    yOut: piBar,
                                    qFillOut: default,
                                    out double vStar,
-                                   options: opts,
+                                   options: SolveOptionsSelect,
                                    nanFallbackQ: qParent);
 
     // Robustness floor on pi_bar.  Combining low policy (mu) with a low imputed Q
@@ -629,10 +665,13 @@ internal static class CBGPUCTScoreCalc
       numChildren = maxKeptIndex + 1;
     }
 
-    Span<double> mu = stackalloc double[numChildren];        // prior policy
-    Span<double> qRaw = stackalloc double[numChildren];      // observed Q (parent persp), NaN if unvisited
-    Span<double> edgeNSpan = stackalloc double[numChildren]; // per-edge visits (lambda schedule + diagnostics)
-    Span<double> nSupport = stackalloc double[numChildren];  // child.N: statistical support of qRaw
+    // Reused per-thread scratch (see buffer declarations at top of class); each is sliced
+    // to the live numChildren so all downstream loops and Solve calls behave as before.
+    int cap = PUCTScoreCalcVector.MAX_CHILDREN;
+    Span<double> mu = (bufferMu ??= new double[cap]).AsSpan(0, numChildren);              // prior policy
+    Span<double> qRaw = (bufferQRaw ??= new double[cap]).AsSpan(0, numChildren);          // observed Q (parent persp), NaN if unvisited
+    Span<double> edgeNSpan = (bufferEdgeN ??= new double[cap]).AsSpan(0, numChildren);    // per-edge visits (lambda schedule + diagnostics)
+    Span<double> nSupport = (bufferNSupport ??= new double[cap]).AsSpan(0, numChildren);  // child.N: statistical support of qRaw
 
     // First pass: gather mu / qRaw / edge.N / child.N (mirrors the legacy first pass).
     // sumEdgeN feeds the lambda_N schedule (kept on per-edge N for comparability); the
@@ -675,7 +714,7 @@ internal static class CBGPUCTScoreCalc
     // NOTE: only the consensus WEIGHT varies; the shrinkage PRECISION below always uses
     // child.N (nSupport) - the true reliability of each q, which transpositions sharpen
     // rather than bias.
-    var consensusMode = paramsSelect.CBGPUCT_ConsensusWeight;
+    ParamsSelect.CBGPUCTConsensusWeightType consensusMode = paramsSelect.CBGPUCT_ConsensusWeight;
     double consensusKc = paramsSelect.CBGPUCT_ConsensusReliabilityK;
     double sumSupport = 0.0;
     double sumSupportQ = 0.0;
@@ -703,7 +742,7 @@ internal static class CBGPUCTScoreCalc
     // Policy-shaped prior m_a anchored at the consensus.  Reuses the exact forward-KL
     // imputation used by the FPU path (tau = PolicyImputationTau): low-policy children
     // get a lower prior, high-policy children a higher one, with E_mu[m] = consensusQ.
-    Span<double> prior = stackalloc double[numChildren];
+    Span<double> prior = (bufferPrior ??= new double[cap]).AsSpan(0, numChildren);
     ComputePolicyImpliedQ(paramsSelect, mu, consensusQ, prior, numChildren);
 
     // Posterior-mean Q estimate q_hat, used CONSISTENTLY below for both pi_bar and V_bar.
@@ -711,7 +750,7 @@ internal static class CBGPUCTScoreCalc
     // Unvisited: q_hat = m                               (the N = 0 limit; no special case).
     float kShrink = paramsSelect.CBGPUCT_BackupSupportShrinkageK;
     double decayExp = paramsSelect.CBGPUCT_BackupSupportShrinkageDecayExponent;
-    Span<double> qHat = stackalloc double[numChildren];
+    Span<double> qHat = (bufferQHat ??= new double[cap]).AsSpan(0, numChildren);
     for (int i = 0; i < numChildren; i++)
     {
       if (double.IsNaN(qRaw[i]))
@@ -730,21 +769,17 @@ internal static class CBGPUCTScoreCalc
     // imputation; qFill echoes q_hat (clamped to [-1, 1]) and is what the weights were
     // actually computed against, so we use it in the dot product for exact consistency.
     double lambdaN = ComputeLambdaNForBackup(paramsSelect, sumEdgeN, numChildren, mu);
-    RPOOptions opts = new(bisectionIterations: 20,
-                          bisectionResidualTol: 1e-6,
-                          clampQToUnitInterval: true,
-                          minPriorProbability: 0.0);
     RPOAnchor anchor = paramsSelect.RPOBackupRegularization == RPORegularization.ReverseKL
       ? RPOAnchor.None
       : new RPOAnchor(RPOAnchorMode.MatchValue, -1, node.Q);
 
-    Span<double> piBar = stackalloc double[numChildren];
-    Span<double> qFill = stackalloc double[numChildren];
+    Span<double> piBar = (bufferPiBar ??= new double[cap]).AsSpan(0, numChildren);
+    Span<double> qFill = (bufferQFill ??= new double[cap]).AsSpan(0, numChildren);
     RegularizedPolicyOptimum.Solve(mu, qHat, lambdaN, anchor, paramsSelect.RPOBackupRegularization,
                                    yOut: piBar,
                                    qFillOut: qFill,
                                    out double _,
-                                   options: opts,
+                                   options: SolveOptionsBackup,
                                    nanFallbackQ: consensusQ);
 
 
@@ -760,18 +795,23 @@ internal static class CBGPUCTScoreCalc
     // Breadth bonus: additive max-entropy credit for nodes with MULTIPLE good moves,
     // measured on a fixed-temperature value-softmax (decoupled from lambda_N so the signal
     // persists at high N, where pi_bar collapses to one-hot and its own entropy -> 0).
-    // No-op when beta <= 0.  Added in the node's OWN (side-to-move) perspective, so through
-    // the negamax edge negation an ancestor reads it with alternating sign: it rewards the
-    // mover's own optionality and penalizes the opponent's reply breadth (prophylaxis).
-    double breadthBonus = ComputeBreadthBonus(paramsSelect, mu, qHat, numChildren, vBar,
-                                              out double breadthFrac);
-    if (breadthBonus != 0.0)
+    // No-op when beta <= 0 - gated here so the (common) disabled case skips the call and
+    // its argument marshalling entirely; the helper would early-return 0 anyway, so both
+    // breadthBonus and breadthFrac stay 0 as the diagnostics dump expects.  Added in the
+    // node's OWN (side-to-move) perspective, so through the negamax edge negation an
+    // ancestor reads it with alternating sign: it rewards the mover's own optionality and
+    // penalizes the opponent's reply breadth (prophylaxis).
+    double breadthBonus = 0.0;
+    double breadthFrac = 0.0;
+    if (paramsSelect.CBGPUCT_BackupBreadthBonusBeta > 0.0)
     {
-      vBar = Math.Clamp(vBar + breadthBonus, -1.0, 1.0);
+      breadthBonus = ComputeBreadthBonus(paramsSelect, mu, qHat, numChildren, vBar,
+                                         out breadthFrac);
+      if (breadthBonus != 0.0)
+      {
+        vBar = Math.Clamp(vBar + breadthBonus, -1.0, 1.0);
+      }
     }
-
-    // Orthogonal late-search greedy override (no-op when CBGPUCT_BackupGreedyMaxAboveN == 0).
-    vBar = ApplyBackupGreedyOverride(node, paramsSelect, qRaw, numChildren, numExpanded, totalN, vBar);
 
     if (CBGPUCTDumpDiagnostics.DEBUG_DUMP_CBGPUCT_BACKUP_CALCS)
     {
@@ -842,7 +882,7 @@ internal static class CBGPUCTScoreCalc
     // Unnormalized value-softmax weights w(a) = mu(a) * exp((q_hat(a) - maxQ) / tau).
     double z = 0.0;
     int contributing = 0;
-    Span<double> wUn = stackalloc double[numChildren];
+    Span<double> wUn = (bufferBreadthW ??= new double[PUCTScoreCalcVector.MAX_CHILDREN]).AsSpan(0, numChildren);
     for (int i = 0; i < numChildren; i++)
     {
       double m = mu[i];
@@ -888,61 +928,6 @@ internal static class CBGPUCTScoreCalc
       bonus = cap;
     }
     return bonus;
-  }
-
-
-  /// <summary>
-  /// Orthogonal late-search greedy override: linearly blends the regularized V_bar with
-  /// the minimax-best visited-child Q so that at high effectiveN the returned value is
-  /// the best-child Q (mirroring AlphaZero's late-search single-move conviction).
-  /// effectiveN is normally totalN, but gets bumped up to the min child.N over the
-  /// high-P expanded children when transposition visits have given even the weakest
-  /// "interesting" child more support than the parent's own visit count would imply.
-  /// No-op (returns vBar unchanged) when CBGPUCT_BackupGreedyMaxAboveN == 0.
-  /// See CBGPUCT_BackupGreedyMaxAboveN docs.
-  /// </summary>
-  private static double ApplyBackupGreedyOverride(GNode node, ParamsSelect paramsSelect,
-                                                  ReadOnlySpan<double> qRaw,
-                                                  int numChildren, int numExpanded,
-                                                  int totalN, double vBar)
-  {
-    // Best visited-child Q in PARENT perspective.  Unvisited slots (qRaw NaN)
-    // skipped: only observed q values qualify for the minimax-best candidate.
-    double bestChildQ = double.NegativeInfinity;
-    for (int i = 0; i < numChildren; i++)
-    {
-      if (!double.IsNaN(qRaw[i]) && qRaw[i] > bestChildQ)
-      {
-        bestChildQ = qRaw[i];
-      }
-    }
-    if (double.IsNegativeInfinity(bestChildQ))
-    {
-      return vBar;
-    }
-
-    // Minimum child.N over expanded children with raw P > 0.02.  Terminals
-    // (no ChildNode) skipped: their values are exact, so they should not
-    // gate the "weakest support" tally.  Unexpanded slots also skipped (no
-    // child node yet).  If no children qualify, the min stays +inf and the
-    // fallback to totalN below applies.
-    const float GREEDY_HIGH_P_THRESHOLD = 0.02f;
-    double minChildNHighP = double.PositiveInfinity;
-    for (int i = 0; i < numExpanded; i++)
-    {
-      GEdge edge = node.ChildEdgeAtIndex(i);
-      if ((float)edge.P > GREEDY_HIGH_P_THRESHOLD
-          && edge.Type == GEdgeStruct.EdgeType.ChildEdge)
-      {
-        double childN = edge.ChildNode.NodeRef.N;
-        if (childN < minChildNHighP)
-        {
-          minChildNHighP = childN;
-        }
-      }
-    }
-
-    return vBar;
   }
 
 
