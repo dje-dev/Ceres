@@ -14,7 +14,6 @@
 #region Using directives
 
 using System;
-using System.Buffers;
 using System.Numerics.Tensors;
 using System.Runtime.CompilerServices;
 
@@ -40,14 +39,35 @@ namespace Ceres.MCGS.Search.RPO;
 ///   ForwardKLSoftmax   y(a) proportional to mu(a) * exp(q(a) / lambda)
 ///   ForwardKL inverse  q(a) = lambda * log(mu(a)) + C(s),   C(s) set by anchor
 ///
-/// No outside Ceres.MCGS dependencies.  Stack-allocates scratch when the action set
-/// is small; rents from ArrayPool otherwise.  TensorPrimitives are used where they
-/// vectorize naturally; bisection of alpha is scalar.
+/// No outside Ceres.MCGS dependencies.  Scratch lives in per-thread reusable buffers
+/// (the action set is bounded by MAX_ACTIONS, so nothing is ever heap-rented per call);
+/// TensorPrimitives are used where they vectorize naturally; bisection of alpha is scalar.
 /// </summary>
 public static class RegularizedPolicyOptimum
 {
-  /// <summary>Threshold below which scratch buffers are stack-allocated.</summary>
-  private const int STACKALLOC_MAX = 64;
+  /// <summary>
+  /// Maximum number of actions (children) the solver ever sees in a single call.
+  /// Equal to the engine's MAX_CHILDREN; the per-thread scratch buffers below are
+  /// sized to this so the live action set always fits without renting.
+  /// </summary>
+  private const int MAX_ACTIONS = 64;
+
+  // Per-thread scratch reused across Solve calls in place of per-call stackalloc/ArrayPool.
+  // Each buffer is lazily allocated once per thread to MAX_ACTIONS and then sliced to the
+  // live action count n on every call.  [ThreadStatic] gives each search thread its own set
+  // (no cross-thread sharing), mirroring CBGPUCTScoreCalc / PUCTScoreCalcVector.  The reverse-
+  // and forward-KL paths never run concurrently on one thread, so the three buffers they share
+  // (muNorm, qFill, y) are safe to reuse between them.  Correctness note: every element in
+  // [0, n) is fully written before it is read on each call, so the loss of stackalloc's implicit
+  // zero-initialization is immaterial; slicing to exactly n also preserves the length validations
+  // and the vStar dot-product semantics.
+  [ThreadStatic] private static double[] bufferMuNorm;
+  [ThreadStatic] private static double[] bufferQFill;
+  [ThreadStatic] private static double[] bufferCoeff;
+  [ThreadStatic] private static double[] bufferY;
+  [ThreadStatic] private static double[] bufferNewtD;
+  [ThreadStatic] private static double[] bufferNewtRatio;
+  [ThreadStatic] private static double[] bufferLogMu;
 
 
   /// <summary>
@@ -151,144 +171,125 @@ public static class RegularizedPolicyOptimum
     int n = mu.Length;
     bool perChild = !lambdaPerChild.IsEmpty;
 
-    // Scratch buffers: muNorm, qFill, coeff, y (always needed even if outputs are empty).
-    double[] rentedMuNorm = null;
-    double[] rentedQFill = null;
-    double[] rentedCoeff = null;
-    double[] rentedY = null;
-    double[] rentedNewtD = null;
-    double[] rentedNewtRatio = null;
-
-    Span<double> muNorm = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedMuNorm = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
-    Span<double> qFill  = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedQFill  = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
-    Span<double> coeff  = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedCoeff  = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
-    Span<double> yLocal = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedY      = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
+    // Per-thread scratch (see field declarations): always needed even if outputs are empty.
+    Span<double> muNorm = (bufferMuNorm ??= new double[MAX_ACTIONS]).AsSpan(0, n);
+    Span<double> qFill = (bufferQFill ??= new double[MAX_ACTIONS]).AsSpan(0, n);
+    Span<double> coeff = (bufferCoeff ??= new double[MAX_ACTIONS]).AsSpan(0, n);
+    Span<double> yLocal = (bufferY ??= new double[MAX_ACTIONS]).AsSpan(0, n);
 
     // Scratch for the vectorized Newton evaluator (TrySolveAlphaNewton / EvalSumAndDeriv).
-    Span<double> newtD     = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedNewtD     = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
-    Span<double> newtRatio = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedNewtRatio = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
+    Span<double> newtD = (bufferNewtD ??= new double[MAX_ACTIONS]).AsSpan(0, n);
+    Span<double> newtRatio = (bufferNewtRatio ??= new double[MAX_ACTIONS]).AsSpan(0, n);
 
-    try
+    NormalizeMu(mu, muNorm, opts.MinPriorProbability);
+
+    // Pre-pass: determine fallback for NaN q entries.
+    double fallback = ResolveFallback(q, nanFallbackQ, opts.ClampQToUnitInterval);
+
+    double maxQEff = double.NegativeInfinity;
+    bool anyPositiveCoeff = false;
+    double maxLambdaEff = 0.0;
+    for (int i = 0; i < n; i++)
     {
-      NormalizeMu(mu, muNorm, opts.MinPriorProbability);
+      double qi = q[i];
+      if (!IsFinite(qi))
+      {
+        qi = fallback;
+      }
+      if (opts.ClampQToUnitInterval)
+      {
+        qi = Clamp(qi, -1.0, 1.0);
+      }
+      qFill[i] = qi;
 
-      // Pre-pass: determine fallback for NaN q entries.
-      double fallback = ResolveFallback(q, nanFallbackQ, opts.ClampQToUnitInterval);
+      // Per-action lambda when supplied; otherwise scalar lambda for all.
+      double lambdaI = perChild ? lambdaPerChild[i] : lambda;
+      if (lambdaI < 0.0 || !IsFinite(lambdaI))
+      {
+        lambdaI = 0.0;
+      }
+      if (lambdaI > maxLambdaEff) maxLambdaEff = lambdaI;
 
-      double maxQEff = double.NegativeInfinity;
-      bool anyPositiveCoeff = false;
-      double maxLambdaEff = 0.0;
+      double c = lambdaI * muNorm[i];
+      if (c < 0.0 || !IsFinite(c))
+      {
+        c = 0.0;
+      }
+      coeff[i] = c;
+
+      if (c > 0.0)
+      {
+        anyPositiveCoeff = true;
+        if (qi > maxQEff)
+        {
+          maxQEff = qi;
+        }
+      }
+    }
+
+    // Degenerate cases: greedy on q if no positive coefficient or every lambda is tiny.
+    // In per-child mode, the gate is on max(lambdaPerChild); otherwise the scalar lambda.
+    double lambdaForDegen = perChild ? maxLambdaEff : lambda;
+    if (!anyPositiveCoeff || lambdaForDegen <= 1e-12)
+    {
+      GreedyOnQ(qFill, yLocal);
+    }
+    else if (!TrySolveAlphaNewton(coeff, qFill, maxQEff, opts.BisectionIterations,
+                                  opts.BisectionResidualTol, newtD, newtRatio, out double alpha))
+    {
+      // Root-find failed to bracket: fall back to normalized prior (closest to greedy-prior choice).
+      WriteNormalizedPrior(muNorm, yLocal);
+    }
+    else
+    {
+      double sumY = 0.0;
       for (int i = 0; i < n; i++)
       {
-        double qi = q[i];
-        if (!IsFinite(qi))
+        double denom = alpha - qFill[i];
+        double yi = denom > 0.0 ? coeff[i] / denom : 0.0;
+        if (!IsFinite(yi) || yi < 0.0)
         {
-          qi = fallback;
+          yi = 0.0;
         }
-        if (opts.ClampQToUnitInterval)
-        {
-          qi = Clamp(qi, -1.0, 1.0);
-        }
-        qFill[i] = qi;
-
-        // Per-action lambda when supplied; otherwise scalar lambda for all.
-        double lambdaI = perChild ? lambdaPerChild[i] : lambda;
-        if (lambdaI < 0.0 || !IsFinite(lambdaI))
-        {
-          lambdaI = 0.0;
-        }
-        if (lambdaI > maxLambdaEff) maxLambdaEff = lambdaI;
-
-        double c = lambdaI * muNorm[i];
-        if (c < 0.0 || !IsFinite(c))
-        {
-          c = 0.0;
-        }
-        coeff[i] = c;
-
-        if (c > 0.0)
-        {
-          anyPositiveCoeff = true;
-          if (qi > maxQEff)
-          {
-            maxQEff = qi;
-          }
-        }
+        yLocal[i] = yi;
+        sumY += yi;
       }
-
-      // Degenerate cases: greedy on q if no positive coefficient or every lambda is tiny.
-      // In per-child mode, the gate is on max(lambdaPerChild); otherwise the scalar lambda.
-      double lambdaForDegen = perChild ? maxLambdaEff : lambda;
-      if (!anyPositiveCoeff || lambdaForDegen <= 1e-12)
+      if (!(sumY > 0.0) || !IsFinite(sumY))
       {
-        GreedyOnQ(qFill, yLocal);
-      }
-      else if (!TrySolveAlphaNewton(coeff, qFill, maxQEff, opts.BisectionIterations,
-                                    opts.BisectionResidualTol, newtD, newtRatio, out double alpha))
-      {
-        // Root-find failed to bracket: fall back to normalized prior (closest to greedy-prior choice).
         WriteNormalizedPrior(muNorm, yLocal);
       }
       else
       {
-        double sumY = 0.0;
+        // Two-pass renormalization to reduce drift (matches legacy ComputePosterior).
+        double inv = 1.0 / sumY;
+        double sumRenorm = 0.0;
         for (int i = 0; i < n; i++)
         {
-          double denom = alpha - qFill[i];
-          double yi = denom > 0.0 ? coeff[i] / denom : 0.0;
-          if (!IsFinite(yi) || yi < 0.0)
+          double v = yLocal[i] * inv;
+          if (!IsFinite(v) || v < 0.0)
           {
-            yi = 0.0;
+            v = 0.0;
           }
-          yLocal[i] = yi;
-          sumY += yi;
+          yLocal[i] = v;
+          sumRenorm += v;
         }
-        if (!(sumY > 0.0) || !IsFinite(sumY))
+        if (sumRenorm > 0.0 && IsFinite(sumRenorm))
         {
-          WriteNormalizedPrior(muNorm, yLocal);
+          double invRenorm = 1.0 / sumRenorm;
+          TensorPrimitives.Multiply(yLocal, invRenorm, yLocal);
         }
-        else
-        {
-          // Two-pass renormalization to reduce drift (matches legacy ComputePosterior).
-          double inv = 1.0 / sumY;
-          double sumRenorm = 0.0;
-          for (int i = 0; i < n; i++)
-          {
-            double v = yLocal[i] * inv;
-            if (!IsFinite(v) || v < 0.0)
-            {
-              v = 0.0;
-            }
-            yLocal[i] = v;
-            sumRenorm += v;
-          }
-          if (sumRenorm > 0.0 && IsFinite(sumRenorm))
-          {
-            double invRenorm = 1.0 / sumRenorm;
-            TensorPrimitives.Multiply(yLocal, invRenorm, yLocal);
-          }
-        }
-      }
-
-      // Copy outputs and compute vStar = sum_i y_i * qFill_i (vectorized dot product).
-      vStarOut = TensorPrimitives.Dot(yLocal, qFill);
-      if (!yOut.IsEmpty)
-      {
-        yLocal.CopyTo(yOut);
-      }
-      if (!qFillOut.IsEmpty)
-      {
-        qFill.CopyTo(qFillOut);
       }
     }
-    finally
+
+    // Copy outputs and compute vStar = sum_i y_i * qFill_i (vectorized dot product).
+    vStarOut = TensorPrimitives.Dot(yLocal, qFill);
+    if (!yOut.IsEmpty)
     {
-      if (rentedMuNorm    != null) ArrayPool<double>.Shared.Return(rentedMuNorm);
-      if (rentedQFill     != null) ArrayPool<double>.Shared.Return(rentedQFill);
-      if (rentedCoeff     != null) ArrayPool<double>.Shared.Return(rentedCoeff);
-      if (rentedY         != null) ArrayPool<double>.Shared.Return(rentedY);
-      if (rentedNewtD     != null) ArrayPool<double>.Shared.Return(rentedNewtD);
-      if (rentedNewtRatio != null) ArrayPool<double>.Shared.Return(rentedNewtRatio);
+      yLocal.CopyTo(yOut);
+    }
+    if (!qFillOut.IsEmpty)
+    {
+      qFill.CopyTo(qFillOut);
     }
   }
 
@@ -308,87 +309,73 @@ public static class RegularizedPolicyOptimum
   {
     int n = mu.Length;
 
-    double[] rentedMuNorm = null;
-    double[] rentedLogMu  = null;
-    double[] rentedQFill  = null;
-    double[] rentedY      = null;
+    // Per-thread scratch (see field declarations).
+    Span<double> muNorm = (bufferMuNorm ??= new double[MAX_ACTIONS]).AsSpan(0, n);
+    Span<double> logMu = (bufferLogMu ??= new double[MAX_ACTIONS]).AsSpan(0, n);
+    Span<double> qFill = (bufferQFill ??= new double[MAX_ACTIONS]).AsSpan(0, n);
+    Span<double> yLocal = (bufferY ??= new double[MAX_ACTIONS]).AsSpan(0, n);
 
-    Span<double> muNorm = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedMuNorm = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
-    Span<double> logMu  = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedLogMu  = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
-    Span<double> qFill  = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedQFill  = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
-    Span<double> yLocal = n <= STACKALLOC_MAX ? stackalloc double[n] : (rentedY      = ArrayPool<double>.Shared.Rent(n)).AsSpan(0, n);
+    // Normalize and floor mu (also enforce a hard floor so log is well-defined).
+    const double LOG_FLOOR = 1e-10;
+    double minPrior = opts.MinPriorProbability;
+    double effectiveFloor = minPrior > LOG_FLOOR ? minPrior : LOG_FLOOR;
+    NormalizeMu(mu, muNorm, effectiveFloor);
 
-    try
+    // Vectorized log of mu.
+    TensorPrimitives.Log(muNorm, logMu);
+
+    // Determine C(s) from the anchor.
+    double cIntercept = ResolveForwardKLIntercept(muNorm, logMu, anchor, lambda);
+
+    // Build q_fill: preserve finite q, impute NaN via  q_i = lambda * log(mu_i) + C(s).
+    for (int i = 0; i < n; i++)
     {
-      // Normalize and floor mu (also enforce a hard floor so log is well-defined).
-      const double LOG_FLOOR = 1e-10;
-      double minPrior = opts.MinPriorProbability;
-      double effectiveFloor = minPrior > LOG_FLOOR ? minPrior : LOG_FLOOR;
-      NormalizeMu(mu, muNorm, effectiveFloor);
-
-      // Vectorized log of mu.
-      TensorPrimitives.Log(muNorm, logMu);
-
-      // Determine C(s) from the anchor.
-      double cIntercept = ResolveForwardKLIntercept(muNorm, logMu, anchor, lambda);
-
-      // Build q_fill: preserve finite q, impute NaN via  q_i = lambda * log(mu_i) + C(s).
-      for (int i = 0; i < n; i++)
+      double qi = q[i];
+      if (!IsFinite(qi))
       {
-        double qi = q[i];
-        if (!IsFinite(qi))
-        {
-          qi = lambda * logMu[i] + cIntercept;
-        }
-        if (opts.ClampQToUnitInterval)
-        {
-          qi = Clamp(qi, -1.0, 1.0);
-        }
-        qFill[i] = qi;
+        qi = lambda * logMu[i] + cIntercept;
       }
-
-      // Compute y_i proportional to mu_i * exp(q_i / lambda) with numerically-stable shift.
-      // exp((q - qMax) / lambda) stays in [0, 1], avoiding overflow when lambda is small.
-      double maxQ = TensorPrimitives.Max(qFill);
-      double invLambda = 1.0 / lambda;
-      double sumW = 0.0;
-      for (int i = 0; i < n; i++)
+      if (opts.ClampQToUnitInterval)
       {
-        double w = muNorm[i] * Math.Exp((qFill[i] - maxQ) * invLambda);
-        if (!IsFinite(w) || w < 0.0)
-        {
-          w = 0.0;
-        }
-        yLocal[i] = w;
-        sumW += w;
+        qi = Clamp(qi, -1.0, 1.0);
       }
-      if (sumW > 0.0 && IsFinite(sumW))
-      {
-        double inv = 1.0 / sumW;
-        TensorPrimitives.Multiply(yLocal, inv, yLocal);
-      }
-      else
-      {
-        WriteNormalizedPrior(muNorm, yLocal);
-      }
-
-      vStarOut = TensorPrimitives.Dot(yLocal, qFill);
-
-      if (!yOut.IsEmpty)
-      {
-        yLocal.CopyTo(yOut);
-      }
-      if (!qFillOut.IsEmpty)
-      {
-        qFill.CopyTo(qFillOut);
-      }
+      qFill[i] = qi;
     }
-    finally
+
+    // Compute y_i proportional to mu_i * exp(q_i / lambda) with numerically-stable shift.
+    // exp((q - qMax) / lambda) stays in [0, 1], avoiding overflow when lambda is small.
+    double maxQ = TensorPrimitives.Max(qFill);
+    double invLambda = 1.0 / lambda;
+    double sumW = 0.0;
+    for (int i = 0; i < n; i++)
     {
-      if (rentedMuNorm != null) ArrayPool<double>.Shared.Return(rentedMuNorm);
-      if (rentedLogMu  != null) ArrayPool<double>.Shared.Return(rentedLogMu);
-      if (rentedQFill  != null) ArrayPool<double>.Shared.Return(rentedQFill);
-      if (rentedY      != null) ArrayPool<double>.Shared.Return(rentedY);
+      double w = muNorm[i] * Math.Exp((qFill[i] - maxQ) * invLambda);
+      if (!IsFinite(w) || w < 0.0)
+      {
+        w = 0.0;
+      }
+      yLocal[i] = w;
+      sumW += w;
+    }
+    if (sumW > 0.0 && IsFinite(sumW))
+    {
+      double inv = 1.0 / sumW;
+      TensorPrimitives.Multiply(yLocal, inv, yLocal);
+    }
+    else
+    {
+      WriteNormalizedPrior(muNorm, yLocal);
+    }
+
+    vStarOut = TensorPrimitives.Dot(yLocal, qFill);
+
+    if (!yOut.IsEmpty)
+    {
+      yLocal.CopyTo(yOut);
+    }
+    if (!qFillOut.IsEmpty)
+    {
+      qFill.CopyTo(qFillOut);
     }
   }
 
@@ -408,20 +395,20 @@ public static class RegularizedPolicyOptimum
     switch (anchor.Mode)
     {
       case RPOAnchorMode.MatchValue:
-      {
-        // entropy = -E_mu[log mu] = -sum_i muNorm_i * logMu_i  (vectorized dot product).
-        double entropy = -TensorPrimitives.Dot(muNorm, logMu);
-        return anchor.Value + lambda * entropy;
-      }
+        {
+          // entropy = -E_mu[log mu] = -sum_i muNorm_i * logMu_i  (vectorized dot product).
+          double entropy = -TensorPrimitives.Dot(muNorm, logMu);
+          return anchor.Value + lambda * entropy;
+        }
 
       case RPOAnchorMode.MatchChild:
-      {
-        if ((uint)anchor.Index >= (uint)muNorm.Length)
         {
-          throw new ArgumentOutOfRangeException(nameof(anchor), "MatchChild anchor index is out of range.");
+          if ((uint)anchor.Index >= (uint)muNorm.Length)
+          {
+            throw new ArgumentOutOfRangeException(nameof(anchor), "MatchChild anchor index is out of range.");
+          }
+          return anchor.Value - lambda * logMu[anchor.Index];
         }
-        return anchor.Value - lambda * logMu[anchor.Index];
-      }
 
       case RPOAnchorMode.None:
         // Caller has not specified an intercept.  Imputed slots (if any) will collapse
