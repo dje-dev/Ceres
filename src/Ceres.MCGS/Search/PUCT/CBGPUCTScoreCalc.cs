@@ -619,7 +619,7 @@ internal static class CBGPUCTScoreCalc
   /// are included only when header.P meets this threshold.  
   /// Set to float.MaxValue to compute V_bar is computed over the expanded children only.
   /// </summary>
-  private const float MIN_P_FOR_Q_IF_UNVISITED = 0.01f;
+  private const float MIN_P_FOR_Q_IF_UNVISITED = 0.05f; // Tests suggest 0.05 at least no worse than 0.01 (and faster)
 
 
   /// <summary>
@@ -648,7 +648,7 @@ internal static class CBGPUCTScoreCalc
     }
 
     // Considered action set: all expanded children plus any unexpanded child whose raw
-    // policy P meets MIN_P_FOR_Q_IF_UNVISITED (identical coverage rule to the legacy path).
+    // policy P meets MIN_P_FOR_Q_IF_UNVISITED
     int numChildren = numExpanded;
     int numPolicyMoves = node.NumPolicyMoves;
     if (MIN_P_FOR_Q_IF_UNVISITED < 1.0f && numPolicyMoves > numExpanded)
@@ -657,10 +657,11 @@ internal static class CBGPUCTScoreCalc
       int maxKeptIndex = numExpanded - 1;
       for (int i = numExpanded; i < numPolicyMoves; i++)
       {
-        if ((float)coverageHeaders[i].P >= MIN_P_FOR_Q_IF_UNVISITED)
+        if ((float)coverageHeaders[i].P < MIN_P_FOR_Q_IF_UNVISITED)
         {
-          maxKeptIndex = i;
+          break; // the edges are (usually) sorted strictly descending by P
         }
+        maxKeptIndex = i;
       }
       numChildren = maxKeptIndex + 1;
     }
