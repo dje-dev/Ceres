@@ -184,7 +184,7 @@ public static class RegularizedPolicyOptimum
     NormalizeMu(mu, muNorm, opts.MinPriorProbability);
 
     // Pre-pass: determine fallback for NaN q entries.
-    double fallback = ResolveFallback(q, nanFallbackQ, opts.ClampQToUnitInterval);
+    double fallback = ResolveFallback(q, nanFallbackQ, opts.ClampQ);
 
     double maxQEff = double.NegativeInfinity;
     bool anyPositiveCoeff = false;
@@ -196,9 +196,9 @@ public static class RegularizedPolicyOptimum
       {
         qi = fallback;
       }
-      if (opts.ClampQToUnitInterval)
-      {
-        qi = Clamp(qi, -1.0, 1.0);
+      if (opts.ClampQ)
+      { 
+        qi = Clamp(qi, -1.2, 1.2);
       }
       qFill[i] = qi;
 
@@ -335,7 +335,7 @@ public static class RegularizedPolicyOptimum
       {
         qi = lambda * logMu[i] + cIntercept;
       }
-      if (opts.ClampQToUnitInterval)
+      if (opts.ClampQ)
       {
         qi = Clamp(qi, -1.0, 1.0);
       }

@@ -79,12 +79,12 @@ public readonly struct RPOOptions
 {
   public RPOOptions(int bisectionIterations = 12,
                     double bisectionResidualTol = 1e-6,
-                    bool clampQToUnitInterval = true,
+                    bool clampQ = true,
                     double minPriorProbability = 0.0)
   {
     BisectionIterations = bisectionIterations;
     BisectionResidualTol = bisectionResidualTol;
-    ClampQToUnitInterval = clampQToUnitInterval;
+    ClampQ = clampQ;
     MinPriorProbability = minPriorProbability;
   }
 
@@ -94,8 +94,8 @@ public readonly struct RPOOptions
   /// <summary>Residual tolerance |sum(coeff/(alpha - q)) - 1| at which bisection terminates early.</summary>
   public double BisectionResidualTol { get; init; }
 
-  /// <summary>If true, finite q values are clamped to [-1, +1] before the closed form is applied.</summary>
-  public bool ClampQToUnitInterval { get; init; }
+  /// <summary>If true, finite q values are clamped to [-1.2, +1.2] before the closed form is applied.</summary>
+  public bool ClampQ { get; init; }
 
   /// <summary>Optional floor applied to mu before renormalization (epsilon-smoothing of the prior).</summary>
   public double MinPriorProbability { get; init; }

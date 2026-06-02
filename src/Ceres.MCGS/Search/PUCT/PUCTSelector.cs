@@ -348,7 +348,7 @@ public static class PUCTSelector
     double lambda = paramsSelect.PolicyImputationTau;
     RPOOptions opts = new(bisectionIterations: 12,
                           bisectionResidualTol: 1e-6,
-                          clampQToUnitInterval: true,
+                          clampQ: true,
                           minPriorProbability: 0.0);
 
     double[] result = qWhenNoChildrenBuffer ??= new double[PUCTScoreCalcVector.MAX_CHILDREN];

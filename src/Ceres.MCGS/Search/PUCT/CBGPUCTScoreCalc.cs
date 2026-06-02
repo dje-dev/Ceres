@@ -65,22 +65,17 @@ internal static class CBGPUCTScoreCalc
 
   #region Solver options (process-wide constants)
 
-  // Solver options are all compile-time literals and identical on every call, so build
-  // each once at class load instead of materializing a ~32-byte struct on the stack per
-  // ComputeVBar / ScoreCalc / ComputePolicyImpliedQ call.  Kept per-purpose (not merged)
-  // so the select / backup paths stay independently tunable even though their values
-  // coincide today.
   private static readonly RPOOptions SolveOptionsSelect =
-    new(bisectionIterations: 20, bisectionResidualTol: 1e-6,
-        clampQToUnitInterval: true, minPriorProbability: 0.0);
+    new(bisectionIterations: 20, bisectionResidualTol: 1e-7,
+        clampQ: true, minPriorProbability: 0.0);
 
   private static readonly RPOOptions SolveOptionsBackup =
-    new(bisectionIterations: 20, bisectionResidualTol: 1e-6,
-        clampQToUnitInterval: true, minPriorProbability: 0.0);
+    new(bisectionIterations: 20, bisectionResidualTol: 1e-7,
+        clampQ: true, minPriorProbability: 0.0);
 
   private static readonly RPOOptions SolveOptionsPolicyImputation =
-    new(bisectionIterations: 12, bisectionResidualTol: 1e-6,
-        clampQToUnitInterval: true, minPriorProbability: 0.0);
+    new(bisectionIterations: 20, bisectionResidualTol: 1e-7,
+        clampQ: true, minPriorProbability: 0.0);
 
   #endregion
 

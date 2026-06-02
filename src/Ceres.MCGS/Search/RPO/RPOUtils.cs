@@ -453,7 +453,7 @@ weighted=false; // <---------------------- HACK. WEIGHTING ALREADY HANDLED JUST 
                                    RPORegularization.ForwardKLSoftmax,
                                    default, qFillNew, out double _,
                                    new RPOOptions(bisectionIterations: 12, bisectionResidualTol: 1e-6,
-                                                  clampQToUnitInterval: false, minPriorProbability: 0.0));
+                                                  clampQ: false, minPriorProbability: 0.0));
 
     float[] muF = { 0.769f, 0.231f };
     float[] qLegacy = new float[mu.Length];
@@ -489,7 +489,7 @@ weighted=false; // <---------------------- HACK. WEIGHTING ALREADY HANDLED JUST 
                                    RPORegularization.ForwardKLSoftmax,
                                    default, qFillNew, out double _,
                                    new RPOOptions(bisectionIterations: 12, bisectionResidualTol: 1e-6,
-                                                  clampQToUnitInterval: false, minPriorProbability: 0.0));
+                                                  clampQ: false, minPriorProbability: 0.0));
 
     float[] muF = { 0.769f, 0.231f };
     float[] qLegacy = new float[mu.Length];
@@ -524,7 +524,7 @@ weighted=false; // <---------------------- HACK. WEIGHTING ALREADY HANDLED JUST 
     RegularizedPolicyOptimum.Solve(mu, qIn, lambda, RPOAnchor.None, RPORegularization.ReverseKL,
                                    yNew, qFillNew, out double vStarNew,
                                    options: new RPOOptions(bisectionIterations: 60, bisectionResidualTol: 1e-9,
-                                                           clampQToUnitInterval: true, minPriorProbability: 0.0),
+                                                           clampQ: true, minPriorProbability: 0.0),
                                    nanFallbackQ: rootQ);
 
     (double Q, double PriorP, int N, double U)[] actions = new (double, double, int, double)[mu.Length];
@@ -600,7 +600,7 @@ weighted=false; // <---------------------- HACK. WEIGHTING ALREADY HANDLED JUST 
 
     double[] piBar = new double[mu.Length];
     RPOOptions opts = new(bisectionIterations: 60, bisectionResidualTol: 1e-9,
-                          clampQToUnitInterval: true, minPriorProbability: 0.0);
+                          clampQ: true, minPriorProbability: 0.0);
 
     // Initial solve (iteration 0 in CBGPUCT.ScoreCalc terms).
     RegularizedPolicyOptimum.Solve(mu, qWorking, lambda, RPOAnchor.None, RPORegularization.ReverseKL,
