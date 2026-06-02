@@ -69,7 +69,7 @@ public static class MCGSParamsFixed
   /// This limits incurring the performance cost to only situations where there is a
   /// large potential benefit from immediate propagation.
   /// </summary>
-  public const double PROPAGATE_OFF_VISIT_PARENTS_MIN_Q_DELTA = 0.01;
+  public const double PROPAGATE_OFF_VISIT_PARENTS_MIN_Q_DELTA = 0.005;
 
 
   /// <summary>
