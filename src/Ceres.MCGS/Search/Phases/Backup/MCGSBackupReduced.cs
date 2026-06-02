@@ -129,33 +129,21 @@ public partial class MCGSBackup
             }
             else
             {
-              // TODO: enable this fix after more testing, likely appropriate (but testing was not clearly positive).
-              const bool BUGFIX_INITIAL_BACKUP = false; 
-              if (BUGFIX_INITIAL_BACKUP)
+              // Leaf edge. On a draw-by-repetition, pass ChildNode.Q (NOT initialBackupValue.V == 0)
+              // as the cached QChild so the edge faithfully mirrors the child node's Q; edge.Q still
+              // dilutes to the draw value via NDrawByRepetition. Writing 0 here clobbers QChild and
+              // forces edge.Q = 0 until the next non-rep visit -- and for an edge whose child is the
+              // search root (whose position is in every path's history) there is NEVER a non-rep
+              // visit, so QChild would stay stuck at 0 forever while the child's true Q is nonzero.
+              // (Matches the internal-edge branch above, which already passes ChildNode.Q.)
+              bool isRepDraw = path.TerminationReason == MCGSPathTerminationReason.DrawByRepetitionInCoalesceMode;
+              double newQChildForLeaf = isRepDraw ? visitEdge.ChildNode.Q : initialBackupValue.V;
+              strategy.BackupToEdge(visitEdge, numVisitsAccepted, newQChildForLeaf, initialBackupValue.D, false);
+              if (isRepDraw)
               {
-                // Passing initialBackupValue.V (=0) as newQChild on a rep-draw would clobber
-                // edge.QChild and make edge.Q = 0 until the next non-rep visit, spuriously
-                // inflating the Δ sent to the parent. Use ChildNode.Q instead (matching the
-                // internal-edge branch above).
-                bool isRepDraw = path.TerminationReason == MCGSPathTerminationReason.DrawByRepetitionInCoalesceMode;
-                double newQChildForLeaf = isRepDraw ? visitEdge.ChildNode.Q : initialBackupValue.V;
-                strategy.BackupToEdge(visitEdge, numVisitsAccepted, newQChildForLeaf, initialBackupValue.D, false);
-                if (isRepDraw)
-                {
-                  // The NDrawByRepeition for the edge immediately leading to the draw
-                  // is incremented in tandem with the primary (but is not backed up).
-                  visitEdge.IncrementNDrawRepetition(numVisitsAccepted);
-                }
-              }
-              else
-              {
-                strategy.BackupToEdge(visitEdge, numVisitsAccepted, initialBackupValue.V, initialBackupValue.D, false);
-                if (path.TerminationReason == MCGSPathTerminationReason.DrawByRepetitionInCoalesceMode)
-                {
-                  // The NDrawByRepeition for the edge immediately leading to the draw
-                  // is incremented in tandem with the primary (but is not backed up).
-                  visitEdge.IncrementNDrawRepetition(numVisitsAccepted);
-                }
+                // The NDrawByRepetition for the edge immediately leading to the draw is incremented
+                // in tandem with the primary update (but is not itself backed up to ancestors).
+                visitEdge.IncrementNDrawRepetition(numVisitsAccepted);
               }
             }
           }
