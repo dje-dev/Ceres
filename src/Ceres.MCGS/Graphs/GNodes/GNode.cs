@@ -681,7 +681,8 @@ public readonly unsafe partial struct GNode : IComparable<GNode>, IEquatable<GNo
     Console.WriteLine("Policy length " + NumPolicyMoves);
     foreach ((GEdge Edge, int _) in ChildEdgesExpandedWithIndex)
     {
-      Console.WriteLine("  Move= " + Edge.MoveMG + " P=" + Edge.P + "  expanded:" + Edge.IsExpanded);
+      Console.WriteLine("  Move= " + Edge.MoveMG + " P=" + Edge.P + "  expanded:" + Edge.IsExpanded 
+                      + "  Q:" + Edge.Q + "  N:" + Edge.N);
     }
     for (int i=NumEdgesExpanded;i<NumPolicyMoves; i++)
     {
