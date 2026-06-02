@@ -3371,8 +3371,17 @@ extern "C"
       }
     }
 
-    // Try loading from cache
-    if (!forceRebuild && FileExists(cachePath.c_str()))
+    // Try loading from cache.
+    // NOTE: every branch that ends up rebuilding logs an explicit reason to avoid a silent rebuilds
+    if (forceRebuild)
+    {
+      fprintf(stderr, "[TensorRT] Cache rebuild forced; ignoring any cached engine: %s\n", cachePath.c_str());
+    }
+    else if (!FileExists(cachePath.c_str()))
+    {
+      fprintf(stderr, "[TensorRT] Cache miss (no cached engine file found): %s\n", cachePath.c_str());
+    }
+    else
     {
       // Check if ONNX file is newer than cache
       struct stat onnxStat, cacheStat;
@@ -3382,6 +3391,7 @@ extern "C"
         if (onnxStat.st_mtime > cacheStat.st_mtime)
         {
           cacheValid = false;
+          fprintf(stderr, "[TensorRT] Cache stale (ONNX is newer than cached engine), rebuilding: %s\n", cachePath.c_str());
         }
       }
 
@@ -3415,21 +3425,39 @@ extern "C"
                 }
                 std::string basename = GetBaseName(onnxPath);
                 char msg[512];
-                snprintf(msg, sizeof(msg), "[TensorRT] Loading multi-profile %s: batches=[%s], %d profiles",
-                  basename.c_str(), batchDesc.c_str(), numProfiles);
+                snprintf(msg, sizeof(msg), "[TensorRT] Loading multi-profile %s: batches=[%s], %d profiles (%lld bytes)",
+                  basename.c_str(), batchDesc.c_str(), numProfiles, (long long)buffer.size());
                 PrintGreen(msg);
 
                 if (outWasCached) *outWasCached = 1;
                 g_lastError.clear();
                 return 0;
               }
-              // CreateContextsFromEngine deleted engine on failure
+              else
+              {
+                // CreateContextsFromEngine deleted engine on failure
+                fprintf(stderr, "[TensorRT WARNING] Cache load FAILED: CreateContextsFromEngine returned %d (%lld bytes), rebuilding: %s\n",
+                  result, (long long)buffer.size(), cachePath.c_str());
+              }
+            }
+            else
+            {
+              fprintf(stderr, "[TensorRT WARNING] Cache load FAILED: deserializeCudaEngine returned null "
+                "(cached engine file likely corrupt, truncated, or built by an incompatible TensorRT/GPU), "
+                "size=%lld bytes, rebuilding: %s\n", (long long)buffer.size(), cachePath.c_str());
             }
           }
           else
           {
+            fprintf(stderr, "[TensorRT WARNING] Cache load FAILED: short read of engine file (got %lld of %lld bytes), rebuilding: %s\n",
+              (long long)file.gcount(), (long long)size, cachePath.c_str());
             file.close();
           }
+        }
+        else
+        {
+          fprintf(stderr, "[TensorRT WARNING] Cache load FAILED: could not open cached engine file for reading, rebuilding: %s\n",
+            cachePath.c_str());
         }
         // Fall through to rebuild if cache load failed
       }
