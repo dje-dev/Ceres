@@ -556,6 +556,43 @@ public record ParamsSearch
 
 
   /// <summary>
+  /// Mode for the optional post-backup recomputation/propagation of node Q values,
+  /// run after each batch is backed up while the backup lock is still held (graph quiescent).
+  /// </summary>
+  public enum PostBackupQModeType
+  {
+    /// <summary>
+    /// No post-backup Q recomputation.
+    /// </summary>
+    Off,
+
+    /// <summary>
+    /// Recompute every node's Q bottom-up each batch (BottomUpQRecalculator).
+    /// Comprehensive but expensive; primarily a diagnostic.
+    /// </summary>
+    FullRecompute,
+
+    /// <summary>
+    /// Selective, amortized upward propagation that actively drains the per-edge IsStale flag with a
+    /// bounded per-batch budget (SelectiveQPropagator). Propagates transposition drift to the root
+    /// over time without a full-graph sweep.
+    /// </summary>
+    StaleDrain
+  }
+
+  /// <summary>
+  /// Mode for optional post-backup recomputation/propagation of node Q values.
+  /// </summary>
+  public PostBackupQModeType PostBackupQMode = PostBackupQModeType.Off;
+
+  /// <summary>
+  /// Maximum number of parent-node Q recomputes performed per batch when
+  /// PostBackupQMode == StaleDrain. Bounds per-batch cost and is the cycle-termination guarantee.
+  /// </summary>
+  public int SelectiveQDrainBudgetPerBatch = 256;
+
+
+  /// <summary>
   /// Constructor (uses default values for the class unless overridden in settings file).
   /// </summary>
   public ParamsSearch()
@@ -634,6 +671,16 @@ public record ParamsSearch
     if (SelectExplorationForUncertaintyAtEdge > 0 && !MCGSParamsFixed.TRACK_NODE_EDGE_UNCERTAINTY)
     {
       throw new NotImplementedException("Nonzero SelectExplorationForUncertaintyAtEdge requires UNCERTAINTY_TESTS_ENABLED to be true.");
+    }
+
+    if (PostBackupQMode == PostBackupQModeType.StaleDrain
+     && OffPathBackupNumAdditionalLevelsToPropagate > 0)
+    {
+      // The incremental off-path backup path (PropagateQChangesUpward) applies delta-based parent
+      // updates; the StaleDrain mode applies idempotent full recomputes. Running both would
+      // double-count, so they are mutually exclusive.
+      throw new Exception("PostBackupQMode.StaleDrain must not be combined with "
+                        + "OffPathBackupNumAdditionalLevelsToPropagate > 0.");
     }
   }
 }

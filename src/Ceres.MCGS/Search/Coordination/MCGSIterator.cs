@@ -449,6 +449,12 @@ public class MCGSIterator : IDisposable
       ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "Validated graph " + Engine.SearchRootNode.N);
     }
 
+    // Optionally perform a full bottom-up recomputation of all node Q values
+    // (experimental, enabled via ParamsSearch.TestFlag). This is done here while we still
+    // hold the backup lock and the graph is quiescent (no other iterator is concurrently
+    // in its select or backup phase).
+    PostBackupRecomputeQIfEnabled();
+
     // Possibly invoke the callback
     // At this point we hold the select/backup lock
     // and graph is quiescent.
@@ -466,6 +472,27 @@ public class MCGSIterator : IDisposable
     batchSequenceNum++;
 
     Engine.PossiblySynchronizeIterators(this);
+  }
+
+
+  /// <summary>
+  /// Invoked after each batch has been backed up, while this iterator still holds the
+  /// backup lock (so the graph is quiescent). When ParamsSearch.TestFlag is enabled,
+  /// performs a full bottom-up recomputation of every node's Q value and aggregates
+  /// statistics about the magnitude of the changes (see BottomUpQRecalculator).
+  /// </summary>
+  private void PostBackupRecomputeQIfEnabled()
+  {
+    switch (Manager.ParamsSearch.PostBackupQMode)
+    {
+      case ParamsSearch.PostBackupQModeType.FullRecompute:
+        Engine.QRecalculator.RunPass();
+        break;
+
+      case ParamsSearch.PostBackupQModeType.StaleDrain:
+        Engine.QPropagator.RunPass(PathsSet);
+        break;
+    }
   }
 
 

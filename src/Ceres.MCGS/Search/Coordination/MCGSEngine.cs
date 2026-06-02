@@ -73,6 +73,20 @@ public partial class MCGSEngine
   // New PhaseCoordinator to manage ordered execution of select and backup phases.
   internal readonly PhaseCoordinator Coordinator = new();
 
+  /// <summary>
+  /// Helper used to optionally perform an (experimental) full bottom-up recomputation
+  /// of all node Q values after each batch is backed up (ParamsSearch.PostBackupQMode == FullRecompute).
+  /// Shared across iterators; invoked only from within the (mutually exclusive) backup lock.
+  /// </summary>
+  public readonly BottomUpQRecalculator QRecalculator;
+
+  /// <summary>
+  /// Helper used to optionally perform selective, amortized upward Q propagation after each batch
+  /// is backed up (enabled via ParamsSearch.PostBackupQMode == StaleDrain).
+  /// Shared across iterators; invoked only from within the (mutually exclusive) backup lock.
+  /// </summary>
+  public readonly SelectiveQPropagator QPropagator;
+
   internal int numVisitsInFlight = 0;
 
 
@@ -129,6 +143,8 @@ public partial class MCGSEngine
     Graph = graph;
     Strategy = new MCGSStrategyPUCT(this);
     SelectWorkerPools = selectWorkerPools;
+    QRecalculator = new BottomUpQRecalculator(this);
+    QPropagator = new SelectiveQPropagator(this);
 
     const bool DEBUG_DUMP = false;
     if (DEBUG_DUMP)
