@@ -262,9 +262,9 @@ namespace Ceres.Commands
       {
         for (int i = 0; i < 5; i++)
         {
-          Thread.Sleep(10);
           evaluator.EvaluateIntoBuffers(testBatch);
         }
+        Thread.Sleep(10);
       }
 
       // Keep track of all timings except the worst.
