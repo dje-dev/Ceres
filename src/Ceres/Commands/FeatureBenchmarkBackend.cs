@@ -24,6 +24,7 @@ using Ceres.Base.DataTypes;
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
+using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.NNEvaluators.Specifications;
@@ -252,10 +253,13 @@ namespace Ceres.Commands
       (testBatchBuffer as IEncodedPositionBatchFlat).TrySetMoves();
     }
 
+    public static NNEvaluatorResult LastResultIndex0FromTestBatchSize;
+
     private static float TestBatchSize(NNEvaluator evaluator, int batchSize, int numRunsPerBatchSize = 4, bool show = false)
     {
       // Prepare batch with test positions.
       IEncodedPositionBatchFlat testBatch = testBatchBuffer.GetSubBatchSlice(0, batchSize);
+      NNEvaluatorResult result = default;
 
       // Run warmup steps if first time.
       if (batchSize == 1)
@@ -272,8 +276,13 @@ namespace Ceres.Commands
       for (int runIndex = 0; runIndex < numRunsPerBatchSize; runIndex++)
       {
         DateTime startTime = DateTime.Now;
-        evaluator.EvaluateIntoBuffers(testBatch);
+        IPositionEvaluationBatch batchRaw = evaluator.EvaluateIntoBuffers(testBatch);
         DateTime endTime = DateTime.Now;
+
+        if (runIndex == 0)
+        {
+          evaluator.ExtractToNNEvaluatorResult(out LastResultIndex0FromTestBatchSize, batchRaw, 0);
+        }
 
         bestTimings.Add((float)(endTime - startTime).TotalSeconds);
       }
