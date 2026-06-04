@@ -195,8 +195,13 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
         throw new Exception("PositionsBuffer not initialized, EncodedPositionBatchFlat.RETAIN_POSITIONS_INTERNALS needs to be set true");
       }
 
-      mgPos = positions.Positions.ToArray();
-      byte[] pliesSinceLastMoveAllPositions = positions.LastMovePlies.ToArray();
+      // mgPos is unused by the sole caller (passes `out _`); skip the expensive
+      // Positions.ToArray() materialization + copy flagged as expensive above.
+      mgPos = null;
+
+      // Use LastMovePlies directly as a Memory slice rather than materializing a byte[] copy.
+      Memory<byte> pliesSinceLastMoveAll = positions.LastMovePlies;
+      bool havePlies = lastMovePliesEnabled && !pliesSinceLastMoveAll.IsEmpty;
 
       // Determine each position and copy converted raw board bytes into rawBoardBytesAll.
       // TODO: for efficiency, avoid doing this if the NN evaluator does not need raw bytes
@@ -207,9 +212,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
         int tpgSquaresStartOffset = i * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD;
         fixed (byte* ptrSquareBytes = &squareBytesAllLocalRef[tpgSquaresStartOffset])
         {
-          Span<byte> thesePliesSinceLastMove = (!lastMovePliesEnabled || pliesSinceLastMoveAllPositions == null || pliesSinceLastMoveAllPositions.Length == 0)
-            ? default
-            : new Span<byte>(pliesSinceLastMoveAllPositions, i * 64, 64);
+          Span<byte> thesePliesSinceLastMove = havePlies ? pliesSinceLastMoveAll.Span.Slice(i * 64, 64) : default;
 
           float thisQNegativeBlunders;
           float thisQPositiveBlunders;

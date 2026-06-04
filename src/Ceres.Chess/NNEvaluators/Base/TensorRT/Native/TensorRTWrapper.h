@@ -244,7 +244,7 @@ extern "C"
     void* dst, const void* src, int64_t bytes);
 
   // Sync specific stream
-  TRT_API int32_t TRT_SyncStreamIdx(TRT_EngineHandle handle, int32_t streamIdx);
+  TRT_API int32_t TRT_SyncStreamIdx(TRT_EngineHandle handle, int32_t streamIdx, int32_t count);
 
   // Legacy single-stream versions
   TRT_API int32_t TRT_InferAsync(TRT_EngineHandle handle, void* gpuInput, void* gpuOutput);

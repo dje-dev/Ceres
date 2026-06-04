@@ -18,6 +18,7 @@
 #include <memory>
 #include <functional>
 #include <cstring>
+#include <cstdlib>
 #include <atomic>
 #include <unordered_map>
 #include <unordered_set>
@@ -80,6 +81,18 @@ namespace
   nvinfer1::IRuntime* g_runtime = nullptr;
   std::string g_lastError;
   bool g_initialized = false;
+
+  // Stream sync wait policy. Default 3="auto" decides per-sync from the per-GPU batch size
+  // (the count being synced): SPIN when it is small (<= SYNC_SPIN_MAX_PERGPU, where the GPU
+  // burst is short so the block-sync OS wakeup latency is a large fraction of the wait) and
+  // BLOCK otherwise (long GPU work => wakeup negligible, and blocking frees the core). This
+  // is measured to be the crossover: spin helps fast/small per-GPU batches (e.g. multi-GPU
+  // splits and fast nets) while block is free and CPU-cheap on large batches / big nets.
+  // Override via env CERES_TRT_SYNC = auto|spin|block|driver.
+  //   0 = "driver" (cudaStreamSynchronize), 1 = "spin" (event busy-poll, low latency,
+  //   burns a core), 2 = "block" (blocking-sync event, low CPU), 3 = "auto" (the rule).
+  int g_syncMode = 3;
+  constexpr int SYNC_SPIN_MAX_PERGPU = 64;
 
   // Thread-local cache for current CUDA device to avoid redundant cudaSetDevice() calls.
   // Value of -1 means no device has been set on this thread yet.
@@ -181,6 +194,9 @@ namespace
     void* streamCapturedInput[3] = { nullptr, nullptr, nullptr };
     void* streamCapturedOutput[3] = { nullptr, nullptr, nullptr };
 
+    // Reusable per-stream events for non-default sync modes (lazily created, see g_syncMode).
+    cudaEvent_t syncEvents[3] = { nullptr, nullptr, nullptr };
+
     ~EngineContext()
     {
       cudaSetDevice(deviceId);  // Ensure correct device for cleanup
@@ -191,6 +207,7 @@ namespace
       {
         if (streamGraphExecs[i]) cudaGraphExecDestroy(streamGraphExecs[i]);
         if (streamGraphs[i]) cudaGraphDestroy(streamGraphs[i]);
+        if (syncEvents[i]) cudaEventDestroy(syncEvents[i]);
       }
       for (int i = 0; i < 3; ++i)
       {
@@ -2474,12 +2491,48 @@ extern "C"
     return 0;
   }
 
-  TRT_API int32_t TRT_SyncStreamIdx(TRT_EngineHandle handle, int32_t streamIdx)
+  // count = number of positions in the batch being synced on this stream (i.e. the per-GPU
+  // batch size). Used to resolve "auto" mode (3): spin for small batches, block for large.
+  TRT_API int32_t TRT_SyncStreamIdx(TRT_EngineHandle handle, int32_t streamIdx, int32_t count)
   {
     if (!handle || streamIdx < 0 || streamIdx > 2) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
     if (!EnsureDevice(ec->deviceId)) return -1;
-    cudaStreamSynchronize(ec->streams[streamIdx]);
+
+    cudaStream_t stream = ec->streams[streamIdx];
+
+    // Resolve the wait policy. "auto" picks spin vs block per-sync from the per-GPU batch
+    // size: short GPU bursts (small batch) spin to avoid the OS wakeup latency; long bursts
+    // block to free the core.
+    int mode = g_syncMode;
+    if (mode == 3)
+    {
+      mode = (count <= SYNC_SPIN_MAX_PERGPU) ? 1 : 2;
+    }
+
+    if (mode == 0)
+    {
+      // Driver policy (typically spins when CUDA contexts <= cores, else blocks).
+      cudaStreamSynchronize(stream);
+      return 0;
+    }
+
+    // Reusable per-stream event. Created with the blocking flag so the BLOCK path actually
+    // blocks; the SPIN path busy-polls cudaEventQuery, which ignores the flag. A single
+    // stream may use either policy across batches (auto mode), hence the fixed flag.
+    if (!ec->syncEvents[streamIdx])
+    {
+      cudaEventCreateWithFlags(&ec->syncEvents[streamIdx], cudaEventBlockingSync | cudaEventDisableTiming);
+    }
+    cudaEventRecord(ec->syncEvents[streamIdx], stream);
+    if (mode == 1)
+    {
+      while (cudaEventQuery(ec->syncEvents[streamIdx]) == cudaErrorNotReady) { }
+    }
+    else
+    {
+      cudaEventSynchronize(ec->syncEvents[streamIdx]);
+    }
     return 0;
   }
 

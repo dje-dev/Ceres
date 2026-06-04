@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -102,6 +103,30 @@ public sealed class EnginePool : IDisposable
     }
   }
 
+
+  /// <summary>
+  /// Exposes a fixed pinned (page-locked) host region as a <see cref="Memory{Half}"/> so
+  /// callers can write into it via the normal Memory/Span APIs (e.g. plane conversion)
+  /// without a managed staging array. The pointer is owned by a StreamBufferSet and stays
+  /// valid for the pool's lifetime, so Pin/Unpin/Dispose are no-ops.
+  /// </summary>
+  private sealed unsafe class PinnedHalfMemoryManager : MemoryManager<Half>
+  {
+    private readonly Half* basePtr;
+    private readonly int lengthElements;
+
+    public PinnedHalfMemoryManager(IntPtr pinnedPtr, int lengthElements)
+    {
+      basePtr = (Half*)pinnedPtr;
+      this.lengthElements = lengthElements;
+    }
+
+    public override Span<Half> GetSpan() => new Span<Half>(basePtr, lengthElements);
+    public override MemoryHandle Pin(int elementIndex = 0) => new MemoryHandle(basePtr + elementIndex);
+    public override void Unpin() { }
+    protected override void Dispose(bool disposing) { }
+  }
+
   // Per-stream buffer sets for pipelined sub-batch processing [0..NUM_COMPUTE_STREAMS-1].
   private StreamBufferSet[] streamBuffers;
   private long maxInputBytes;
@@ -115,6 +140,10 @@ public sealed class EnginePool : IDisposable
   private byte[] cachedByteInputBuffer;
   private Half[] cachedHalfInputBuffer;
   private Half[] cachedOutputBuffer;
+
+  // Support for ProcessWithHandlerDirect: wraps stream 0's pinned input as Memory<Half>
+  // so plane conversion can write into it directly.
+  private PinnedHalfMemoryManager pinnedInputMgr;
 
   /// <summary>
   /// CUDA graph capture requires 256-byte aligned memory addresses.
@@ -451,7 +480,7 @@ public sealed class EnginePool : IDisposable
           engine.CopyToGPUOnStreamAsync(streamId, streamBuffers[s].GpuInput, streamBuffers[s].PinnedInput, inputBytes);
           engine.InferOnStreamWithGraphAsync(streamId, streamBuffers[s].GpuInput, streamBuffers[s].GpuOutput, GraphCaptureRWLock);
           engine.CopyFromGPUOnStreamAsync(streamId, streamBuffers[s].PinnedOutput, streamBuffers[s].GpuOutput, outputBytes);
-          engine.SyncStream(streamId);
+          engine.SyncStream(streamId, engine.BatchSize);
         }
       }
       catch (Exception ex)
@@ -608,6 +637,62 @@ public sealed class EnginePool : IDisposable
   }
 
 
+  /// <summary>
+  /// Like <see cref="ProcessWithHandler"/>, but instead of receiving a pre-filled managed
+  /// Half[] input buffer it invokes <paramref name="fillInput"/> to populate the input.
+  /// When the batch maps to a single engine (the common case), the conversion writes
+  /// directly into the pinned input buffer, eliminating the redundant managed->pinned
+  /// Buffer.MemoryCopy. For multi-sub-batch plans it falls back to filling a reusable
+  /// managed buffer and running the standard pipelined path (identical results).
+  /// </summary>
+  public unsafe void ProcessWithHandlerDirect(int totalPositions, Action<Memory<Half>> fillInput,
+                                              SubBatchOutputHandler handler, Half[] fallbackBuffer,
+                                              int globalPositionOffset = 0)
+  {
+    ComputeBatchPlan(totalPositions);
+    if (cachedBatchPlan.Count == 0)
+    {
+      return;
+    }
+
+    if (cachedBatchPlan.Count == 1)
+    {
+      (int start, int count, TensorRTEngine engine, int engineBatchSize, bool useDynamic, int engineIndex) = cachedBatchPlan[0];
+      int inputElements = count * InputElementsPerPosition;
+      int inputBytes = inputElements * sizeof(Half);
+
+      // Fill the conversion output straight into the pinned input buffer (no managed staging copy).
+      pinnedInputMgr ??= new PinnedHalfMemoryManager(streamBuffers[0].PinnedInput, MaxEngineBatchSize * InputElementsPerPosition);
+      fillInput(pinnedInputMgr.Memory.Slice(0, inputElements));
+
+      engine.CopyToGPUOnStreamAsync(STREAM_COMPUTE_A, streamBuffers[0].GpuInput, streamBuffers[0].PinnedInput, inputBytes);
+
+      if (useDynamic)
+      {
+        engine.InferOnStreamDynamicAsync(STREAM_COMPUTE_A, streamBuffers[0].GpuInput, streamBuffers[0].GpuOutput, count);
+      }
+      else
+      {
+        engine.InferOnStreamWithGraphAsync(STREAM_COMPUTE_A, streamBuffers[0].GpuInput, streamBuffers[0].GpuOutput);
+      }
+
+      int outputPositions = useDynamic ? count : engineBatchSize;
+      int outputElements = ComputeAlignedOutputSize(outputPositions);
+      long outputBytes = (long)outputElements * sizeof(ushort);
+      engine.CopyFromGPUOnStreamAsync(STREAM_COMPUTE_A, streamBuffers[0].PinnedOutput, streamBuffers[0].GpuOutput, outputBytes);
+      engine.SyncStream(STREAM_COMPUTE_A, count);
+
+      handler(globalPositionOffset + start, count, outputPositions, streamBuffers[0].PinnedOutput, outputElements);
+      return;
+    }
+
+    // Multi-sub-batch fallback: fill the caller-provided scratch buffer, then use the standard path.
+    int needed = totalPositions * InputElementsPerPosition;
+    fillInput(new Memory<Half>(fallbackBuffer, 0, needed));
+    ProcessSubBatchesPipelined(fallbackBuffer, handler, globalPositionOffset, 0);
+  }
+
+
 
 
 
@@ -676,7 +761,7 @@ public sealed class EnginePool : IDisposable
       int outputElements = ComputeAlignedOutputSize(outputPositions);
       long outputBytes = (long)outputElements * sizeof(ushort);
       engine.CopyFromGPUOnStreamAsync(STREAM_COMPUTE_A, streamBuffers[0].PinnedOutput, streamBuffers[0].GpuOutput, outputBytes);
-      engine.SyncStream(STREAM_COMPUTE_A);
+      engine.SyncStream(STREAM_COMPUTE_A, count);
 
       handler(globalPositionOffset + start, count, outputPositions, streamBuffers[0].PinnedOutput, outputElements);
       return;
@@ -728,7 +813,7 @@ public sealed class EnginePool : IDisposable
         // Dynamic path safety: serialize compute when streams share execution context
         if (anyDynamic && s > 0)
         {
-          cachedBatchPlan[groupStart + s - 1].engine.SyncStream(COMPUTE_STREAM_IDS[s - 1]);
+          cachedBatchPlan[groupStart + s - 1].engine.SyncStream(COMPUTE_STREAM_IDS[s - 1], cachedBatchPlan[groupStart + s - 1].count);
         }
 
         // Launch compute
@@ -758,7 +843,7 @@ public sealed class EnginePool : IDisposable
         int streamId = COMPUTE_STREAM_IDS[s];
         (int start, int count, TensorRTEngine engine, _, _, _) = cachedBatchPlan[batchIdx];
 
-        engine.SyncStream(streamId);
+        engine.SyncStream(streamId, count);
 
         handler(globalPositionOffset + start, count, groupOutputPositions[s],
                 streamBuffers[s].PinnedOutput, groupOutputElements[s]);

@@ -937,6 +937,36 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
 
   /// <summary>
+  /// Converts the output heads from FP16 to float, EXCEPT the large policy head, and only
+  /// for the used positions [0, count). The policy head is read sparsely (legal moves only)
+  /// directly from the FP16 buffer by ExtractSubBatchResults — (float)Half is exact — so
+  /// bulk-converting all ~1858 policy entries per position would be wasted work (the policy
+  /// is ~99% of the output for typical LC0 nets). Other heads (value/MLH/uncertainty and,
+  /// when present, policy2/action/ply-bin/PUNIM/qDev) are still converted here and read from
+  /// the float buffer as before. Walks tensors with the identical offset/alignment logic as
+  /// ComputeTensorOffsets so offsets stay consistent.
+  /// </summary>
+  private void PerfConvertNonPolicyHeads(ReadOnlySpan<Half> rawSpan, Span<float> floatBuf, int count, int engineBatchSize)
+  {
+    const int ALIGN = 128;
+    int currentOffset = 0;
+    for (int t = 0; t < outputInfos.Length; t++)
+    {
+      int sizePerPos = (int)(outputInfos[t].Size / largestEngineBatchSize);
+      int tensorSize = engineBatchSize * sizePerPos;
+
+      if (t != policyTensorIndex && sizePerPos > 0)
+      {
+        int n = count * sizePerPos;
+        TensorPrimitives.ConvertToSingle(rawSpan.Slice(currentOffset, n), floatBuf.Slice(currentOffset, n));
+      }
+
+      currentOffset += (tensorSize + ALIGN - 1) / ALIGN * ALIGN;
+    }
+  }
+
+
+  /// <summary>
   /// Applies softmax with bin reversal to 8-bin logits, writing to destination.
   /// Used for ply-bin and PUNIM outputs.
   /// </summary>
@@ -1406,13 +1436,10 @@ public class NNEvaluatorTensorRT : NNEvaluator
       throw new ArgumentException($"Batch size {numPos} exceeds maximum {maxBatchSize}");
     }
 
-    if (NetType == ONNXNetExecutor.NetTypeEnum.LC0)
-    {
-      // LC0 path: convert positions to 112-plane format directly into inputHalfBuffer
-      Memory<Half> inputBuffer = new Memory<Half>(inputHalfBuffer, 0, numPos * inputElementsPerPosition);
-      batch.ConvertValuesToFlatFromPlanes(inputBuffer, false, true);
-    }
-    else
+    // LC0 path: the plane->Half conversion is deferred to FillInputLC0, invoked inside
+    // ProcessWithHandlerDirect, which writes the result straight into the pinned input
+    // buffer (no managed staging buffer / redundant copy). Only TPG pre-fills its buffer here.
+    if (NetType != ONNXNetExecutor.NetTypeEnum.LC0)
     {
       // TPG path: convert positions to flat TPG byte format
       if (ConverterToFlat == null)
@@ -1461,78 +1488,19 @@ public class NNEvaluatorTensorRT : NNEvaluator
     Half[] punimSelf = punimSelfBuffer;
     Half[] punimOpponent = punimOpponentBuffer;
 
-    // Get option values for value head temperature
-    float valueHead1Temperature = Options?.ValueHead1Temperature ?? 1.0f;
-    float valueHead2Temperature = Options?.ValueHead2Temperature ?? 1.0f;
-    float valueHead1TemperatureScaling = Options?.Value1UncertaintyTemperatureScalingFactor ?? 0.0f;
-    float valueHead2TemperatureScaling = Options?.Value2UncertaintyTemperatureScalingFactor ?? 0.0f;
-
-    // Policy2 blend parameters
-    float fractionPolicyHead2 = (hasPolicySecondary ? Options?.FractionPolicyHead2 : null) ?? 0.0f;
-    bool policy2BlendLogits = Options?.Policy2BlendLogits ?? true;
-    float policy1Temperature = Options?.Policy1Temperature ?? 1.0f;
-    float policy2Temperature = Options?.Policy2Temperature ?? 1.0f;
-    float actionTemperature = Options?.ActionTemperature ?? 1.0f;
-
-    // Capture buffer size for thread-local allocation in handler
-    int requiredBufferSize = outputFloatBufferSize;
-
-    SubBatchOutputHandler handler = (int globalStartPosition, int positionCount, int engineBatchSize, IntPtr rawOutputPtr, int outputElementCount) =>
-    {
-      // Ensure thread-local buffer is allocated (each GPU thread gets its own buffer)
-      if (threadLocalOutputFloatBuffer == null || threadLocalOutputFloatBuffer.Length < requiredBufferSize)
-      {
-        threadLocalOutputFloatBuffer = new float[requiredBufferSize];
-      }
-
-      // Vectorized conversion from Half to float directly from pinned host memory
-      unsafe
-      {
-        ReadOnlySpan<Half> rawSpan = new ReadOnlySpan<Half>((void*)rawOutputPtr, outputElementCount);
-
-        // Check for NaNs on raw Half data (half the bandwidth vs checking floats)
-        int usedOutputElements = positionCount * outputElementsPerPosition;
-        bool hasNaN = MathUtils.ContainsNaN(rawSpan.Slice(0, usedOutputElements));
-
-        TensorPrimitives.ConvertToSingle(rawSpan, threadLocalOutputFloatBuffer.AsSpan(0, outputElementCount));
-
-        if (hasNaN)
-        {
-          // Identify which head(s) contain the NaN before we substitute zeros.
-          string nanHeads = IdentifyNaNHeads(rawSpan, positionCount, engineBatchSize);
-
-          // Substitute NaN with 0 in the converted float buffer so downstream
-          // consumers see sane values, then emit a rate-limited warning.
-          Span<float> usedFloats = threadLocalOutputFloatBuffer.AsSpan(0, usedOutputElements);
-          for (int i = 0; i < usedFloats.Length; i++)
-          {
-            if (float.IsNaN(usedFloats[i]))
-            {
-              usedFloats[i] = 0;
-            }
-          }
-
-          ReportNaNOccurrence(positionCount, usedOutputElements, nanHeads);
-        }
-      }
-
-      ExtractSubBatchResults(batch, globalStartPosition, positionCount, engineBatchSize,
-                             threadLocalOutputFloatBuffer, w, l, w2, l2, m, uncV, uncP, policies,
-                             pol2, actions,
-                             plyBinMove, plyBinCapture, punimSelf, punimOpponent,
-                             extraStat0, extraStat1,
-                             valueHead1Temperature, valueHead2Temperature,
-                             valueHead1TemperatureScaling, valueHead2TemperatureScaling,
-                             fractionPolicyHead2, policy2BlendLogits,
-                             policy1Temperature, policy2Temperature,
-                             NetType == ONNXNetExecutor.NetTypeEnum.TPG,
-                             actionTemperature);
-    };
+    // Set per-call state for the cached output handler. The handler is an instance
+    // method whose delegate is allocated once (cachedHandler), avoiding a per-batch
+    // closure + delegate allocation. All other state it needs (buffers, option-derived
+    // parameters) is read from instance fields; only the batch varies per call.
+    handlerBatch = batch;
+    SubBatchOutputHandler handler = cachedHandler ??= OutputHandler;
 
     if (NetType == ONNXNetExecutor.NetTypeEnum.LC0)
     {
-      // LC0: inputHalfBuffer already contains the encoded planes from DoEvaluateIntoBuffers
-      pool.ProcessWithHandler(inputHalfBuffer, numPos, handler);
+      // LC0: convert the 112-plane input directly into the pinned input buffer via
+      // FillInputLC0 (no managed staging buffer + redundant copy). handlerBatch was set above.
+      // inputHalfBuffer is passed only as scratch for the rare multi-sub-batch fallback.
+      pool.ProcessWithHandlerDirect(numPos, cachedFillInputLC0 ??= FillInputLC0, handler, inputHalfBuffer);
     }
     else if (useByteInputs)
     {
@@ -1605,6 +1573,99 @@ public class NNEvaluatorTensorRT : NNEvaluator
       extraStat1: hasQDeviation ? extraStat1 : default,
       hasPolicySecondary: hasPolicySecondary,
       policies2: hasPolicySecondary ? pol2 : default);
+  }
+
+
+  // Per-call state for the cached output handler (set before each pool call).
+  private SubBatchOutputHandler cachedHandler;
+  private IEncodedPositionBatchFlat handlerBatch;
+
+  // Cached LC0 input-fill delegate (allocated once). Converts the current batch's 112-plane
+  // representation directly into the destination Memory<Half> supplied by the engine pool
+  // (the pinned input buffer for single-engine batches). Uses handlerBatch, set per call.
+  private Action<Memory<Half>> cachedFillInputLC0;
+  private void FillInputLC0(Memory<Half> dest) => handlerBatch.ConvertValuesToFlatFromPlanes(dest, false, true);
+
+  /// <summary>
+  /// Output handler invoked (possibly concurrently across GPU worker threads) for each
+  /// sub-batch produced by the engine pool. Implemented as an instance method so its
+  /// delegate can be cached once (see cachedHandler) rather than allocating a closure
+  /// per batch. Reads buffers and option-derived parameters from instance state; the
+  /// per-call batch is passed via the handlerBatch field. All worker threads for a single
+  /// ProcessBatchWithPool call operate on the same batch (disjoint position sub-ranges),
+  /// so a single shared field is correct.
+  /// </summary>
+  private void OutputHandler(int globalStartPosition, int positionCount, int engineBatchSize, IntPtr rawOutputPtr, int outputElementCount)
+  {
+    IEncodedPositionBatchFlat batch = handlerBatch;
+    int requiredBufferSize = outputFloatBufferSize;
+
+    // Option-derived parameters (constant for this evaluator; recomputed cheaply here
+    // to keep the handler closure-free).
+    float valueHead1Temperature = Options?.ValueHead1Temperature ?? 1.0f;
+    float valueHead2Temperature = Options?.ValueHead2Temperature ?? 1.0f;
+    float valueHead1TemperatureScaling = Options?.Value1UncertaintyTemperatureScalingFactor ?? 0.0f;
+    float valueHead2TemperatureScaling = Options?.Value2UncertaintyTemperatureScalingFactor ?? 0.0f;
+    float fractionPolicyHead2 = (hasPolicySecondary ? Options?.FractionPolicyHead2 : null) ?? 0.0f;
+    bool policy2BlendLogits = Options?.Policy2BlendLogits ?? true;
+    float policy1Temperature = Options?.Policy1Temperature ?? 1.0f;
+    float policy2Temperature = Options?.Policy2Temperature ?? 1.0f;
+    float actionTemperature = Options?.ActionTemperature ?? 1.0f;
+    CompressedActionVector[] actions = hasAction ? actionsBuffer : Array.Empty<CompressedActionVector>();
+
+    // Ensure thread-local buffer is allocated (each GPU thread gets its own buffer)
+    if (threadLocalOutputFloatBuffer == null || threadLocalOutputFloatBuffer.Length < requiredBufferSize)
+    {
+      threadLocalOutputFloatBuffer = new float[requiredBufferSize];
+    }
+
+    // Vectorized conversion from Half to float directly from pinned host memory
+    unsafe
+    {
+      ReadOnlySpan<Half> rawSpan = new ReadOnlySpan<Half>((void*)rawOutputPtr, outputElementCount);
+
+      // Check for NaNs on raw Half data (half the bandwidth vs checking floats)
+      int usedOutputElements = positionCount * outputElementsPerPosition;
+      bool hasNaN = MathUtils.ContainsNaN(rawSpan.Slice(0, usedOutputElements));
+
+      // Convert only the small heads (value/MLH/uncertainty/etc.) to float. The large
+      // policy/policy2/action heads are NOT converted here: extraction reads only the
+      // handful of legal-move logits it needs directly from this Half buffer (and
+      // (float)Half is exact), so converting the full ~1858-wide policy per position is
+      // pure waste. Only the used positions (count, not engineBatchSize) are converted.
+      PerfConvertNonPolicyHeads(rawSpan, threadLocalOutputFloatBuffer.AsSpan(), positionCount, engineBatchSize);
+
+      if (hasNaN)
+      {
+        // Identify which head(s) contain the NaN before we substitute zeros.
+        string nanHeads = IdentifyNaNHeads(rawSpan, positionCount, engineBatchSize);
+
+        // Substitute NaN with 0 in the converted float buffer so downstream
+        // consumers see sane values, then emit a rate-limited warning.
+        Span<float> usedFloats = threadLocalOutputFloatBuffer.AsSpan(0, usedOutputElements);
+        for (int i = 0; i < usedFloats.Length; i++)
+        {
+          if (float.IsNaN(usedFloats[i]))
+          {
+            usedFloats[i] = 0;
+          }
+        }
+
+        ReportNaNOccurrence(positionCount, usedOutputElements, nanHeads);
+      }
+    }
+
+    ExtractSubBatchResults(batch, globalStartPosition, positionCount, engineBatchSize,
+                           threadLocalOutputFloatBuffer, rawOutputPtr, wBuffer, lBuffer, w2Buffer, l2Buffer, mBuffer, uncVBuffer, uncPBuffer, policiesBuffer,
+                           policies2Buffer, actions,
+                           plyBinMoveBuffer, plyBinCaptureBuffer, punimSelfBuffer, punimOpponentBuffer,
+                           extraStat0Buffer, extraStat1Buffer,
+                           valueHead1Temperature, valueHead2Temperature,
+                           valueHead1TemperatureScaling, valueHead2TemperatureScaling,
+                           fractionPolicyHead2, policy2BlendLogits,
+                           policy1Temperature, policy2Temperature,
+                           NetType == ONNXNetExecutor.NetTypeEnum.TPG,
+                           actionTemperature);
   }
 
 
@@ -1794,8 +1855,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
   /// Uses parallel processing for all per-position extractions (values, policies, etc.)
   /// for improved performance, matching the pattern used in the ONNX backend.
   /// </summary>
-  private void ExtractSubBatchResults(IEncodedPositionBatchFlat batch, int startPos, int count, int engineBatchSize,
-                                      float[] subBatchOutput,
+  private unsafe void ExtractSubBatchResults(IEncodedPositionBatchFlat batch, int startPos, int count, int engineBatchSize,
+                                      float[] subBatchOutput, IntPtr rawHalfPtr,
                                       FP16[] w, FP16[] l, FP16[] w2, FP16[] l2, FP16[] m, FP16[] uncV, FP16[] uncP,
                                       CompressedPolicyVector[] policies,
                                       CompressedPolicyVector[] policies2,
@@ -1904,7 +1965,10 @@ public class NNEvaluatorTensorRT : NNEvaluator
         return;
       }
 
-      ReadOnlySpan<float> policyLogits = subBatchOutput.AsSpan().Slice(posPolicyOffset, policySize);
+      // Policy logits are read directly from the FP16 output buffer (this head is NOT
+      // bulk-converted to float, since only the legal-move entries are needed and
+      // (float)Half is exact). NaN->0 reproduces the substitution applied to converted heads.
+      Half* policyHalf = (Half*)rawHalfPtr + posPolicyOffset;
 
       // Collect move indices and find max logit in a single pass
       Span<int> indices = stackalloc int[numMoves];
@@ -1920,7 +1984,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
         if (nnIndex >= 0 && nnIndex < policySize)
         {
-          float logit = policyLogits[nnIndex];
+          float logit = (float)policyHalf[nnIndex];
+          if (float.IsNaN(logit))
+          {
+            logit = 0f;
+          }
           logits[mv] = logit;
           if (logit > maxLogit)
           {

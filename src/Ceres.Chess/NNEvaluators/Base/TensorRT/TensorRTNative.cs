@@ -247,7 +247,7 @@ internal static partial class TensorRTNative
   internal static partial int CopyFromGPUOnStream(IntPtr handle, int streamIdx, IntPtr dst, IntPtr src, long bytes);
 
   [LibraryImport(LibraryName, EntryPoint = "TRT_SyncStreamIdx")]
-  internal static partial int SyncStreamIdx(IntPtr handle, int streamIdx);
+  internal static partial int SyncStreamIdx(IntPtr handle, int streamIdx, int count);
 
   // =========================================================================
   // Dynamic Batch Size Inference (for range-mode engines)

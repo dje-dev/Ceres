@@ -1152,19 +1152,58 @@ namespace Ceres.Chess.LC0.Batches
     internal void ConvertToFlat(int startPosToConvertIndex, int numPositionsToConvert,
                                 Memory<Half> destinationBuffer, bool scale50MoveCounter)
     {
-      int numPlanesTotal = NumPos * TOTAL_NUM_PLANES_ALL_HISTORIES;
-      int startPlanesToConvert = startPosToConvertIndex * TOTAL_NUM_PLANES_ALL_HISTORIES;
-      int numPlanesToConvert = numPositionsToConvert * TOTAL_NUM_PLANES_ALL_HISTORIES;
+      const int PLANES = TOTAL_NUM_PLANES_ALL_HISTORIES;
+      const int SQUARES_PER_PLANE = 64;
+      int numPlanesTotal = NumPos * PLANES;
 
-      if (false)
+      // The bitmap->Half plane expansion is embarrassingly parallel across positions and is
+      // (for small/fast nets) the dominant CPU phase feeding TensorRT. Parallelize across
+      // position chunks for larger batches. Each position is exactly PLANES planes, so chunk
+      // boundaries stay position-aligned and the 50-move-plane scaling tracked by
+      // (planeIndex % 112) inside the expander remains correct. State is passed via instance
+      // fields + a cached delegate to avoid a per-call closure allocation (only one
+      // conversion runs at a time per batch instance).
+      const int MIN_POS_FOR_PARALLEL = 64;
+      if (numPositionsToConvert >= MIN_POS_FOR_PARALLEL)
       {
-        BitmapRepresentationExpandSLOW(PosPlaneBitmaps, PosPlaneValues, destinationBuffer,
-                                       numPlanesToConvert, scale50MoveCounter); //old slow version
+        // Cap chunks: the expansion is partly memory-bandwidth bound, so a handful of
+        // workers saturates it; more chunks just add Parallel.For overhead/allocation.
+        int numChunks = Math.Clamp(numPositionsToConvert / 32, 2, 16);
+        convDest = destinationBuffer;
+        convStartPos = startPosToConvertIndex;
+        convNumPos = numPositionsToConvert;
+        convPosPerChunk = (numPositionsToConvert + numChunks - 1) / numChunks;
+        convScale50 = scale50MoveCounter;
+        convNumPlanesTotal = numPlanesTotal;
+        Parallel.For(0, numChunks, convChunkAction ??= ConvertChunk);
         return;
       }
 
       BitmapRepresentationExpand(PosPlaneBitmaps, PosPlaneValues, destinationBuffer,
-                                 startPlanesToConvert, numPlanesToConvert, numPlanesTotal, scale50MoveCounter);
+                                 startPosToConvertIndex * PLANES, numPositionsToConvert * PLANES,
+                                 numPlanesTotal, scale50MoveCounter);
+    }
+
+    // Scratch state for the cached parallel-conversion delegate (ConvertChunk). Safe as
+    // instance fields because at most one ConvertToFlat runs at a time per batch instance.
+    private Memory<Half> convDest;
+    private int convStartPos, convPosPerChunk, convNumPos, convNumPlanesTotal;
+    private bool convScale50;
+    private Action<int> convChunkAction;
+
+    private void ConvertChunk(int ci)
+    {
+      const int PLANES = TOTAL_NUM_PLANES_ALL_HISTORIES;
+      const int SQUARES_PER_PLANE = 64;
+      int a = ci * convPosPerChunk;
+      if (a >= convNumPos)
+      {
+        return;
+      }
+      int chunkPos = Math.Min(convPosPerChunk, convNumPos - a);
+      Memory<Half> dstSlice = convDest.Slice(a * PLANES * SQUARES_PER_PLANE, chunkPos * PLANES * SQUARES_PER_PLANE);
+      BitmapRepresentationExpand(PosPlaneBitmaps, PosPlaneValues, dstSlice,
+                                 (convStartPos + a) * PLANES, chunkPos * PLANES, convNumPlanesTotal, convScale50);
     }
 
 

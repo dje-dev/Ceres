@@ -809,9 +809,14 @@ public sealed class TensorRTEngine : IDisposable
   /// Synchronizes the specified CUDA stream, blocking until all operations complete.
   /// </summary>
   /// <param name="streamIdx">Stream index (0 or 1)</param>
-  public void SyncStream(int streamIdx)
+  /// <summary>
+  /// Waits for the given stream's work to complete. <paramref name="count"/> is the per-GPU
+  /// batch size being synced; the native layer uses it to pick spin vs block sync in "auto"
+  /// mode (spin for small batches where the wakeup latency dominates, block otherwise).
+  /// </summary>
+  public void SyncStream(int streamIdx, int count)
   {
-    int result = TensorRTNative.SyncStreamIdx(handle, streamIdx);
+    int result = TensorRTNative.SyncStreamIdx(handle, streamIdx, count);
     if (result != 0)
     {
       throw new InvalidOperationException($"SyncStreamIdx failed on stream {streamIdx}");

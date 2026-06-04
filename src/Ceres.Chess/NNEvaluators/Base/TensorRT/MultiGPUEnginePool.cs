@@ -265,6 +265,8 @@ public sealed class MultiGPUEnginePool : IDisposable
       deviceNames[i] = TensorRTNative.GetDeviceName(deviceIds[i]);
     }
 
+    // Sync policy (spin vs block) is chosen per-sync from the per-GPU batch size in the
+    // native layer's "auto" mode (default), so no pool-level promotion is needed here.
     Warmup();
   }
 
@@ -971,6 +973,31 @@ public sealed class MultiGPUEnginePool : IDisposable
     workerHandler = handler;
     workerWorkType = WORK_WITH_HANDLER;
     DispatchAndWait(numGPUs, WORK_WITH_HANDLER);
+  }
+
+
+  /// <summary>
+  /// Like <see cref="ProcessWithHandler"/>, but receives a fill delegate instead of a
+  /// pre-filled managed input buffer. When the batch is routed to a single GPU, the
+  /// conversion writes directly into that GPU's pinned input buffer (no managed staging
+  /// copy). For the multi-GPU split path it fills a reusable managed buffer and uses the
+  /// standard split path (identical results).
+  /// </summary>
+  public void ProcessWithHandlerDirect(int totalPositions, Action<Memory<Half>> fillInput,
+                                       SubBatchOutputHandler handler, Half[] fallbackBuffer)
+  {
+    for (int i = 0; i < pools.Count; i++) pools[i].MarkNewBatch();
+
+    if (ShouldUseSingleGPU(totalPositions))
+    {
+      pools[0].ProcessWithHandlerDirect(totalPositions, fillInput, handler, fallbackBuffer, globalPositionOffset: 0);
+      return;
+    }
+
+    // Multi-GPU split: fill the caller-provided scratch buffer, then run the standard split path.
+    int needed = totalPositions * InputElementsPerPosition;
+    fillInput(new Memory<Half>(fallbackBuffer, 0, needed));
+    ProcessWithHandler(fallbackBuffer, totalPositions, handler);
   }
 
 
