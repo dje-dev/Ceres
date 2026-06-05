@@ -545,7 +545,17 @@ public readonly unsafe partial struct GNode : IComparable<GNode>, IEquatable<GNo
       }
     }
 
-    return ChildEdgeAtIndex(maxIndex);
+    // If no edge produced a value greater than double.MinValue, maxIndex remains -1. This happens
+    // when every candidate value is NaN (NaN > x is always false) — e.g. valueFunc reads an edge
+    // Q that is NaN (draw-by-repetition / transposition nodes can have uninitialized Q). Fall back
+    // to the first edge rather than calling ChildEdgeAtIndex(-1), which reads the header slot before
+    // the node's block and can corrupt memory / fault.
+    if (maxIndex < 0)
+    {
+      maxIndex = 0;
+    }
+
+    return numExpanded > 0 ? ChildEdgeAtIndex(maxIndex) : default;
   }
 
 

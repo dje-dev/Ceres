@@ -504,6 +504,24 @@ public class MCGSSelect
     // This allows the parent lock to be released before commencing recursive descent.
     ListBounded<DeferredSubPath> deferredSubPaths = null;
 
+    // Enforce in-order edge expansion. The edge store requires unexpanded children to be expanded
+    // in strictly ascending index order (creating edge k derives its storage block from edge k-1).
+    // Compact the unexpanded children into contiguous slots beginning at NumEdgesExpanded, swapping both edge headers.
+    int scanLimit = Math.Min(numChildrenToConsider, childVisitCounts.Length);
+    int writeSlot = parentNode.NumEdgesExpanded;
+    for (int k = parentNode.NumEdgesExpanded; k < scanLimit; k++)
+    {
+      if (childVisitCounts[k] > 0)
+      {
+        if (k != writeSlot)
+        {
+          parentNode.SwapChildEdgeHeaders(writeSlot, k);
+          (childVisitCounts[writeSlot], childVisitCounts[k]) = (childVisitCounts[k], childVisitCounts[writeSlot]);
+        }
+        writeSlot++;
+      }
+    }
+
     SelectVisitsEnumerator childVisitScans = new(numChildrenToConsider, parentNode.NumEdgesExpanded, multipass);
     foreach ((SelectVisitsEnumerator.VisitsPhase phase, int childIndex) in childVisitScans)
     {
