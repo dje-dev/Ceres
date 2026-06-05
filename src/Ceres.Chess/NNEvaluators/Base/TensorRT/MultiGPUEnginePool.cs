@@ -1297,8 +1297,81 @@ public sealed class MultiGPUEnginePool : IDisposable
   }
 
 
+  /// <summary>
+  /// Within each group of identical GPUs (same device name), redistributes that group's total
+  /// assigned positions as evenly as possible. For symmetric GPUs this produces the expected
+  /// balanced split (e.g. 50/50) instead of the makespan DP's lower-plateau-edge result
+  /// (e.g. 160 positions -> [72, 88] rather than [80, 80]).
+  ///
+  /// Makespan-safe: because each GPU's cost(n) is non-decreasing, the evened group maximum
+  /// (cost of ceil(total/k)) is &lt;= the original group maximum (cost of the largest member),
+  /// so this can only keep or reduce the makespan, never increase it. Any remainder goes to the
+  /// earliest GPU indices, so GPU 0 (which runs inline on the caller thread, with no dispatch/join
+  /// handoff latency) carries the larger share. Only GPUs the optimizer actually used (count &gt; 0)
+  /// participate, which preserves any fewer-GPU decision.
+  /// </summary>
+  private void RebalanceWithinDeviceGroups(Span<int> distribution, int numGPUs)
+  {
+    for (int g = 0; g < numGPUs; g++)
+    {
+      string name = deviceNames[g];
+      if (name == null || distribution[g] <= 0)
+      {
+        continue;
+      }
+
+      // Only process each group once, at its first used member.
+      bool isFirstOfGroup = true;
+      for (int p = 0; p < g; p++)
+      {
+        if (distribution[p] > 0 && string.Equals(deviceNames[p], name, StringComparison.Ordinal))
+        {
+          isFirstOfGroup = false;
+          break;
+        }
+      }
+      if (!isFirstOfGroup)
+      {
+        continue;
+      }
+
+      int groupCount = 0;
+      int groupTotal = 0;
+      for (int m = g; m < numGPUs; m++)
+      {
+        if (distribution[m] > 0 && string.Equals(deviceNames[m], name, StringComparison.Ordinal))
+        {
+          groupCount++;
+          groupTotal += distribution[m];
+        }
+      }
+      if (groupCount <= 1)
+      {
+        continue;
+      }
+
+      // Even split; first (groupTotal % groupCount) members get one extra position.
+      int baseShare = groupTotal / groupCount;
+      int remainder = groupTotal % groupCount;
+      int assigned = 0;
+      for (int m = g; m < numGPUs; m++)
+      {
+        if (distribution[m] > 0 && string.Equals(deviceNames[m], name, StringComparison.Ordinal))
+        {
+          distribution[m] = baseShare + (assigned < remainder ? 1 : 0);
+          assigned++;
+        }
+      }
+    }
+  }
+
+
   private void StoreDistCache(int totalPositions, int numGPUs, Span<int> distribution)
   {
+    // Even out the load within each group of identical GPUs before caching, so symmetric
+    // GPUs get equal (e.g. 50/50) splits. Makespan-safe (see RebalanceWithinDeviceGroups).
+    RebalanceWithinDeviceGroups(distribution, numGPUs);
+
     int cBase = totalPositions * pools.Count;
     for (int g = 0; g < numGPUs; g++)
     {

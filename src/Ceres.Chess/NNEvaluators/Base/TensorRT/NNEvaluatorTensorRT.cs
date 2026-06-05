@@ -1624,8 +1624,18 @@ public class NNEvaluatorTensorRT : NNEvaluator
     {
       ReadOnlySpan<Half> rawSpan = new ReadOnlySpan<Half>((void*)rawOutputPtr, outputElementCount);
 
-      // Check for NaNs on raw Half data (half the bandwidth vs checking floats)
-      int usedOutputElements = positionCount * outputElementsPerPosition;
+      // Check for NaNs on raw Half data (half the bandwidth vs checking floats).
+      // outputElementsPerPosition is a single global, floor(largestEngine.TotalOutputSize /
+      // largestBatch); because TotalOutputSize sums each output tensor aligned-up independently,
+      // positionCount * outputElementsPerPosition can slightly EXCEED this engine's actual aligned
+      // output (outputElementCount = rawSpan.Length) for some bucket sets — e.g. an exact-fit batch
+      // on a mid engine whose per-tensor alignment padding amortizes less than the largest engine's.
+      // Clamp to the real buffer length to avoid over-reading rawSpan (was an ArgumentOutOfRange in
+      // the NaN slice). The genuine per-head data is read via aligned per-tensor offsets elsewhere
+      // (PerfConvertNonPolicyHeads / ExtractSubBatchResults / ComputeTensorOffsets), so this scan is
+      // only an approximate sanity bound; when it clamps, positionCount == engineBatchSize and the
+      // whole buffer is valid used data anyway. A no-op whenever the product already fits.
+      int usedOutputElements = Math.Min(positionCount * outputElementsPerPosition, outputElementCount);
       bool hasNaN = MathUtils.ContainsNaN(rawSpan.Slice(0, usedOutputElements));
 
       // Convert only the small heads (value/MLH/uncertainty/etc.) to float. The large
@@ -2362,7 +2372,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     }
 
     //    if (optionsCeres.HeadOverrides != null)
-    //    {
+    //    { 
     //      throw new NotImplementedException("Ceres TensorRT Native evaluator does not yet support head overrides.");
     //    }
     bool EXACT_BATCHES = options.EnableCUDAGraphs;
@@ -2370,15 +2380,23 @@ public class NNEvaluatorTensorRT : NNEvaluator
     // Check if BF16 mode or refittable is requested via NNEvaluatorOptionsCeres
     TensorRTBuildOptions? buildOptions = null;
 
-    //const bool ENABLE_GRAPHS = false;
+    // Determine set of batch sizes (for exact batch mode)
+    // Smaller batch sizes are used with multiple GPUs because each GPU processes a smaller sub-batch
+    int[] batchSizes = gpuIDs.Length switch
+    {
+      1           => [1, 16, 48, 72, 96, 120, 152, 184],
+      2           => [1, 16, 40, 64, 80, 104, 128, 152],
+      3 or 4 or 5 => [1, 16, 32, 48, 60, 72, 88, 104],
+      _           => [1, 16, 24, 32, 40, 48, 60, 72],
+    };
+
     bool forceBF16 = options is NNEvaluatorOptionsCeres optionsCeres && optionsCeres.UseBF16;
     bool refittable = options is NNEvaluatorOptionsCeres optionsCeresRefit && optionsCeresRefit.Refittable;
     int fp32AllNorms = options is NNEvaluatorOptionsCeres optionsCeresNorms ? optionsCeresNorms.Fp32AllNorms : -1;
     NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
                                               netType,
                                               EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
-                                              EXACT_BATCHES ? [1, 8, 20, 42, 64, 88, 116, 240]
-                                                            : [96, 1024],
+                                              EXACT_BATCHES ? batchSizes : [96, 1024],
                                               buildOptions,
                                               gpuIDs: gpuIDs,
                                               useCudaGraphs: EXACT_BATCHES,
@@ -2418,7 +2436,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     {
       throw new Exception($"Failed to query SM count for GPU {deviceID}");
     }
-    const int THRESHOLD_ADJUST_TO_SM_DISTANCE = 8;
+    const int THRESHOLD_ADJUST_TO_SM_DISTANCE = 6;
 
     int[] bases = { smCount };
 

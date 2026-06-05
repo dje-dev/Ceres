@@ -546,10 +546,22 @@ public sealed class EnginePool : IDisposable
         // Synchronous inference
         engine.InferHost(batchInput, batchOutput);
 
-        // Copy output
-        if (outputElements > 0)
+        // Copy output.
+        // The engine writes exactly engine.TotalOutputSize elements into batchOutput, where
+        // TotalOutputSize is the sum of each output tensor's size aligned up independently
+        // (per-tensor 128-element alignment). The global OutputElementsPerPosition is derived
+        // (truncated) from the LARGEST engine, so actualPositions * OutputElementsPerPosition can
+        // slightly exceed an individual engine's TotalOutputSize for some bucket sets (the
+        // alignment padding does not amortize identically across profiles). Clamp the copy to what
+        // the engine actually produced to avoid over-reading batchOutput. This static path is used
+        // only for warmup/benchmark timing (its output is never consumed — production inference
+        // uses the *WithHandler paths, which size every copy with ComputeAlignedOutputSize and are
+        // therefore exact); in all non-degenerate cases outputElements <= batchOutput.Length and
+        // this clamp is a no-op.
+        int copyElements = Math.Min(outputElements, batchOutput.Length);
+        if (copyElements > 0)
         {
-          Array.Copy(batchOutput, 0, output, outputOffset, outputElements);
+          Array.Copy(batchOutput, 0, output, outputOffset, copyElements);
         }
       }
 
@@ -609,10 +621,16 @@ public sealed class EnginePool : IDisposable
         // Synchronous inference with byte inputs
         engine.InferHostBytes(batchInput, batchOutput);
 
-        // Copy output
-        if (outputElements > 0)
+        // Copy output. Clamp to engine.TotalOutputSize (= batchOutput.Length) to avoid over-reading:
+        // the global OutputElementsPerPosition is truncated from the largest engine, so
+        // actualPositions * OutputElementsPerPosition can exceed this engine's TotalOutputSize for
+        // some bucket sets (per-tensor alignment padding amortizes differently across profiles).
+        // Warmup/benchmark-only path (output never consumed); a no-op when outputElements fits.
+        // See the matching comment in Process() for full detail. This was the INT8/TPG warmup crash.
+        int copyElements = Math.Min(outputElements, batchOutput.Length);
+        if (copyElements > 0)
         {
-          Array.Copy(batchOutput, 0, output, outputOffset, outputElements);
+          Array.Copy(batchOutput, 0, output, outputOffset, copyElements);
         }
       }
 
