@@ -513,8 +513,9 @@ public readonly unsafe partial struct GNode : IComparable<GNode>, IEquatable<GNo
   /// <returns></returns>
   public readonly GEdge[] EdgesSorted(Func<GEdge, double> sortValueFunc)
   {
-    GEdge[] edges = new GEdge[NumEdgesExpanded];
-    for (int i = 0; i < NumEdgesExpanded; i++)
+    int numExpanded = NumEdgesExpanded;
+    GEdge[] edges = new GEdge[numExpanded];
+    for (int i = 0; i < numExpanded; i++)
     {
       edges[i] = ChildEdgeAtIndex(i);
     }
@@ -531,9 +532,10 @@ public readonly unsafe partial struct GNode : IComparable<GNode>, IEquatable<GNo
   /// <returns></returns>
   public readonly GEdge EdgeWithMaxValue(Func<GEdge, double> valueFunc)
   {
+    int numExpanded = NumEdgesExpanded;
     double maxValue = double.MinValue;
-    int maxIndex = -1;  
-    for (int i = 0; i < NumEdgesExpanded; i++)
+    int maxIndex = -1;
+    for (int i = 0; i < numExpanded; i++)
     {
       double value = valueFunc(ChildEdgeAtIndex(i));
       if (value > maxValue)
