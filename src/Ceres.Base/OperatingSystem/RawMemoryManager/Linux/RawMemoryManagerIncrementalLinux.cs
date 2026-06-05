@@ -129,25 +129,37 @@ namespace Ceres.Base.OperatingSystem
 
       if (numBytesNeeded > numBytesAllocated)
       {
-        numBytesAllocated += ALLOCATE_INCREMENTAL_BYTES;
+        // Grow to at least the number of bytes actually needed, but by no less than the
+        // standard incremental amount (to keep the number of mprotect syscalls modest).
+        long newBytesAllocated = System.Math.Max(numBytesNeeded, numBytesAllocated + ALLOCATE_INCREMENTAL_BYTES);
+        newBytesAllocated = RoundToHugePageSize(newBytesAllocated);
 
-        int resultCode = LinuxAPI.mprotect(rawMemoryPointer, numBytesAllocated, LinuxAPI.PROT_READ | LinuxAPI.PROT_WRITE);
-        if (resultCode != 0)
+        // Never extend beyond the region that was reserved at construction.
+        if (newBytesAllocated > NumBytesReserved)
         {
-          throw new Exception($"Virtual memory extension to size {numBytesAllocated} failed with error {resultCode}");
+          newBytesAllocated = NumBytesReserved;
         }
 
-        Interlocked.Add(ref RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated, ALLOCATE_INCREMENTAL_BYTES);
+        int resultCode = LinuxAPI.mprotect(rawMemoryPointer, newBytesAllocated, LinuxAPI.PROT_READ | LinuxAPI.PROT_WRITE);
+        if (resultCode != 0)
+        {
+          throw new Exception($"Virtual memory extension to size {newBytesAllocated} failed with error {resultCode}");
+        }
+
+        long bytesNewlyCommitted = newBytesAllocated - numBytesAllocated;
+
+        // Publish the new committed size only after mprotect has succeeded.
+        Volatile.Write(ref numBytesAllocated, newBytesAllocated);
+
+        Interlocked.Add(ref RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated, bytesNewlyCommitted);
         if (RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated > RawMemoryManagerIncrementalLinuxStats.MaxBytesAllocated)
         {
           RawMemoryManagerIncrementalLinuxStats.MaxBytesAllocated = RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated;
         }
-
-
       }
     }
 
-    public long NumItemsAllocated => numBytesAllocated / sizeof(T);
+    public long NumItemsAllocated => Volatile.Read(ref numBytesAllocated) / sizeof(T);
 
     public void Dispose()
     {
