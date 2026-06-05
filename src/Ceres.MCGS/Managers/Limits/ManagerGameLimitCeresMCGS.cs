@@ -30,11 +30,28 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
 {
   public readonly float Aggressiveness;
 
-  const int   EARLY_SMOOTHING_MIN_BASELINE_N = 10_000; // disabled at low nodes where reduced allocation in late game more likely highly adverse
   const int   EARLY_SMOOTHING_WINDOW_MOVES   = 25;
   const int   EARLY_SMOOTHING_MAX_ADJUSTS    = 3;
-  const float EARLY_SMOOTHING_BASELINE_FRAC  = 0.35f;
   const float EARLY_SMOOTHING_BOOST          = 1.3f;
+
+  /// <summary>
+  /// Returns target minimum fraction of initial move nodes in early game.
+  /// Expectations are lower for games with smaller searches 
+  /// more suboptimal moves and therefore less graph reuse 
+  /// and therefore also smaller accumulated graph sizes will be expected.
+  /// </summary>
+  /// <param name="baselineN"></param>
+  /// <returns></returns>
+  static float EarlySmoothingBaselineFracForBaselineN(int baselineN)
+    => baselineN switch
+    {
+      < 10_000    => 0, // disabled
+      < 100_000   => 0.25f,
+      < 1_000_000 => 0.30f,
+      < 5_000_000 => 0.35f,
+      _ => 0.40f
+    };
+  
 
   // Per-game state for GameLimitEarlySmoothing. Reset on IsFirstMoveOfGame == true,
   // so the manager can be safely reused across multiple games in self-play tournaments.
@@ -221,11 +238,8 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
       // PriorMoveStats[^2] is the engine's prior move (the first-move-bonus search).
       int recordedN = inputs.PriorMoveStats[^2].FinalN;
 
-      if (recordedN > EARLY_SMOOTHING_MIN_BASELINE_N)
-      {
-        earlySmoothingBaselineN = recordedN;
-        earlySmoothingMovesRemaining = EARLY_SMOOTHING_WINDOW_MOVES;
-      }
+      earlySmoothingBaselineN = recordedN;
+      earlySmoothingMovesRemaining = EARLY_SMOOTHING_WINDOW_MOVES;
       earlySmoothingRecordPending = false;
     }
   }
@@ -326,10 +340,11 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
     {
       earlySmoothingMovesRemaining--;  // consume one slot from the 20-move window
 
+      float earlySmothingBaselineFrac = EarlySmoothingBaselineFracForBaselineN(earlySmoothingBaselineN);
       bool canStillAdjust  = earlySmoothingAdjustsApplied < EARLY_SMOOTHING_MAX_ADJUSTS;
       bool baselineValid   = earlySmoothingBaselineN > 0;
       bool isEarlyUnsmooth = baselineValid
-                          && inputs.RootN < EARLY_SMOOTHING_BASELINE_FRAC * earlySmoothingBaselineN;
+                          && inputs.RootN < earlySmothingBaselineFrac * earlySmoothingBaselineN;
 
       if (canStillAdjust && isEarlyUnsmooth)
       {
@@ -339,8 +354,8 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
         ConsoleColor savedColor = Console.ForegroundColor;
         Console.ForegroundColor = ConsoleColor.Yellow;
         Console.WriteLine($"\r\n[GameLimitEarlySmoothing] boost x{EARLY_SMOOTHING_BOOST:F2}  "
-                        + $"RootN={inputs.RootN} < {EARLY_SMOOTHING_BASELINE_FRAC:F2}*baseline({earlySmoothingBaselineN})"
-                        + $"={EARLY_SMOOTHING_BASELINE_FRAC * earlySmoothingBaselineN:F0}  "
+                        + $"RootN={inputs.RootN} < {earlySmothingBaselineFrac:F2}*baseline({earlySmoothingBaselineN})"
+                        + $"={earlySmothingBaselineFrac * earlySmoothingBaselineN:F0}  "
                         + $"adj {earlySmoothingAdjustsApplied}/{EARLY_SMOOTHING_MAX_ADJUSTS}  "
                         + $"window {EARLY_SMOOTHING_WINDOW_MOVES - earlySmoothingMovesRemaining}/{EARLY_SMOOTHING_WINDOW_MOVES}");
         Console.ForegroundColor = savedColor;
