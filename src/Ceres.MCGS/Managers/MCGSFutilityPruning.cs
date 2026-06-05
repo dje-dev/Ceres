@@ -174,9 +174,8 @@ public class MCGSFutilityPruning
     }
 
     // Allocate (or reallocate if undersized) the per-root pruning array.
-    if (Manager.Engine.SearchRootNode.N > 1
-        && (Manager.RootMovesPruningStatus == null
-            || Manager.RootMovesPruningStatus.Length < SearchRoot.NumPolicyMoves))
+    if (Manager.RootMovesPruningStatus == null
+        || Manager.RootMovesPruningStatus.Length < SearchRoot.NumPolicyMoves)
     {
       Manager.RootMovesPruningStatus = new MCGSFutilityPruningStatus[SearchRoot.NumPolicyMoves];
     }
