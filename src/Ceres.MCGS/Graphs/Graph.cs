@@ -1187,9 +1187,6 @@ public unsafe partial class Graph : IDisposable
               && refEdge.Type == GEdgeStruct.EdgeType.ChildEdge
               && !refEdge.ChildNodeHasDrawKnownToExist)
           {
-            // NumParentsMoreThanOne touches the child node header (same cache line we'd hit for
-            // the refresh itself); gating here eliminates the read entirely for single-parent
-            // edges, which dominate non-transposition positions.
             GNode candidateChild = new GNode(node.Graph, refEdge.ChildNodeIndex);
             needsRefresh = candidateChild.NumParentsMoreThanOne;
           }

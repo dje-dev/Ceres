@@ -109,7 +109,7 @@ public static class PUCTSelector
 
 
     graph.GatherChildInfoViaChildren(node, selectorID, maxChildIndex, dualCollisionFraction, stats, refreshStaleEdges,
-                                     crossParentNActive: paramsSelect.CBGPUCT_SelectCrossParentNEnabled);
+                                     crossParentNActive: paramsSelect.CBGPUCTSelectActive && paramsSelect.CBGPUCT_SelectCrossParentNEnabled);
 
     // Possibly use action head directly
     double[] qWhenNoChildrenComposite = null;
@@ -337,8 +337,7 @@ public static class PUCTSelector
     // affects only the q calibration formula's intercept, not the value being matched.
     // The reverse-KL path ignores the anchor entirely (must be None there).
     RPORegularization regularization = paramsSelect.RPOFPURegularization;
-    double anchorValue = CBGPUCTScoreCalc.ComputeImputationAnchor(
-      paramsSelect.CBGPUCT_QAnchorTypeFPU, node, qIn, numToProcess);
+    double anchorValue = CBGPUCTScoreCalc.ComputeImputationAnchor(paramsSelect.CBGPUCT_QAnchorTypeFPU, node, qIn, numToProcess);
     RPOAnchor anchor = regularization == RPORegularization.ReverseKL
       ? RPOAnchor.None
       : (nSpan[0] > 0
@@ -361,26 +360,14 @@ public static class PUCTSelector
                                    options: opts,
                                    nanFallbackQ: node.Q);
 
-    // Final clamp to [-1, 1] to match legacy effective output range.  The legacy
-    // Boltzmann code internally clipped to [-1.2, 1.2] to leave headroom for a
-    // descending-epsilon hack that is now obsolete (sequential expansion ordering
-    // is preserved through P-ordering of children).
-    for (int i = 0; i < numToProcess; i++)
-    {
-      double v = result[i];
-      if (v < -1.0) result[i] = -1.0;
-      else if (v > 1.0) result[i] = 1.0;
-    }
-
     // Cap Q values for unexpanded children to not exceed defaultFPU + 0.20.
     double defaultFPU = paramsSelect.CalcQWhenNoChildren(node.IsSearchRoot, node.Q, stats.SumPVisited);
     double maxQ = 0.20 + defaultFPU;
     for (int i = numExpanded; i < numToProcess; i++)
     {
-      if (result[i] > maxQ)
-      {
-        result[i] = maxQ;
-      }
+      double thisResult = result[i] + paramsSelect.RPOFPUValue; 
+      thisResult = Math.Clamp(result[i], -1, 1);
+      result[i] = thisResult > maxQ ? maxQ : thisResult;
     }
 
     if (CBGPUCTDumpDiagnostics.DEBUG_DUMP_FPU_CALCS)
