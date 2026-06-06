@@ -162,7 +162,7 @@ namespace Ceres.Chess.UserSettings
     /// Lower values improve the purity of selected nodes, which can
     /// significantly improve play quality especially for larger, accurate networks.
     /// </summary>
-    public int MaxBatchSize { get; set; } = 1024;
+    public int MaxBatchSize { get; set; } = 896;
 
     /// <summary>
     /// If the CUDA graphs features should be used 
