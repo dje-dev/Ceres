@@ -119,7 +119,6 @@ public static class MCGSParamsFixed
   public const bool ENABLE_DRAW_KNOWN_TO_EXIST = true; // possibly small benefit? (+3 Elo at 3k nodes)
 
   public const bool FIX_DRP_NEEDS_3_BEFORE_ROOT = true;
-  public const bool FIX_REUSE_GRAPH_DRAW_AT_ROOT = true;
 
   /// <summary>
   /// If the redescent multiplier should be adjusted higher
