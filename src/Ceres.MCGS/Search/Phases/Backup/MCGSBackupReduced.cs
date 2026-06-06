@@ -138,6 +138,15 @@ public partial class MCGSBackup
               // (Matches the internal-edge branch above, which already passes ChildNode.Q.)
               bool isRepDraw = path.TerminationReason == MCGSPathTerminationReason.DrawByRepetitionInCoalesceMode;
               double newQChildForLeaf = isRepDraw ? visitEdge.ChildNode.Q : initialBackupValue.V;
+              if (isRepDraw && double.IsNaN(newQChildForLeaf))
+              {
+                // Unevaluated draw-by-repetition placeholder child (Q is the NaN "unevaluated" sentinel):
+                // its value is a draw (0), never NaN. Passing NaN here would store edge.QChild = NaN and
+                // make deltaQ = NaN (silently disabling off-path propagation) and feed NaN*0 into the
+                // edge.Q dilution. A search-root child has a real Q (not NaN) and is therefore unaffected.
+                newQChildForLeaf = 0;
+              }
+
               strategy.BackupToEdge(visitEdge, numVisitsAccepted, newQChildForLeaf, initialBackupValue.D, false);
               if (isRepDraw)
               {

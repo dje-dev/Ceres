@@ -324,8 +324,10 @@ public struct GEdgeStruct
   /// (the NDrawByRepetition count is used to dilute child Q 
   /// proportionally to the draw visits treating draws as 0).
   /// </summary>
-  public readonly double Q => NDrawByRepetition == 0 ? QChild : QChild * ((double)(N - NDrawByRepetition) / N);
-
+  public readonly double Q => NDrawByRepetition == 0 ? QChild
+                            : N == NDrawByRepetition? 0.0   // all visits are draws-by-repetition: clean draw value; avoids NaN*0 when QChild is an unevaluated placeholder
+                            : QChild* ((double)(N - NDrawByRepetition) / N);
+ 
 
   /// <summary>
   /// Returns string representation.
