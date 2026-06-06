@@ -190,6 +190,22 @@ namespace Ceres.Features.Tournaments
     public bool AdjudicateDrawByRepetitionImmediately = true;
 
     /// <summary>
+    /// If nonzero, enables blunder diagnostic dumps: after each move, if an engine's evaluation
+    /// improved by more than BlunderDumpThresholdCentipawns compared to its prior move (implying
+    /// the opponent just blundered), and the node count (N) of that move, the engine's prior move,
+    /// and the intervening opponent move are all at least this value, and the opponent is an
+    /// in-process Ceres MCGS engine, then the opponent engine's search graph is dumped to a
+    /// "blunder_info_NNN.txt" file in the current working directory for post-hoc analysis.
+    /// </summary>
+    public int BlunderDumpThresholdN = 5000;
+
+    /// <summary>
+    /// Minimum centipawn improvement in an engine's evaluation (versus its prior move) required
+    /// to trigger a blunder diagnostic dump (see BlunderDumpThresholdN).
+    /// </summary>
+    public int BlunderDumpThresholdCentipawns = 250;
+
+    /// <summary>
     /// The index of the processor group to which the engines should be affinitized. 
     /// </summary>
     public int ProcessGroupIndex = 0;

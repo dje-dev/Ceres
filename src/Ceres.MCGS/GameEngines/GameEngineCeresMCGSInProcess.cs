@@ -86,6 +86,11 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   public MCGSSearch Search;
 
   /// <summary>
+  /// The result of the most recently completed search (used for post-hoc diagnostic dumps).
+  /// </summary>
+  public GameEngineSearchResultCeresMCGS LastSearchResult { get; private set; }
+
+  /// <summary>
   /// Optional name of file to which detailed log information 
   /// will be written after each move.
   /// </summary>
@@ -406,9 +411,11 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     // TODO is the RootNWhenSearchStarted correct because we may be following a continuation (BestMoveRoot)
     string moveStr = bestMoveMG.MoveStr(MGMoveNotationStyle.Coordinates);
     scoreCeresCP = (int)MathF.Round(EncodedEvalLogistic.WinLossToCentipawn(bestMoveInfo.QOfBest), 0);
-    int eps = 0;
+    // Evaluations per second (neural network position evaluations) made during this search.
+    int eps = searchTimingStats.ElapsedTimeSecs > 0
+            ? (int)MathF.Round(Search.Manager.NumEvalsThisSearch / (float)searchTimingStats.ElapsedTimeSecs)
+            : 0;
     int depth = 0;
-    //this..NumEvalsThisSearch / elapsedTimeSeconds; // positions evaluated per second
 
     GameEngineSearchResultCeresMCGS result = new(Search, moveStr, bestMoveMG, (float)Search.Manager.Engine.SearchRootNode.Q, bestMoveInfo.QOfBest,
                                                  scoreCeresCP, 0,
@@ -416,6 +423,9 @@ public class GameEngineCeresMCGSInProcess : GameEngine
                                                  Search.StartSearchN, Search.Manager.Engine.SearchRootNode.N,
                                                  eps, depth,
                                                  bestMoveInfo, Search.Manager.Engine.Graph.RatioVisitsToNodes);
+
+    // Retain the most recent search result so diagnostics can be dumped post-hoc (e.g. blunder analysis).
+    LastSearchResult = result;
 
     // Append search result information to log file (if any).
     StringWriter dumpInfo = new();
@@ -442,6 +452,23 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     }
 
     return result;
+  }
+
+
+  /// <summary>
+  /// Dumps detailed diagnostics about the most recently completed search to the specified writer.
+  /// Returns false if no search has yet completed for this engine.
+  /// </summary>
+  public override bool TryDumpLastSearchDiagnostics(TextWriter writer, string description)
+  {
+    GameEngineSearchResultCeresMCGS result = LastSearchResult;
+    if (result?.Search?.Manager == null)
+    {
+      return false;
+    }
+
+    result.Search.Manager.DumpFullInfo(result, writer, description);
+    return true;
   }
 
 

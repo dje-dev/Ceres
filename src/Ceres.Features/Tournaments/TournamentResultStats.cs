@@ -41,6 +41,21 @@ namespace Ceres.Features.Tournaments
     public List<TournamentGameInfo> GameInfos = new List<TournamentGameInfo>();
 
     /// <summary>
+    /// Headline pentanomial (paired-game) result for the tournament, computed for the
+    /// first non-reference engine's aggregate matchup when the tournament summary is dumped.
+    /// The trinomial statistics on PlayerStat remain available for backward compatibility.
+    /// </summary>
+    public PentanomialResult Pentanomial { get; set; } = PentanomialResult.Empty;
+
+    /// <summary>
+    /// Tracks the first-completed game of each pair (keyed by the global pair index,
+    /// GameSequenceNum / 2) while awaiting its partner game to form a completed pair
+    /// for pentanomial accounting. Only ever accessed under the statistics lock (i.e.
+    /// from UpdateTournamentStats).
+    /// </summary>
+    private readonly Dictionary<int, (string engA, string engB, int aHalfGame1)> pendingPentanomialPairs = new();
+
+    /// <summary>
     /// Dump full tournament summary to console.
     /// </summary>
     public void DumpTournamentSummary(TournamentDef def)
@@ -63,6 +78,9 @@ namespace Ceres.Features.Tournaments
       writer.WriteLine("Tournament round robin Elo table (W-D-L):");
       DumpRoundRobinEloTable(writer, referenceId);
       writer.WriteLine();
+      writer.WriteLine("Pentanomial analysis (paired-game statistics):");
+      DumpPentanomialSummary(def);
+      writer.WriteLine();
 
       Console.WriteLine();
       if (def.ForceReferenceEngineDeterministic)
@@ -80,11 +98,11 @@ namespace Ceres.Features.Tournaments
       TextWriter writer = def.Logger;
       string referenceId = def.ReferenceEngineId;
 
-      int maxWidth = 140;
+      int maxWidth = 155;
       PrintLine(writer, maxWidth - 1);
       List<(string, int)> header = new List<(string, int)>
         { ("Player",25), ("Elo", 8), ("+/-",5), ("CFS(%)", 8),
-          ("Played", 8), ("W-D-L", 13), ("D(%)",5), ("Time",12), ("Nodes",18), ("NPS-avg", 14), ("NPS-med", 11) };
+          ("Played", 8), ("W-D-L", 13), ("D(%)",5), ("Time",12), ("Nodes",18), ("NPS-avg", 14), ("EPS-avg", 14), ("NPS-med", 11) };
       PrintHeaderRow(writer, header, maxWidth);
       PrintLine(writer, maxWidth - 1);
       bool twoPlayers = Players.Count == 2 && string.IsNullOrEmpty(referenceId);
@@ -104,11 +122,11 @@ namespace Ceres.Features.Tournaments
       TextWriter writer = def.Logger;
       string referenceId = def.ReferenceEngineId;
 
-      int maxWidth = 93;
+      int maxWidth = 108;
       PrintLine(writer, maxWidth);
       List<(string, int)> header = new List<(string, int)>
         { ("Player",25), ("Elo", 8), ("+/-",5), ("CFS(%)", 8),
-           ("W-D-L", 13), ("Time",12), ("NPS-avg", 14) };
+           ("W-D-L", 13), ("Time",12), ("NPS-avg", 14), ("EPS-avg", 14) };
       PrintHeaderRow(writer, header, maxWidth);
       PrintLine(writer, maxWidth);
       bool twoPlayers = Players.Count == 2 && string.IsNullOrEmpty(referenceId);
@@ -136,12 +154,18 @@ namespace Ceres.Features.Tournaments
       string playerInfo = player.Name == referenceId ? player.Name + "*" : player.Name;
       //double score = player.PlayerWins + (player.Draws / 2.0);
       string wdl = $"+{player.PlayerWins}={player.Draws}-{player.PlayerLosses}";
-      float cfs = EloCalculator.LikelihoodSuperiority(player.PlayerWins, player.Draws, player.PlayerLosses);
-      var (_, avg, max) = EloCalculator.EloConfidenceInterval(player.PlayerWins, player.Draws, player.PlayerLosses);
-      string error = $"{(max - avg):F0}";
+      // Error bar (+/-) and CFS (likelihood of superiority) are based on pentanomial
+      // (paired-game) analysis; the Elo point estimate is the same as the trinomial mean.
+      PentanomialResult penta = PentanomialAggregateFor(player.Name);
+      float cfs = penta.LOS;
+      var (_, avg, _) = EloCalculator.EloConfidenceInterval(player.PlayerWins, player.Draws, player.PlayerLosses);
+      string error = $"{penta.EloErrorMargin:F0}";
       double draws = (player.Draws / (double)player.NumGames) * 100;
       long nodes = player.PlayerTotalNodes;
       float time = player.PlayerTotalTime;
+      // Average evaluations per second (neural network position evaluations), shown where reported.
+      string epsAvg = player.PlayerTotalEvaluations > 0 && time > 0
+                    ? (player.PlayerTotalEvaluations / time).ToString("N0") + " " : "-";
 
       List<(string, int)> rowItems = new()
       {
@@ -155,6 +179,7 @@ namespace Ceres.Features.Tournaments
         { (time.ToString("F2"), 12) },
         { (nodes.ToString("N0") + " ", 18) },
         { ((nodes / time).ToString("N0") + " ", 14) },
+        { (epsAvg, 14) },
         { ((player.MedianNPSAverage).ToString("N0") + " ", 11) }
 
       };
@@ -165,11 +190,17 @@ namespace Ceres.Features.Tournaments
     {
       string playerInfo = player.Name == referenceId ? player.Name + "*" : player.Name;
       string wdl = $"+{player.PlayerWins}={player.Draws}-{player.PlayerLosses}";
-      float cfs = EloCalculator.LikelihoodSuperiority(player.PlayerWins, player.Draws, player.PlayerLosses);
-      var (_, avg, max) = EloCalculator.EloConfidenceInterval(player.PlayerWins, player.Draws, player.PlayerLosses);
-      string error = $"{(max - avg):F0}";
+      // Error bar (+/-) and CFS (likelihood of superiority) are based on pentanomial
+      // (paired-game) analysis; the Elo point estimate is the same as the trinomial mean.
+      PentanomialResult penta = PentanomialAggregateFor(player.Name);
+      float cfs = penta.LOS;
+      var (_, avg, _) = EloCalculator.EloConfidenceInterval(player.PlayerWins, player.Draws, player.PlayerLosses);
+      string error = $"{penta.EloErrorMargin:F0}";
       long nodes = player.PlayerTotalNodes;
       float time = player.PlayerTotalTime;
+      // Average evaluations per second (neural network position evaluations), shown where reported.
+      string epsAvg = player.PlayerTotalEvaluations > 0 && time > 0
+                    ? (player.PlayerTotalEvaluations / time).ToString("N0") + " " : "-";
 
       List<(string, int)> rowItems = new()
       {
@@ -180,8 +211,104 @@ namespace Ceres.Features.Tournaments
         (wdl, 13),
         { (time.ToString("F2"), 12) },
         { ((nodes / time).ToString("N0") + " ", 14) },
+        { (epsAvg, 14) },
       };
       PrintSimpleEngineRow(writer, rowItems, width);
+    }
+
+
+    /// <summary>
+    /// Dumps the pentanomial (paired-game) analysis table to the writer, with one row per
+    /// matchup showing the distribution of pair outcomes, the pentanomial Elo error bar
+    /// (alongside the trinomial error bar for comparison), and the likelihood of superiority.
+    /// Also populates the headline Pentanomial property (first non-reference engine aggregate).
+    /// </summary>
+    /// <param name="def"></param>
+    void DumpPentanomialSummary(TournamentDef def)
+    {
+      TextWriter writer = def.Logger;
+      string referenceId = def.ReferenceEngineId;
+
+      // Populate the headline pentanomial result (first non-reference engine's aggregate).
+      PlayerStat headline = Players.FirstOrDefault(p => p.Name != referenceId) ?? Players.FirstOrDefault();
+      if (headline != null)
+      {
+        Pentanomial = PentanomialAggregateFor(headline.Name);
+      }
+
+      List<(string, int)> header = new List<(string, int)>
+      {
+        ("Matchup", 28), ("Pairs", 7), ("LL", 6), ("LD+DL", 8), ("WL+LW+DD", 11),
+        ("WD+DW", 8), ("WW", 6), ("Score%", 8), ("Elo", 8), ("Penta +/-", 11),
+        ("Tri +/-", 9), ("LOS%", 7)
+      };
+      int totalWidth = header.Sum(h => h.Item2) + header.Count + 1;
+
+      PrintLine(writer, totalWidth);
+      PrintHeaderRow(writer, header, totalWidth);
+      PrintLine(writer, totalWidth);
+
+      bool anyRows = false;
+      for (int i = 0; i < Players.Count; i++)
+      {
+        for (int j = i + 1; j < Players.Count; j++)
+        {
+          PlayerStat a = Players[i];
+          PlayerStat b = Players[j];
+          if (!a.OpponentsPentanomial.TryGetValue(b.Name, out long[] counts))
+          {
+            continue; // these two engines did not play each other
+          }
+
+          anyRows = true;
+          PentanomialResult penta = PentanomialCalculator.Compute(counts);
+
+          // Trinomial error bar (1 sigma) for side-by-side comparison.
+          string triError = "----";
+          if (a.Opponents.TryGetValue(b.Name, out (int w, int d, int l) wdl))
+          {
+            var (_, triAvg, triMax) = EloCalculator.EloConfidenceInterval(wdl.w, wdl.d, wdl.l);
+            triError = $"{(triMax - triAvg):F0}";
+          }
+
+          List<(string, int)> row = new List<(string, int)>
+          {
+            ($"{a.Name} vs {b.Name}", 28),
+            (penta.NumPairs.ToString("N0"), 7),
+            (counts[0].ToString("N0"), 6),
+            (counts[1].ToString("N0"), 8),
+            (counts[2].ToString("N0"), 11),
+            (counts[3].ToString("N0"), 8),
+            (counts[4].ToString("N0"), 6),
+            ((penta.ScoreRate * 100).ToString("F1"), 8),
+            (penta.Elo.ToString("F0"), 8),
+            (penta.EloErrorMargin.ToString("F0"), 11),
+            (triError, 9),
+            ((penta.LOS * 100).ToString("F0"), 7)
+          };
+          PrintPentanomialRow(writer, row);
+        }
+      }
+
+      if (!anyRows)
+      {
+        writer.WriteLine("(no completed game pairs)");
+      }
+      PrintLine(writer, totalWidth);
+    }
+
+    /// <summary>
+    /// Dumps a single pentanomial table row (matchup label centered, numeric columns right aligned).
+    /// </summary>
+    void PrintPentanomialRow(TextWriter writer, List<(string, int)> columns)
+    {
+      string row = "|";
+      for (int i = 0; i < columns.Count; i++)
+      {
+        var (txt, width) = columns[i];
+        row += (i == 0 ? AlignCentre(txt, width) : AlignRight(txt, width)) + "|";
+      }
+      writer.WriteLine(row);
     }
 
 
@@ -309,6 +436,103 @@ namespace Ceres.Features.Tournaments
       playerWhite.UpdateGameOutcome(whiteResult, playerBlack.Name);
       playerBlack.UpdateGameOutcome(blackResult, playerWhite.Name);
       UpdateNodeCounterAndTimeUse(thisResult, playerWhite, playerBlack);
+      UpdatePentanomialStats(thisResult);
+    }
+
+
+    /// <summary>
+    /// Reverses a game result (from one player's perspective to the opponent's).
+    /// </summary>
+    private static TournamentGameResult Reverse(TournamentGameResult result) =>
+        result == TournamentGameResult.Win ? TournamentGameResult.Loss :
+        result == TournamentGameResult.Loss ? TournamentGameResult.Win :
+        TournamentGameResult.Draw;
+
+    /// <summary>
+    /// Half-points (out of 2) earned in a single game given a result, so that pair scores
+    /// remain integers in 0..4. Matches the trinomial accounting which treats a non-decisive
+    /// result (including None) as a draw.
+    /// </summary>
+    private static int HalfPoints(TournamentGameResult result) =>
+        result == TournamentGameResult.Win ? 2 :
+        result == TournamentGameResult.Loss ? 0 :
+        1;
+
+    /// <summary>
+    /// Updates the pentanomial (paired-game) statistics for a completed game.
+    ///
+    /// The two games of a pair share the same pair index (GameSequenceNum / 2). The first
+    /// game to complete is held pending; when its partner completes, the pair score is
+    /// recorded for both engines (with mirrored buckets, since the pair is zero-sum).
+    ///
+    /// Must only be called while holding the statistics lock (it is invoked from
+    /// UpdateTournamentStats), since it reads and mutates shared accumulation state.
+    /// </summary>
+    /// <param name="thisResult"></param>
+    void UpdatePentanomialStats(TournamentGameInfo thisResult)
+    {
+      // Half-points earned by the engine playing White in this game (zero-sum: Black gets 2 - white).
+      // thisResult.Result is from engine 1's (player1's) perspective, so White's result is the
+      // reverse when engine 2 is White and Result directly when engine 1 is White. This mirrors
+      // the whiteResult mapping in UpdateTournamentStats, keeping the pentanomial accounting
+      // consistent with the trinomial accounting.
+      int whiteHalf = thisResult.Engine2IsWhite
+                        ? HalfPoints(Reverse(thisResult.Result))
+                        : HalfPoints(thisResult.Result);
+
+      int pairKey = thisResult.GameSequenceNum / 2;
+
+      if (pendingPentanomialPairs.Remove(pairKey, out (string engA, string engB, int aHalfGame1) pending))
+      {
+        // Both games of the pair are now complete. Compute engine A's half-points in this
+        // (second) game; A played White in the first game, so its color here may differ.
+        int aHalfThisGame = thisResult.PlayerWhite == pending.engA ? whiteHalf : 2 - whiteHalf;
+        int idxA = pending.aHalfGame1 + aHalfThisGame; // in 0..4
+
+        GetPlayer(pending.engA, pending.engB).AddPentanomialPair(pending.engB, idxA);
+        GetPlayer(pending.engB, pending.engA).AddPentanomialPair(pending.engA, 4 - idxA);
+      }
+      else
+      {
+        // First game of the pair: hold it pending until its partner completes.
+        // Engine A is defined as the engine playing White in this first game.
+        pendingPentanomialPairs[pairKey] = (thisResult.PlayerWhite, thisResult.PlayerBlack, whiteHalf);
+      }
+    }
+
+
+    /// <summary>
+    /// Returns the pentanomial result for a specific matchup (player versus a single opponent).
+    /// </summary>
+    /// <param name="player"></param>
+    /// <param name="opponent"></param>
+    /// <param name="mult">Number of standard errors for the Elo error margin (1.0 = 1 sigma).</param>
+    /// <returns>The pentanomial result, or PentanomialResult.Empty if no completed pairs.</returns>
+    public PentanomialResult PentanomialFor(string player, string opponent, float mult = 1.0f)
+    {
+      PlayerStat stat = Players.FirstOrDefault(e => e.Name == player);
+      if (stat == null || !stat.OpponentsPentanomial.TryGetValue(opponent, out long[] counts))
+      {
+        return PentanomialResult.Empty;
+      }
+      return PentanomialCalculator.Compute(counts, mult);
+    }
+
+
+    /// <summary>
+    /// Returns the pentanomial result for a player aggregated across all opponents.
+    /// </summary>
+    /// <param name="player"></param>
+    /// <param name="mult">Number of standard errors for the Elo error margin (1.0 = 1 sigma).</param>
+    /// <returns>The pentanomial result, or PentanomialResult.Empty if no completed pairs.</returns>
+    public PentanomialResult PentanomialAggregateFor(string player, float mult = 1.0f)
+    {
+      PlayerStat stat = Players.FirstOrDefault(e => e.Name == player);
+      if (stat == null)
+      {
+        return PentanomialResult.Empty;
+      }
+      return PentanomialCalculator.Compute(stat.AggregatePentanomialCounts(), mult);
     }
 
 
@@ -324,6 +548,8 @@ namespace Ceres.Features.Tournaments
       {
         playerWhite.PlayerTotalNodes += thisResult.TotalNodesEngine2;
         playerBlack.PlayerTotalNodes += thisResult.TotalNodesEngine1;
+        playerWhite.PlayerTotalEvaluations += thisResult.TotalEvaluationsEngine2;
+        playerBlack.PlayerTotalEvaluations += thisResult.TotalEvaluationsEngine1;
         playerWhite.PlayerTotalTime += thisResult.TotalTimeEngine2;
         playerBlack.PlayerTotalTime += thisResult.TotalTimeEngine1;
       }
@@ -331,6 +557,8 @@ namespace Ceres.Features.Tournaments
       {
         playerWhite.PlayerTotalNodes += thisResult.TotalNodesEngine1;
         playerBlack.PlayerTotalNodes += thisResult.TotalNodesEngine2;
+        playerWhite.PlayerTotalEvaluations += thisResult.TotalEvaluationsEngine1;
+        playerBlack.PlayerTotalEvaluations += thisResult.TotalEvaluationsEngine2;
         playerWhite.PlayerTotalTime += thisResult.TotalTimeEngine1;
         playerBlack.PlayerTotalTime += thisResult.TotalTimeEngine2;
       }
@@ -395,7 +623,7 @@ namespace Ceres.Features.Tournaments
       for (int i = 0; i < numberOfColumns; i++)
       {
         var (txt, width) = columns[i];
-        if (i > numberOfColumns - 2)
+        if (i > numberOfColumns - 3)
           row += AlignRight(txt, width) + "|";
         else
           row += AlignCentre(txt, width) + "|";
@@ -412,7 +640,7 @@ namespace Ceres.Features.Tournaments
       for (int i = 0; i < numberOfColumns; i++)
       {
         var (txt, width) = columns[i];
-        if (i > numberOfColumns - 4)
+        if (i > numberOfColumns - 5)
           row += AlignRight(txt, width) + "|";
         else
           row += AlignCentre(txt, width) + "|";

@@ -61,6 +61,12 @@ namespace Ceres.Features.Tournaments
     public long PlayerTotalNodes { set; get; }
 
     /// <summary>
+    /// Total number of neural network position evaluations for player across all games
+    /// (0 if the engine does not report evaluations per second).
+    /// </summary>
+    public long PlayerTotalEvaluations { set; get; }
+
+    /// <summary>
     /// Total time spent in seconds for player across all games.
     /// </summary>
     public float PlayerTotalTime { get; set; }
@@ -74,7 +80,47 @@ namespace Ceres.Features.Tournaments
     /// Table to store Win-Draw-Loss statistics against each opponent.
     /// </summary>
     public Dictionary<string, (int, int, int)> Opponents { get; set; } = new Dictionary<string, (int, int, int)>();
-  
+
+    /// <summary>
+    /// Table to store pentanomial (paired-game) statistics against each opponent.
+    /// Each value is an array of length 5 holding the number of completed pairs in each
+    /// outcome bucket (from this player's perspective), indexed by (pair points * 2):
+    /// [0] = LL, [1] = LD+DL, [2] = WL+LW+DD, [3] = WD+DW, [4] = WW.
+    /// </summary>
+    public Dictionary<string, long[]> OpponentsPentanomial { get; set; } = new Dictionary<string, long[]>();
+
+    /// <summary>
+    /// Records a completed pair outcome against an opponent in the pentanomial table.
+    /// </summary>
+    /// <param name="opponent">Opponent name.</param>
+    /// <param name="idx">Outcome bucket (pair points * 2), in the range 0..4.</param>
+    internal void AddPentanomialPair(string opponent, int idx)
+    {
+      if (!OpponentsPentanomial.TryGetValue(opponent, out long[] counts))
+      {
+        counts = new long[5];
+        OpponentsPentanomial[opponent] = counts;
+      }
+      counts[idx]++;
+    }
+
+    /// <summary>
+    /// Returns the element-wise sum of the pentanomial pair counts across all opponents
+    /// (pooling every pair this player played, for an aggregate summary).
+    /// </summary>
+    public long[] AggregatePentanomialCounts()
+    {
+      long[] total = new long[5];
+      foreach (long[] counts in OpponentsPentanomial.Values)
+      {
+        for (int i = 0; i < 5; i++)
+        {
+          total[i] += counts[i];
+        }
+      }
+      return total;
+    }
+
     /// <summary>
     /// Update player statistics based on a game result.
     /// </summary>

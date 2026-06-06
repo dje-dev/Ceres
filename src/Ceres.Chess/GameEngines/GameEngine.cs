@@ -163,6 +163,14 @@ namespace Ceres.Chess.GameEngines
 
     }
 
+    /// <summary>
+    /// If supported by this engine type, writes detailed diagnostics about the most recently
+    /// completed search to the specified writer (for example, for post-hoc blunder analysis).
+    /// Returns true if diagnostics were written, or false if not supported by this engine type.
+    /// The description string is forwarded to the underlying dump.
+    /// </summary>
+    public virtual bool TryDumpLastSearchDiagnostics(System.IO.TextWriter writer, string description) => false;
+
     readonly object dumpLockObj = new();
     public void DumpFullMoveHistory(List<GameMoveStat> gameMoveHistory, bool weAreWhite)
     {

@@ -228,6 +228,18 @@ namespace Ceres.Features.Tournaments
     public long TotalNodesEngine2;
 
     /// <summary>
+    /// Total number of neural network position evaluations performed by engine 1
+    /// (0 if the engine does not report evaluations per second).
+    /// </summary>
+    public long TotalEvaluationsEngine1;
+
+    /// <summary>
+    /// Total number of neural network position evaluations performed by engine 2
+    /// (0 if the engine does not report evaluations per second).
+    /// </summary>
+    public long TotalEvaluationsEngine2;
+
+    /// <summary>
     /// If this is a reference engine and ForceReferenceEngineDeterministic is true,
     /// the number of times the bestmove was changed to force it to be deterministic.
     /// </summary>
