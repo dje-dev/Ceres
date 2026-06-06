@@ -709,6 +709,7 @@ namespace Ceres.Chess.EncodedPositions
 
       // First create the position without the miscellaneous info set.
       PositionMiscInfo miscInfo = default;
+      RookPlacementInfo rookInfo = default;
 
       Position pos = new Position(board.OurKing.Data, board.OurQueens.Data, board.OurRooks.Data, board.OurBishops.Data, board.OurKnights.Data, board.OurPawns.Data,
                                   board.TheirKing.Data, board.TheirQueens.Data, board.TheirRooks.Data, board.TheirBishops.Data, board.TheirKnights.Data, board.TheirPawns.Data,
@@ -735,6 +736,14 @@ namespace Ceres.Chess.EncodedPositions
           blackCanCastleOO = MiscInfo.InfoPosition.Castling_US_OO == 1;
           blackCanCastleOOO = MiscInfo.InfoPosition.Castling_US_OOO == 1;
         }
+
+        // FRC-aware castling reconstruction: the LC0 wire format does not carry rook
+        // placement, so derive it from board state. Castling-rights flags are passed by
+        // reference and cleared by the helper for any slot where no qualifying rook is
+        // found (or the king is off its back rank).
+        rookInfo = RookPlacementInfo.DeriveFromBoard(in pos,
+                                                     ref whiteCanCastleOO, ref whiteCanCastleOOO,
+                                                     ref blackCanCastleOO, ref blackCanCastleOOO);
       }
       else
       {
@@ -742,14 +751,6 @@ namespace Ceres.Chess.EncodedPositions
         // board-scan below clear them for any slot where the king or rook is absent.
         whiteCanCastleOO = whiteCanCastleOOO = blackCanCastleOO = blackCanCastleOOO = true;
       }
-
-      // FRC-aware castling reconstruction: the LC0 wire format does not carry rook
-      // placement, so derive it from board state. Castling-rights flags are passed by
-      // reference and cleared by the helper for any slot where no qualifying rook is
-      // found (or the king is off its back rank).
-      RookPlacementInfo rookInfo = RookPlacementInfo.DeriveFromBoard(in pos,
-                                                                     ref whiteCanCastleOO, ref whiteCanCastleOOO,
-                                                                     ref blackCanCastleOO, ref blackCanCastleOOO);
 
       // NOTE: move number cannot be determined, set value to 2 (which will translate to 1 ply in FEN) since 0 is considered invalid.
       miscInfo = new PositionMiscInfo(whiteCanCastleOO, whiteCanCastleOOO, blackCanCastleOO, blackCanCastleOOO,
