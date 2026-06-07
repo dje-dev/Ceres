@@ -93,6 +93,14 @@ public static class GraphReuseManager
   public const float SELECTIVE_TARGET_RETENTION = 0.40f;
 
   /// <summary>
+  /// Maximum (estimated) retention fraction at or below which a reused graph is rebuilt by
+  /// COPYING the reachable subgraph into a fresh graph (GraphExtractor) rather than rewriting
+  /// it in place or abandoning it. Kept low because extraction is only advantageous when the
+  /// surviving subgraph is small relative to the whole graph.
+  /// </summary>
+  public const float EXTRACT_MAX_RETENTION = 0.25f;
+
+  /// <summary>
   /// Maximum fraction of search time allowed for rewrite.
   /// </summary>
   public const float MAX_REWRITE_TIME_FRACTION = 0.60f;
@@ -424,9 +432,46 @@ public static class GraphReuseManager
     float reachabilityFraction = EstimateReachability(graph, searchRootNodeInfo, priorMoves);
     bool lowReachability = reachabilityFraction < LOW_REACHABILITY_ABANDON_THRESHOLD;
 
+    // --- Decision: FULLY RETAIN, EXTRACT, REWRITE, or ABANDON ---
+    // A single self-contained block that considers all four possibilities. When extraction is
+    // disabled this is behaviorally identical to the prior logic (retain / abandon / rewrite).
+
+    // (1) FULLY RETAIN: no pressure trigger and reachability is healthy. Keep the existing
+    //     (large) graph as-is; the upcoming search simply descends from the search root.
+    if (!standardTrigger && !lowReachability)
+    {
+      return graph;
+    }
+
+    // (2) EXTRACT: the reachable subgraph is small enough that copying it into a fresh graph is
+    //     cheap (O(reachable) vs the in-place rewrite's O(total nodes)). This beats BOTH a rewrite
+    //     (when a pressure trigger fired) AND outright abandonment (when reachability is low) —
+    //     in the low-reachability case extraction preserves the small subgraph's neural-network
+    //     evaluations instead of discarding them. The reachability estimate is an upper bound, so
+    //     reachabilityFraction <= EXTRACT_MAX_RETENTION implies the actual reachable set is small.
+    if (paramsSearch.GraphReuseExtractEnabled
+     && reachabilityFraction <= EXTRACT_MAX_RETENTION)
+    {
+      GraphExtractor.ExtractResult ex = GraphExtractor.TryExtract(graph, searchRootNodeInfo.ChildNode.Index, priorMoves);
+      if (ex.Succeeded)
+      {
+        string extractReason = standardTrigger ? rewriteReason : $"low reachability ({reachabilityFraction:P1})";
+        LogExtraction(ex, searchRootN, extractReason);
+
+        // Switch over to the new graph and dispose the old one. Returning a different Graph object
+        // is contract-compatible with the caller (it installs whatever graph is returned); the
+        // search root is now the graph root, so clear the path.
+        graph.Dispose();
+        searchRootPathFromGraphRoot = null;
+        return ex.NewGraph;
+      }
+      // Extraction declined unexpectedly — fall through to rewrite/abandon below.
+    }
+
+    // (3) ABANDON: reachability is too low to justify an (expensive) in-place rewrite and we did
+    //     not extract. Discard the graph; the search starts from scratch.
     if (lowReachability)
     {
-      // Low reachability forces abandonment regardless of rewrite setting.
       string reason = standardTrigger
         ? $"{rewriteReason} + low reachability ({reachabilityFraction:P1})"
         : $"low reachability ({reachabilityFraction:P1})";
@@ -439,15 +484,10 @@ public static class GraphReuseManager
       return null;
     }
 
-    if (!standardTrigger)
-    {
-      return graph;
-    }
-
-    // Standard trigger fired with sufficient reachability.
+    // (4) REWRITE: a pressure trigger fired with sufficient reachability.
     if (!paramsSearch.GraphReuseRewriteEnabled)
     {
-      // Rewrite would have been triggered but feature is disabled.
+      // Rewrite would have been triggered but the feature is disabled.
       LogGraphAbandonment(graph, searchRootNodeInfo, searchRootN, numNodesUsed,
                           ratioSearchRootToTotal, memFraction, rewriteReason, priorMoves);
 
@@ -456,7 +496,6 @@ public static class GraphReuseManager
       return null;
     }
 
-    // Perform rewrite
     return PerformGraphRewrite(graph, searchRootNodeInfo, ref searchRootPathFromGraphRoot,
                                searchLimit, priorMoves, searchRootN, numNodesUsed,
                                ratioSearchRootToTotal, memFraction, rewriteReason);
@@ -620,6 +659,17 @@ public static class GraphReuseManager
       $"{result.ElapsedSeconds * 1000:F0}ms, mem delta {memReductionMB:+0.0;-0.0;0}MB{timeBudgetInfo}{actualSpeedStr}, " +
       $"[{RewriteTimeEstimator.GetEstimatesString()}]";
     Log(msg);
+  }
+
+  /// <summary>
+  /// Logs (unconditionally, in yellow) a one-line summary of a graph EXTRACT decision and its stats.
+  /// </summary>
+  private static void LogExtraction(GraphExtractor.ExtractResult ex, int searchRootN, string reason)
+  {
+    ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+      $"Graph EXTRACT: searchRootN={searchRootN:N0}, reason={reason}, "
+    + $"retention={ex.RetentionFraction:P1} (<= {EXTRACT_MAX_RETENTION:P0}), "
+    + $"{ex.NodesBefore:N0} -> {ex.NodesAfter:N0} nodes, {ex.ElapsedSeconds * 1000:F0}ms");
   }
 
   #endregion

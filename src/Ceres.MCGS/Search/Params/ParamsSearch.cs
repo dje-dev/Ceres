@@ -364,6 +364,20 @@ public record ParamsSearch
   public bool GraphReuseRewriteEnabled = false;// !CeresUserSettingsManager.Settings.ReducedMemoryMode;
 
   /// <summary>
+  /// If graph reuse may, when the subgraph reachable from the new search root is small
+  /// relative to the whole graph, build a brand-new graph by copying only the reachable
+  /// nodes (via <see cref="Ceres.MCGS.Graphs.GraphStores.GraphExtractor"/>) instead of
+  /// rewriting the existing graph in place or abandoning it.
+  ///
+  /// This is much faster than an in-place rewrite when retention is low (extraction is
+  /// O(reachable) whereas rewrite is O(total nodes)), and lets low-reachability graphs be
+  /// kept (preserving their neural-network evaluations) rather than discarded. It costs a
+  /// modest transient memory increase (the small new graph coexists briefly with the old
+  /// one before the old one is disposed). Independent of <see cref="GraphReuseRewriteEnabled"/>.
+  /// </summary>
+  public bool GraphReuseExtractEnabled = false;
+
+  /// <summary>
   /// If another search graph should be consulted to possibly reuse NN evaluations.
   /// The other graph might for example come from the opponent when playing a tournament, 
   /// or a comparison graph when doing suite testing.
