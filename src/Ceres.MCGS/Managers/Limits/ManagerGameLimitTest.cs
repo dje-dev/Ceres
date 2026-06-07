@@ -31,8 +31,9 @@ public class ManagerGameLimitTest : IManagerGameLimit
 {
   public ManagerGameLimitTest(float aggressiveness)
   {
-  } 
-  public ManagerGameLimitOutputs ComputeMoveAllocation(ManagerGameLimitInputs inputs)
+  }
+
+  public ManagerGameLimitOutputs ComputeMoveAllocation(ManagerGameLimitInputs inputs, bool applyEarlySmoothing = true)
   {
     throw new NotImplementedException();
   }

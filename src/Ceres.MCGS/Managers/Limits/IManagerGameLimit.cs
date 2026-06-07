@@ -34,7 +34,7 @@ public interface IManagerGameLimit
   /// <param name="search"></param>
   /// <param name="inputs"></param>
   /// <returns></returns>
-  public ManagerGameLimitOutputs ComputeMoveAllocation(/*MCTSearch search, */ManagerGameLimitInputs inputs);
+  public ManagerGameLimitOutputs ComputeMoveAllocation(ManagerGameLimitInputs inputs, bool applyEarlySmoothing = true);
 
 
   /// <summary>
@@ -45,7 +45,7 @@ public interface IManagerGameLimit
   /// <param name="newRoot"></param>
   /// <param name="inputs"></param>
   /// <returns></returns>
-  public LimitsManagerInstamoveDecision CheckInstamove(/*MCTSearch search, MCTSNode newRoot,*/ ManagerGameLimitInputs inputs)
+  public LimitsManagerInstamoveDecision CheckInstamove(ManagerGameLimitInputs inputs)
     => LimitsManagerInstamoveDecision.NoDecision;
 
 

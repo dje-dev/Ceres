@@ -226,6 +226,24 @@ public partial class MCGSManager : IDisposable
 
 
   /// <summary>
+  /// Replaces this move's search limit after the manager was constructed.
+  /// Used when a reused graph is abandoned after the initial (warm) time/node allocation:
+  /// the search will actually run from a cold (empty) graph, so the budget is recomputed
+  /// with a cold-start input and installed here.
+  /// </summary>
+  internal void OverrideSearchLimit(SearchLimit newLimit,
+                                    ManagerGameLimitInputs gameLimitInputs,
+                                    ManagerGameLimitOutputs gameLimitOutputs)
+  {
+    SearchLimit = newLimit;
+    SearchLimitInitial = newLimit;
+    LastSearchLimit = newLimit;
+    LastGameLimitInputs = gameLimitInputs;
+    LastGameLimitOutputs = gameLimitOutputs;
+  }
+
+
+  /// <summary>
   /// Constructor.
   /// </summary>
   /// <param name="evaluatorSet"></param>
@@ -811,3 +829,83 @@ public partial class MCGSManager : IDisposable
     Dispose();
   }
 }
+
+#if NOT
+      if (false)
+      {
+        // 1) Choose the inner nodes to roll out from (NodeIndex[]). Any node indices work —
+        //    DoSearchInnerNodes silently skips ones that aren't rollable (terminal, unevaluated,
+        //    no policy, the search root itself). Example: the search root's children.
+        List<NodeIndex> nodes = new();
+        foreach (GEdge edge in root.ChildEdgesExpanded)
+        {
+          if (edge.Type == GEdgeStruct.EdgeType.ChildEdge)
+          {
+            nodes.Add(edge.ChildNode.Index);
+          }
+        }
+
+        float minVisitsFraction = 0.002f; // 1%
+        float maxQDeviation = 0.02f;
+        MGPosition rootPos = root.Graph.Store.PositionHistory.FinalPosMG;
+        PrincipalPosSet pp = PrincipalPosSet.CollectNodesAboveVisitThreshold(rootPos, root,
+                                                                             (int)(root.N * minVisitsFraction),
+                                                                             maxQDeviation);
+        nodes.Clear();
+        foreach (PrincipalPos xx in pp.Members)
+        {
+          nodes.Add(xx.LeafNode.Index);
+        }
+        PrincipalPosSetDumper.DumpToConsoleGraphical(pp, default);// BestMove);
+
+
+        // 2) Run the deep rollouts.
+        List<(NodeIndex node, int numVisits, int maxDepthBelowNode,
+                                                    int numTerminalWin, int numTerminalDraw, int numTerminalLoss,
+                                                    double avgLeafQAllPaths, double avgLeafQMaximalPaths,
+                                                    List<NodeIndex[]> maximalPathsNodes)> nodeStats;
+
+        TimingStats timing = manager.DoSearchInnerNodes(
+            nodes.ToArray(),
+            numVisitsEachNode: 216,                    // up to 16 rounds (visits) per node
+            out nodeStats,
+            explorationMultiplier: 0.05f,                // 0 = greedy (×CPUCT for PUCT, ×SelectLambdaC for CBGPUCT)
+            stopNodeVisitsIfTerminalReached: true,
+            null,
+            (MCGSPathsSet pathsSelect) => { },
+            (MCGSPathsSet pathsSelect) =>
+            {
+              foreach (MCGSPath path in pathsSelect.Paths)
+              {
+                if (path.InnerSearchStartNode.Index.Index == nodes[0].Index)
+                {
+                  MCGSPathVisit lastPathVisit = path[path.NumVisitsInPath - 1];
+                  if (lastPathVisit.ParentChildEdge.Type != GEdgeStruct.EdgeType.ChildEdge)
+                  {
+                    Console.WriteLine($"[1]: {lastPathVisit.ParentChildEdge.Type}  {path.NumVisitsInPath}  {lastPathVisit}");
+                  }
+                  else
+                  {
+                    Console.WriteLine($"[2]: {(lastPathVisit.ParentChildEdge.Type != GEdgeStruct.EdgeType.ChildEdge ? "" : lastPathVisit.ChildNode.Terminal)}  "
+                                    + $"{path.NumVisitsInPath}  {lastPathVisit.ChildNode.N}  {lastPathVisit.ChildNode.Q}  {lastPathVisit}");
+                  }
+                  //path.DumpAllVisits();
+                }
+              }
+            },
+            deepRollout: true);// drop a node once its rollout hits a terminal
+
+        // 3) Read per-node results (W/D/L are from each node's side-to-move perspective).
+        foreach ((NodeIndex node, int numVisits, int maxDepthBelowNode, int numTerminalWin, int numTerminalDraw, int numTerminalLoss, 
+                  double avgLeafQAllPaths, double avgLeafQMaximalPaths, List<NodeIndex[]> maximalPathsNodes) 
+                  info in nodeStats)
+        {
+          NodeIndex[] x = info.maximalPathsNodes[1];
+          GNode topLevelMoveNode = root.Graph[info.maximalPathsNodes[0][1]];
+          Console.WriteLine($"#{info.node.Index}: {topLevelMoveNode.TreeParentEdge} visits={info.numVisits}  paths={info.maximalPathsNodes.Count}  avgQ={Math.Round(info.avgLeafQAllPaths, 2)}  maxDepthBelow={info.maxDepthBelowNode}");
+          //+ $"W/D/L={win}/{draw}/{loss}");
+        }
+      }
+
+
+#endif

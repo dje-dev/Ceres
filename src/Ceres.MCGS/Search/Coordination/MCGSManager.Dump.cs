@@ -90,10 +90,13 @@ public partial class MCGSManager
 
       writer.WriteLine();
 
-      writer.WriteLine("Graph root           : " + Engine.SearchRootNode);
-      if (searchRootNode != Engine.SearchRootNode)
+      // Print the actual graph root and the search root as distinct nodes. Under graph reuse the
+      // search root descends below the graph root, so these are frequently different nodes.
+      writer.WriteLine("Graph root           : " + Engine.Graph.GraphRootNode);
+      writer.WriteLine("Search root          : " + Engine.SearchRootNode);
+      if (!searchRootNode.IsNull && searchRootNode != Engine.SearchRootNode)
       {
-        writer.WriteLine("Search root         : " + searchRootNode);
+        writer.WriteLine("Search root (arg)    : " + searchRootNode);
       }
       writer.WriteLine();
 
@@ -128,8 +131,28 @@ public partial class MCGSManager
       }
 
       // Output position (with history) information.
-      writer.WriteLine("Position            : " + searchRootNode.CalcPosition().ToPosition.FEN);
-      writer.WriteLine("Tree root position  : " + this.Engine.Graph.Store.NodesStore.PositionHistory);
+      // NOTE: Under graph reuse (especially Position / PositionEquivalence mode) the search root
+      // descends BELOW the graph root by design, so "Position (search root)" and "Graph root
+      // position" (an ancestor) legitimately differ. The "Search root path" line shows the moves
+      // from the graph root down to the search root; its final FEN matches the "Position" line.
+      int pliesBelowGraphRoot = Engine.SearchRootPathFromGraphRoot?.Length ?? 0;
+      writer.WriteLine("Position (search root): " + searchRootNode.CalcPosition().ToPosition.FEN);
+      writer.WriteLine($"Graph root position   : {this.Engine.Graph.Store.NodesStore.PositionHistory} "
+                     + $"(ancestor, +{pliesBelowGraphRoot} plies above search root)");
+
+      // Move sequence from the graph root down to the search root (final FEN matches "Position" above).
+      System.Text.StringBuilder sbPath = new();
+      sbPath.Append(Engine.Graph.Store.NodesStore.PositionHistory.FinalPosition.FEN);
+      foreach (var pathInfo in Engine.SearchRootPathFromGraphRoot ?? [])
+      {
+        sbPath.Append("  " + pathInfo.MoveToChild.MoveStr(MGMoveNotationStyle.Coordinates)
+                    + " -> " + pathInfo.ChildPosMG.ToPosition.FEN);
+      }
+      writer.WriteLine("Search root path      : " + sbPath.ToString());
+
+      // Internal consistency of the root state (also logs a red diagnostic block above on mismatch).
+      bool rootConsistent = MCGSRootConsistencyCheck.Validate(Engine, Engine.SearchRootPosMG.ToPosition, "dump", out _);
+      writer.WriteLine("Root consistency      : " + (rootConsistent ? "OK" : "*** MISMATCH — see red diagnostic above ***"));
       writer.WriteLine("Search stop status  : " + StopStatus);
       writer.WriteLine("Best move selected  : " + bestMove.MoveStr(MGMoveNotationStyle.Coordinates) + " " + bestMoveInfoStr);
       writer.WriteLine();

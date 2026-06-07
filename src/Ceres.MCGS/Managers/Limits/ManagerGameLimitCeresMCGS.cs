@@ -30,9 +30,9 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
 {
   public readonly float Aggressiveness;
 
-  const int   EARLY_SMOOTHING_WINDOW_MOVES   = 25;
-  const int   EARLY_SMOOTHING_MAX_ADJUSTS    = 3;
-  const float EARLY_SMOOTHING_BOOST          = 1.3f;
+  const int EARLY_SMOOTHING_WINDOW_MOVES = 25;
+  const int EARLY_SMOOTHING_MAX_ADJUSTS = 3;
+  const float EARLY_SMOOTHING_BOOST = 1.3f;
 
   /// <summary>
   /// Returns target minimum fraction of initial move nodes in early game.
@@ -45,20 +45,20 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
   static float EarlySmoothingBaselineFracForBaselineN(int baselineN)
     => baselineN switch
     {
-      < 10_000    => 0, // disabled
-      < 100_000   => 0.25f,
+      < 10_000 => 0, // disabled
+      < 100_000 => 0.25f,
       < 1_000_000 => 0.30f,
       < 5_000_000 => 0.35f,
       _ => 0.40f
     };
-  
+
 
   // Per-game state for GameLimitEarlySmoothing. Reset on IsFirstMoveOfGame == true,
   // so the manager can be safely reused across multiple games in self-play tournaments.
-  int  earlySmoothingBaselineN      = -1;     // FinalN of the first-move-bonus search (once recorded)
-  bool earlySmoothingRecordPending  = false;  // armed on move 1, consumed on move 2
-  int  earlySmoothingMovesRemaining = 0;      // counts down from EARLY_SMOOTHING_WINDOW_MOVES
-  int  earlySmoothingAdjustsApplied = 0;      // capped at EARLY_SMOOTHING_MAX_ADJUSTS
+  int earlySmoothingBaselineN = -1;     // FinalN of the first-move-bonus search (once recorded)
+  bool earlySmoothingRecordPending = false;  // armed on move 1, consumed on move 2
+  int earlySmoothingMovesRemaining = 0;      // counts down from EARLY_SMOOTHING_WINDOW_MOVES
+  int earlySmoothingAdjustsApplied = 0;      // capped at EARLY_SMOOTHING_MAX_ADJUSTS
 
   /// <summary>
   /// Constructor.
@@ -85,7 +85,7 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
     {
       float fracNodesRetainedSinceLastMove = (float)thisRootN / priorRootN;
       graphReuseShrinkageMultiplier = MapFractionGraphReusedToShrinkageMultiplier(fracNodesRetainedSinceLastMove);
-//Console.WriteLine(treeReuseShrinkageMultiplier + "  " + fracNodesRetainedSinceLastMove);
+      //Console.WriteLine(treeReuseShrinkageMultiplier + "  " + fracNodesRetainedSinceLastMove);
     }
 
     // TODO: Someday implement this idea to prevent too many in a row.
@@ -160,10 +160,10 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
 
     float adjustedBaseMultiplier = earlyGameExtension ? BASE_MULTIPLIER_EARLY : BASE_MULTIPLIER_NOT_EARLY;
     float ret = Aggressiveness
-              * graphReuseShrinkageMultiplier 
-              * adjustedBaseMultiplier 
-              * (1.0f / baseDivisor) 
-              * factorWinningness 
+              * graphReuseShrinkageMultiplier
+              * adjustedBaseMultiplier
+              * (1.0f / baseDivisor)
+              * factorWinningness
               * factorFirstMove;
 
     return ret;
@@ -212,7 +212,7 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
 
       // Allocate 0.20 at minimum.
       _ => 0.20f
-    };  
+    };
 
 
   /// <summary>
@@ -224,8 +224,8 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
   {
     if (inputs.IsFirstMoveOfGame)
     {
-      earlySmoothingBaselineN      = -1;
-      earlySmoothingRecordPending  = true;
+      earlySmoothingBaselineN = -1;
+      earlySmoothingRecordPending = true;
       earlySmoothingMovesRemaining = 0;
       earlySmoothingAdjustsApplied = 0;
       return;
@@ -249,9 +249,13 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
   /// allocate to the the current move in a game subject to
   /// a limit on total number of time or nodes over
   /// some number of moves (or possibly all moves).
-  public ManagerGameLimitOutputs ComputeMoveAllocation(ManagerGameLimitInputs inputs)
+  public ManagerGameLimitOutputs ComputeMoveAllocation(ManagerGameLimitInputs inputs, bool applyEarlySmoothing = true)
   {
-    if (inputs.SearchParams.GameLimitEarlySmoothing)
+    // applyEarlySmoothing is false when this is a recomputation for a move whose per-game
+    // early-smoothing state was already advanced by an earlier call (e.g. a cold-start
+    // reallocation after a reused graph was abandoned). In that case neither update nor apply
+    // the early-smoothing state here, to avoid double-counting the window/adjustments.
+    if (applyEarlySmoothing && inputs.SearchParams.GameLimitEarlySmoothing)
     {
       UpdateEarlySmoothingState(inputs);
     }
@@ -314,8 +318,8 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
       fractionOfIncrementToUse = numIncrementsAvailableTime switch
       {
         < 0.0f => 0.05f, // possibly already in technical forfeit!
-        < 1.0f => 0.50f, 
-        < 2.0f => 0.90f, 
+        < 1.0f => 0.50f,
+        < 2.0f => 0.90f,
         < 3.0f => 0.96f, // if at least 2 increments are available we don't need to hold much back
         _ => 0.99f,
       };
@@ -327,7 +331,7 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
     // Prevent totalValueFromUse being zero or negative.
     if (SearchLimit.TypeIsNodesLimit(inputs.TargetLimitType))
     {
-      totalValueUse = Math.Max(1, totalValueUse); 
+      totalValueUse = Math.Max(1, totalValueUse);
     }
     else if (SearchLimit.TypeIsTimeLimit(inputs.TargetLimitType))
     {
@@ -336,13 +340,13 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
     }
 
     // Optionally boost allocation under the GameLimitEarlySmoothing feature.
-    if (inputs.SearchParams.GameLimitEarlySmoothing && earlySmoothingMovesRemaining > 0)
+    if (applyEarlySmoothing && inputs.SearchParams.GameLimitEarlySmoothing && earlySmoothingMovesRemaining > 0)
     {
       earlySmoothingMovesRemaining--;  // consume one slot from the 20-move window
 
       float earlySmothingBaselineFrac = EarlySmoothingBaselineFracForBaselineN(earlySmoothingBaselineN);
-      bool canStillAdjust  = earlySmoothingAdjustsApplied < EARLY_SMOOTHING_MAX_ADJUSTS;
-      bool baselineValid   = earlySmoothingBaselineN > 0;
+      bool canStillAdjust = earlySmoothingAdjustsApplied < EARLY_SMOOTHING_MAX_ADJUSTS;
+      bool baselineValid = earlySmoothingBaselineN > 0;
       bool isEarlyUnsmooth = baselineValid
                           && inputs.RootN < earlySmothingBaselineFrac * earlySmoothingBaselineN;
 
