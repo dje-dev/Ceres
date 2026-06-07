@@ -211,7 +211,7 @@ public record ParamsSearch
   /// Because visits are coalesced across all transposition paths,
   /// the expectation for subgraph size is typically higher than with PositionAndHistory mode.
   /// </summary>
-  public float TranspositionStopMinSupportRatioPositionMode = 5f;
+  public float TranspositionStopMinSupportRatioPositionMode = 4f;
 
 
   /// <summary>

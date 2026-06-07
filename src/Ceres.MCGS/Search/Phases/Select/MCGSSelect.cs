@@ -1397,14 +1397,13 @@ public class MCGSSelect
       // "already big enough" that we can stop descent here and just use the subtree value as is.
       int scaledTargetN = (int)MathF.Round(transpositionStopMinSupportRatio * (edgeN + numVisitsTotalThisIterator));
 
-      if (MCGSParamsFixed.REDESCENT_MUTIPLIER_ADJUST)
+      if (MCGSParamsFixed.REDESCENT_MUTIPLIER_ADJUST && childNode.N < 30)
       {
-        //double adjTarget = 2.5f * scaledTargetN / 3f;
         // Adjust scaling so that for smaller absolute N we require a higher redescent mutiplier,
         // reflecting that absolute uncertainty is higher for smaller N.
         const double REDESCENT_MULTIPLIER_ADJ_FACTOR = 2;
         double scale = 1.0f + (REDESCENT_MULTIPLIER_ADJ_FACTOR / Math.Sqrt(childNode.N));
-        scaledTargetN = (int)(scaledTargetN * scale + 0.5); // simple rounding
+        scaledTargetN = (int)(scaledTargetN * scale);
       }
 
       return childNode.N > scaledTargetN;
