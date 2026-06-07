@@ -1243,7 +1243,8 @@ public class MCGSSelect
       pathsSet.AddPath(newVisitPiggy, numVisitsToAccept);
     }
     else if (IsTranspositionSufficientN(graphEnabled, transpositionStopMinSupportRatio,
-                                       childEdge.NInFlightForIterator(iterator.IteratorID), childEdge.N, childNode))
+                                        childEdge.NInFlightForIterator(iterator.IteratorID), 
+                                        childEdge.N, childNode, iterator.DisableTranspositionSufficiencyStop))
     {
       // Sufficient visit transposition node --> create edge, extract evaluation, end descent.
       // It must have nonzero visits and thus be able to satisfy our needs without going deeper
@@ -1375,14 +1376,10 @@ public class MCGSSelect
   /// This target may then be scaled by a multiplier to encourage deeper exploration
   /// of frequently visited nodes.
   /// </summary>
-  /// <param name="numVisits"></param>
-  /// <param name="transpositionStopMinSupportRatio"></param>
-  /// <param name="numVisitsTotalThisIterator"></param>
-  /// <param name="edgeN"></param>
-  /// <param name="childN"></param>
   /// <returns></returns>
-  static bool IsTranspositionSufficientN(bool graphEnabled, float transpositionStopMinSupportRatio, int numVisitsTotalThisIterator, int edgeN, GNode childNode,
-                                         bool disableTranspositionSufficiencyStop = false)
+  static bool IsTranspositionSufficientN(bool graphEnabled, float transpositionStopMinSupportRatio,
+                                         int numVisitsTotalThisIterator, int edgeN, GNode childNode,
+                                         bool disableTranspositionSufficiencyStop)
   {
     if (disableTranspositionSufficiencyStop)
     {
