@@ -31,6 +31,7 @@ using Ceres.MCTS.Iteration;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.MCTS.GameEngines;
+using Ceres.Base.Misc;
 
 #endregion
 
@@ -469,7 +470,7 @@ namespace Ceres.Features.Tournaments
     /// in-process engine, dumps the opponent's search graph diagnostics to a "blunder_info_NNN.txt"
     /// file in the current working directory (overwriting any existing file of the same name).
     /// </summary>
-    private void CheckForBlunderDump(List<GameMoveStat> gameMoveHistory, GameEngine movingEngine,
+    private void CheckForBlunderDump(int gameSequenceNum, List<GameMoveStat> gameMoveHistory, GameEngine movingEngine,
                                      GameEngine opponentEngine, string opponentBlunderMoveStr)
     {
       if (gameMoveHistory.Count < 3)
@@ -488,7 +489,7 @@ namespace Ceres.Features.Tournaments
 
       string header = $"Engine {movingEngine.ID} detected {improvement:F0}cp improvement since last move, "
                     + $"diagnostic dump of opponent engine {opponentEngine.ID} follows "
-                    + $"(move actually played was {opponentBlunderMoveStr}).";
+                    + $"(move actually played was {opponentBlunderMoveStr}) in game {gameSequenceNum}.";
 
       // Buffer the dump first so nothing is written for opponents that cannot be dumped
       // (e.g. not a Ceres MCGS in-process engine, or no completed search yet).
@@ -502,7 +503,7 @@ namespace Ceres.Features.Tournaments
       string fullPath = Path.Combine(Directory.GetCurrentDirectory(), fileName);
       File.WriteAllText(fullPath, header + Environment.NewLine + Environment.NewLine + dump.ToString());
 
-      Console.WriteLine($"BLUNDER: engine {opponentEngine.ID} position worse by {improvement:F0}cp, dumped to {fullPath}");
+      ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"BLUNDER: engine {opponentEngine.ID} position worse by {improvement:F0}cp, dumped to {fullPath}");
     }
 
 
@@ -999,7 +1000,7 @@ namespace Ceres.Features.Tournaments
         {
           GameEngine movingEngine = engine2ToMove ? engine2 : engine1;
           GameEngine opponentEngine = engine2ToMove ? engine1 : engine2;
-          CheckForBlunderDump(gameMoveHistory, movingEngine, opponentEngine, lastPlayedMoveStr);
+          CheckForBlunderDump(gameSequenceNum, gameMoveHistory, movingEngine, opponentEngine, lastPlayedMoveStr);
         }
         lastPlayedMoveStr = moveStat.Side == SideType.White ? info.WhiteMoveStr : info.BlackMoveStr;
 

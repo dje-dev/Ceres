@@ -589,7 +589,7 @@ public static class GraphReuseManager
   {
     Log($"ABANDONING GRAPH: searchRootN={searchRootN:N0}, " +
         $"reason={rewriteReason}, numNodesUsed={numNodesUsed:N0}, " +
-        $"ratio={ratioSearchRootToTotal:P1}, memFraction={memFraction:P1}", red: true);
+        $"ratio={ratioSearchRootToTotal:P1}, memFraction={memFraction:P1}", red: false);
   }
 
   /// <summary>
