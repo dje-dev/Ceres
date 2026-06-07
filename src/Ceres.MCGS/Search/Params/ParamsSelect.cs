@@ -122,6 +122,12 @@ public record ParamsSelect
   public RPORegularization RPOFPURegularization = RPORegularization.ForwardKLSoftmax;
 
   /// <summary>
+  /// Amount by which unvisited child value scores are shifted in RPO mode
+  /// from the value computed by RPO imputation.
+  /// </summary>
+  public float RPOFPUValue = -0.15f;
+
+  /// <summary>
   /// Apportionment algorithm used to translate pi_bar into a concrete visit allocation
   /// in CB-GPUCT.  Default IterativeLargestDeficit matches the historical CBGPUCT inner
   /// loop exactly; HamiltonClosedForm is behaviorally equivalent up to tie-breaking and
