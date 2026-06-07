@@ -112,6 +112,13 @@ public class MCGSIterator : IDisposable
   /// </summary>
   internal float CPUCTMultiplier = 1.0f;
 
+  /// <summary>
+  /// When true, the transposition-sufficiency stop (MCGSSelect.IsTranspositionSufficientN) is
+  /// bypassed during selection, so descents continue through well-visited transposition nodes to a
+  /// true frontier leaf or terminal. Used by inner-node "deep rollouts" (DoSearchInnerNodes).
+  /// </summary>
+  internal bool DisableTranspositionSufficiencyStop = false;
+
   internal int numAllocatedPaths = 0;
 
   const bool ENABLE_LOGGING = false;
@@ -460,18 +467,182 @@ public class MCGSIterator : IDisposable
     // and graph is quiescent.
     Engine.PossiblyInvokeCallback();
 
-    LogWrite(() => $"End backup with mode {BackupMode}");
-    Engine.Coordinator.ExitBackup(IteratorID, thisBatchID);
-
-    LogFlush();
-
-    // Apply search moves as soon as possible (need the root to have been evaluated).
     Engine.Manager.TerminationManager.ApplySearchMovesIfNeeded();
 
     Manager.RunPeriodicMaintenance(batchSequenceNum);
     batchSequenceNum++;
 
+    LogWrite(() => $"End backup with mode {BackupMode}");
+    Engine.Coordinator.ExitBackup(IteratorID, thisBatchID);
+
+    LogFlush();
+
     Engine.PossiblySynchronizeIterators(this);
+  }
+
+
+  /// <summary>
+  /// Variant of RunOnce used by MCGSManager.DoSearchInnerNodes. Instead of selecting a batch of
+  /// visits beginning at the search root, it sends exactly one visit to each specified inner node:
+  /// each rollout is a full path searchRoot -> node -> ... -> leaf (built by
+  /// MCGSSelect.ExtendPathFromInnerNode), all leaves are evaluated in a single aggregated NN batch,
+  /// and all rollouts are backed up (propagating each value up to the search root).
+  ///
+  /// Returns one record per non-aborted rollout this round: the originating start node, the depth
+  /// descended below it, a terminal classification (0 = not terminal, 1 = win, 2 = draw, 3 = loss),
+  /// the leaf Q, and the sequence of node indices from the start node (index 0) down to the leaf.
+  /// The terminal classification and leaf Q are both from the start node's side-to-move perspective.
+  /// The exploration multiplier applied during the descent below each start node is the current
+  /// CPUCTMultiplier (set by the caller).
+  ///
+  /// startNodes.Count must not exceed the configured max batch size (the caller chunks if needed).
+  /// </summary>
+  /// <param name="startNodes"></param>
+  /// <param name="preBackupCallback">If not null, invoked with the constructed PathsSet just before it is backed up.</param>
+  /// <param name="postBackupCallback">If not null, invoked with the PathsSet just after it is backed up.</param>
+  /// <returns></returns>
+  internal List<(NodeIndex node, int depthBelow, int terminalKind, double leafQFromStart, NodeIndex[] sequence)> RunOnceFromNodes(
+                                                                                      IReadOnlyList<GNode> startNodes,
+                                                                                      Action<MCGSPathsSet> preBackupCallback,
+                                                                                      Action<MCGSPathsSet> postBackupCallback)
+  {
+    Debug.Assert(startNodes.Count <= Manager.ParamsSearch.Execution.MaxBatchSize);
+
+    int thisBatchID = Interlocked.Add(ref Engine.nextBatchID, 1) - 1;
+
+    PathsSet.Reset();
+    ResetPaths();
+    pathVisitPool.Clear(false);
+
+    BackupMode = Engine.Backup.BackupModeToUse();
+
+    // STEP 1: Build one single-visit rollout path per start node.
+    Engine.Coordinator.EnterSelect(IteratorID, thisBatchID);
+    for (int i = 0; i < startNodes.Count; i++)
+    {
+      Engine.Select.ExtendPathFromInnerNode(this, startNodes[i], 1);
+    }
+    Engine.SelectWorkerPools[IteratorID]?.WaitAll();
+    Engine.Coordinator.ExitSelect(IteratorID, thisBatchID);
+
+    if (PathsSet.Paths.Count == 0)
+    {
+      return new List<(NodeIndex node, int depthBelow, int terminalKind, double leafQFromStart, NodeIndex[] sequence)>(0);
+    }
+
+    // STEP 2: Evaluate any leaves needing the neural network (single aggregated batch).
+    Engine.Coordinator.EnterEvaluate(IteratorID, thisBatchID);
+    RunNNEvaluationPhase(deferRetrieveResults: false);
+    Engine.Coordinator.ExitEvaluate(IteratorID, thisBatchID);
+
+    // STEP 3: Backup the rollouts (propagates each leaf value up to the search root).
+    Engine.Coordinator.EnterBackup(IteratorID, thisBatchID);
+
+    // The PathsSet is fully constructed (and its leaves evaluated) but not yet backed up.
+    preBackupCallback?.Invoke(PathsSet);
+
+    RunBackupPhase();
+
+    postBackupCallback?.Invoke(PathsSet);
+
+    Engine.PossiblyInvokeCallback();
+    Engine.Coordinator.ExitBackup(IteratorID, thisBatchID);
+
+    batchSequenceNum++;
+
+    // Build one result record per non-aborted rollout: depth below the start node, terminal
+    // classification, leaf Q (from the start node's perspective), and the node-index sequence
+    // from the start node (index 0) down to the leaf.
+    List<(NodeIndex node, int depthBelow, int terminalKind, double leafQFromStart, NodeIndex[] sequence)> results = new();
+    foreach (MCGSPath path in PathsSet.Paths)
+    {
+      if (path.InnerSearchStartNode.IsNull
+       || path.TerminationReason == MCGSPathTerminationReason.Abort)
+      {
+        continue;
+      }
+
+      int depthBelow = path.NumVisitsInPath - path.InnerSearchStartDepth;
+      (double leafQFromStart, int terminalKind) = LeafResultFromStart(path, depthBelow);
+      NodeIndex[] sequence = BuildNodeSequenceBelowStart(path);
+      results.Add((path.InnerSearchStartNode.Index, depthBelow, terminalKind, leafQFromStart, sequence));
+    }
+
+    return results;
+  }
+
+
+  /// <summary>
+  /// Returns the leaf value and terminal classification of an inner-node rollout, both expressed
+  /// from the perspective of the side to move at the start node (the leaf's own value is converted
+  /// using the parity of the depth descended below the start node). terminalKind: 0 = not terminal,
+  /// 1 = win, 2 = draw, 3 = loss. Non-terminal leaves return the leaf node's Q with terminalKind 0.
+  /// </summary>
+  /// <param name="path"></param>
+  /// <param name="depthBelow"></param>
+  /// <returns></returns>
+  private static (double leafQFromStart, int terminalKind) LeafResultFromStart(MCGSPath path, int depthBelow)
+  {
+    GEdge leafEdge = path.LeafVisitRef.ParentChildEdge;
+    bool isTerminal = path.TerminationReason == MCGSPathTerminationReason.Terminal
+                   || path.TerminationReason == MCGSPathTerminationReason.TerminalEdge;
+
+    // Leaf value in the leaf's own side-to-move perspective (0 for draws / repetition stops).
+    double leafVLeaf;
+    bool isDraw = false;
+    if (path.TerminationReason == MCGSPathTerminationReason.DrawByRepetitionInCoalesceMode
+     || leafEdge.Type == GEdgeStruct.EdgeType.TerminalEdgeDrawn)
+    {
+      leafVLeaf = 0.0;
+      isDraw = leafEdge.Type == GEdgeStruct.EdgeType.TerminalEdgeDrawn;
+    }
+    else if (leafEdge.Type == GEdgeStruct.EdgeType.ChildEdge)
+    {
+      double q = leafEdge.ChildNode.Q;
+      leafVLeaf = double.IsNaN(q) ? 0.0 : q;
+      isDraw = isTerminal && leafEdge.ChildNode.Terminal == GameResult.Draw;
+    }
+    else
+    {
+      // Decisive terminal edge (checkmate / tablebase win or loss).
+      leafVLeaf = leafEdge.Q;
+    }
+
+    double leafQFromStart = (depthBelow % 2 == 0) ? leafVLeaf : -leafVLeaf;
+
+    int terminalKind = 0;
+    if (isTerminal)
+    {
+      const double EPS = 1e-6;
+      terminalKind = isDraw ? 2
+                            : (leafQFromStart > EPS ? 1 : (leafQFromStart < -EPS ? 3 : 2));
+    }
+
+    return (leafQFromStart, terminalKind);
+  }
+
+
+  /// <summary>
+  /// Builds the sequence of node indices for an inner-node rollout, from the start node (index 0)
+  /// down to the leaf. The root-to-start-node prefix is excluded. A terminal-edge leaf contributes
+  /// no node (a terminal edge has no child node), so such a sequence ends at the deepest real node.
+  /// </summary>
+  /// <param name="path"></param>
+  /// <returns></returns>
+  private static NodeIndex[] BuildNodeSequenceBelowStart(MCGSPath path)
+  {
+    int startDepth = path.InnerSearchStartDepth;
+    List<NodeIndex> seq = new(Math.Max(1, path.numSlotsUsed - startDepth + 1));
+    seq.Add(path.InnerSearchStartNode.Index);   // index 0 is the start node itself
+    for (int i = startDepth; i < path.numSlotsUsed; i++)
+    {
+      GEdge edge = path.slots[i].ParentChildEdge;
+      if (edge.Type == GEdgeStruct.EdgeType.ChildEdge)
+      {
+        seq.Add(edge.ChildNode.Index);
+      }
+    }
+    return seq.ToArray();
   }
 
 

@@ -25,6 +25,7 @@ using Ceres.Base.Misc;
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
+using Ceres.Chess.Positions;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Defs;
@@ -246,26 +247,26 @@ public class MCGSSelect
         cpuctMultiplier *= 1f + 0.2f * (float)(parentNode.NodeRef.StdDevEstimate.RunningStdDev - 0.1);
       }
 
-//#if FEATURE_UNCERTAINTY_POLICY
-      if ( 
+      //#if FEATURE_UNCERTAINTY_POLICY
+      if (
         //-7 Elo
         false && Engine.Manager.ParamsSearch.TestFlag2)
       {
         Debug.Assert(!float.IsNaN(parentNode.UncertaintyPolicy));
-//Console.WriteLine("UCCP: " + parentNode.UncertaintyPolicy + "  " + parentNode.UncertaintyValue);
+        //Console.WriteLine("UCCP: " + parentNode.UncertaintyPolicy + "  " + parentNode.UncertaintyValue);
         // Research idea: increase CPUCT if high policy uncertainty.
         // Low uncertainty may just indicate network saw position many times
         // (not any reflection of optimal policy).
         // However high uncertanity indicates we should somewhat discount policy.
         // Tests did not show improvement.
         cpuctMultiplier *= (parentNode.UncertaintyPolicy > 0.3 || parentNode.UncertaintyValue > 0.5)
-          ? StatUtils.Bounded(1f 
+          ? StatUtils.Bounded(1f
           + 0.15f * parentNode.UncertaintyPolicy
           + 0.25f * parentNode.UncertaintyValue,
           0.5f, 1.5f)
           : 0.95f; // Scale to keep average close to 1.0        
       }
-//#endif
+      //#endif
 
       if ((Engine.Manager.ParamsSearch.MoveOrderingPhase == ParamsSearch.MoveOrderingPhaseEnum.ChildSelection
        || Engine.Manager.ParamsSearch.MoveOrderingPhase == ParamsSearch.MoveOrderingPhaseEnum.NodeInitializationAndChildSelect)
@@ -396,6 +397,176 @@ public class MCGSSelect
     MCGSParamsFixed.Assert(path.TerminationReason != MCGSPathTerminationReason.NotYetTerminated, "NotYetTerminated");
   }
 
+
+  /// <summary>
+  /// Builds a path that begins at the search root, forcibly descends to a specified inner node
+  /// (startNode) along the most-visited ancestor line (at each step choosing the highest-N parent
+  /// edge that is strictly closer to the search root), and then continues normal PUCT/CBGPUCT
+  /// selection from startNode to a leaf.
+  ///
+  /// Used by MCGSManager.DoSearchInnerNodes to run "deep rollouts" originating at inner nodes.
+  /// Because the resulting path spans searchRoot -> ... -> startNode -> ... -> leaf, the subsequent
+  /// backup propagates the leaf evaluation all the way up to the search root, and the neural network
+  /// history planes remain continuous (no special handling needed in the evaluator).
+  ///
+  /// startNode must be an already-evaluated, non-terminal, strict descendant of the search root
+  /// (the caller is responsible for filtering); the exploration multiplier in force during the
+  /// descent from startNode is iterator.CPUCTMultiplier.
+  /// </summary>
+  /// <param name="iterator"></param>
+  /// <param name="startNode"></param>
+  /// <param name="numAttemptedVisits"></param>
+  internal void ExtendPathFromInnerNode(MCGSIterator iterator, GNode startNode, int numAttemptedVisits)
+  {
+    Debug.Assert(numAttemptedVisits > 0);
+    Debug.Assert(!startNode.IsNull);
+    Debug.Assert(!startNode.IsSearchRoot, "ExtendPathFromInnerNode requires a strict descendant of the search root");
+
+    // Walk up from startNode to the search root, collecting node indices leaf-to-root. At each step
+    // follow the highest-N incoming (parent) edge, but only among parents that are strictly closer
+    // to the search root. Constraining to strictly-decreasing depth-from-search-root both guarantees
+    // we terminate at the search root and rules out cycles from transposition / repetition
+    // back-edges (a naive max-N walk could loop: e.g. A's busiest parent is B and B's is A). The
+    // acyclic tree parent always qualifies (it sits at depth-1), so a valid choice always exists.
+    const int MAX_DEPTH = 512;
+    Span<int> nodeIndicesLeafToRoot = stackalloc int[MAX_DEPTH];
+    int depth = 0;
+    GNode walk = startNode;
+    int walkDepth = DepthFromSearchRootOrNegative(startNode);
+    if (walkDepth < 0)
+    {
+      throw new ArgumentException($"DoSearchInnerNodes start node #{startNode.Index.Index} is not a descendant of the search root.");
+    }
+    while (!walk.IsSearchRoot)
+    {
+      Debug.Assert(depth < MAX_DEPTH, "ExtendPathFromInnerNode: depth exceeded maximum");
+      nodeIndicesLeafToRoot[depth++] = walk.Index.Index;
+
+      // Pick the highest-N parent edge whose parent is strictly closer to the search root.
+      GNode chosenParent = default;
+      int chosenParentN = -1;
+      int chosenParentDepth = walkDepth;
+      foreach (GEdge parentEdge in walk.ParentEdges)
+      {
+        GNode candidate = parentEdge.ParentNode;
+        int candidateDepth = DepthFromSearchRootOrNegative(candidate);
+        if (candidateDepth >= 0 && candidateDepth < walkDepth && parentEdge.N > chosenParentN)
+        {
+          chosenParent = candidate;
+          chosenParentN = parentEdge.N;
+          chosenParentDepth = candidateDepth;
+        }
+      }
+
+      if (chosenParentN < 0)
+      {
+        // No rootward parent found (should not happen, since the tree parent is always at depth-1);
+        // fall back to the acyclic tree parent.
+        chosenParent = Engine.Graph[walk.TreeParentNodeIndex];
+        chosenParentDepth = walkDepth - 1;
+      }
+
+      walk = chosenParent;
+      walkDepth = chosenParentDepth;
+    }
+
+    // Allocate the path and seed it with the search root context.
+    MCGSPath path = iterator.AllocatedPath(NumInitialSlotsFromNumVisits(startNode.N, numAttemptedVisits));
+    path.InnerSearchStartNode = startNode;
+    path.InnerSearchStartDepth = depth;
+    path.RunningHash = Engine.SearchRootRunningHash;
+    if (Engine.NeedsPlySinceLastMove)
+    {
+      Engine.SearchRootPlySinceLastMove.AsSpan().CopyTo(path.PlySinceLastMove.SquarePlySince);
+    }
+
+    // Force descent from the search root down to startNode (root-to-leaf order), recording a
+    // single-visit slot for each step so that backup later propagates upward to the search root.
+    MGPosition parentPosMG = Engine.SearchRootPosMG;
+    GNode parentNode = Engine.SearchRootNode;
+    for (int i = depth - 1; i >= 0; i--)
+    {
+      GNode childNode = Engine.Graph[nodeIndicesLeafToRoot[i]];
+      int childIndex = parentNode.IndexOfChildInChildEdges(childNode.Index);
+      Debug.Assert(childIndex >= 0, "ExtendPathFromInnerNode: tree-parent child edge not found");
+      GEdge childEdge = parentNode.ChildEdgeAtIndex(childIndex);
+      AddForcedPrefixVisit(path, parentNode, childIndex, childEdge, ref parentPosMG);
+      parentNode = childNode;
+    }
+
+    Debug.Assert(path.NumVisitsInPath == depth);
+    Debug.Assert(path.LeafVisitRef.ParentChildEdge.ChildNode.Index == startNode.Index);
+
+    // Continue normal selection (PUCT/CBGPUCT) from startNode.
+    ExtendPathsRecursively(iterator, path, numAttemptedVisits);
+  }
+
+
+  /// <summary>
+  /// Returns the depth of a node from the search root (number of tree-parent edges to reach it),
+  /// or -1 if the node is not a descendant of the search root (its tree-parent chain reaches the
+  /// graph root first). Walking via the acyclic TreeParentEdge guarantees this terminates; it is
+  /// used to keep the inner-node prefix walk moving strictly toward the search root.
+  /// </summary>
+  /// <param name="node"></param>
+  /// <returns></returns>
+  private int DepthFromSearchRootOrNegative(GNode node)
+  {
+    const int MAX_DEPTH = 512;
+    int depth = 0;
+    GNode n = node;
+    while (!n.IsSearchRoot)
+    {
+      if (n.IsGraphRoot || depth >= MAX_DEPTH)
+      {
+        return -1;
+      }
+      n = Engine.Graph[n.TreeParentNodeIndex];
+      depth++;
+    }
+    return depth;
+  }
+
+
+  /// <summary>
+  /// Records a single forced (non-PUCT) visit along an already-expanded child edge while building
+  /// the search-root -> startNode prefix in ExtendPathFromInnerNode. Mirrors the per-visit
+  /// bookkeeping of the normal expanded-child descent (position, hashes, edge in-flight, running
+  /// hash, ply) but always assigns exactly one visit to the given child.
+  /// </summary>
+  private void AddForcedPrefixVisit(MCGSPath path, GNode parentNode, int childIndex,
+                                    GEdge childEdge, ref MGPosition parentPosMG)
+  {
+    Debug.Assert(childEdge.Type == GEdgeStruct.EdgeType.ChildEdge);
+
+    MGMove moveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(childEdge.Move, in parentPosMG);
+    MGPosition childPos = parentPosMG;
+    childPos.MakeMove(moveMG);
+    bool moveIrreversible = parentPosMG.IsIrreversibleMove(moveMG, in childPos);
+
+    PosHash64 childHash64 = MGPositionHashing.Hash64(in childPos);
+    PosHash96 childHash96 = MGPositionHashing.Hash96(in childPos);
+
+    ref MCGSPathVisit visit = ref path.AddVisit(parentNode, childIndex, in childPos, 1, childHash64, moveIrreversible);
+    visit.ParentChildEdge = childEdge;
+    GNodeStruct.UpdateEdgeNInFlightForIterator(childEdge, path.IteratorID, 1);
+
+    // Maintain the running multiset hash and ply-since-last-move exactly as PossiblyBranched does
+    // for an ordinary descended visit (history resets on an irreversible move).
+    if (moveIrreversible)
+    {
+      path.RunningHash = default;
+    }
+    path.RunningHash.Add(childHash96);
+
+    if (Engine.NeedsPlySinceLastMove)
+    {
+      PlySinceLastMoveArray.ApplyMoveWithSwap(ref path.PlySinceLastMove, ref path.PlySinceLastMoveTemp, in moveMG);
+    }
+
+    parentPosMG = childPos;
+  }
+
   private static bool CapacityAbortNeeded(MCGSIterator iterator, MCGSPath path, MCGSPathsSet pathsSet)
   {
     if (iterator.IsApproachingMaxPathCapacity) // for example, when a prefetch operation has reached the target
@@ -486,8 +657,8 @@ public class MCGSSelect
     ParamsSearch paramsSearch = iterator.Engine.Manager.ParamsSearch;
     int minRepetitionCountForDraw = paramsSearch.TwofoldDrawEnabled ? 1 : 2;
     bool graphEnabled = paramsSearch.EnableGraph;
-    float transpositionStopMinSupportRatio = paramsSearch.PathTranspositionMode == PathMode.PositionAndHistoryEquivalence 
-                                           ? paramsSearch.TranspositionStopMinSupportRatioPositionAndHistoryMode 
+    float transpositionStopMinSupportRatio = paramsSearch.PathTranspositionMode == PathMode.PositionAndHistoryEquivalence
+                                           ? paramsSearch.TranspositionStopMinSupportRatioPositionAndHistoryMode
                                            : paramsSearch.TranspositionStopMinSupportRatioPositionMode;
     bool parallelEnabled = paramsSearch.Execution.SelectOperationParallelThresholdNumVisits < int.MaxValue;
     int THRESHOLD_PARALLEL = ParallelThresholdToUse;
@@ -521,6 +692,7 @@ public class MCGSSelect
         writeSlot++;
       }
     }
+
 
     SelectVisitsEnumerator childVisitScans = new(numChildrenToConsider, parentNode.NumEdgesExpanded, multipass);
     foreach ((SelectVisitsEnumerator.VisitsPhase phase, int childIndex) in childVisitScans)
@@ -759,7 +931,8 @@ public class MCGSSelect
                               childPosInfo.moveMG);
     }
     else if (IsTranspositionSufficientN(graphEnabled, transpositionStopMinSupportRatio,
-                                        childEdge.NInFlightForIterator(iterator.IteratorID), childEdge.N, childNode))
+                                        childEdge.NInFlightForIterator(iterator.IteratorID), childEdge.N, childNode,
+                                        iterator.DisableTranspositionSufficiencyStop))
     {
       // Already expanded, connects to a transposition node with already sufficient N, stop descent.
       //  Revisit transposition node with sufficient visits --> extract evaluation, end descent.
@@ -1208,8 +1381,16 @@ public class MCGSSelect
   /// <param name="edgeN"></param>
   /// <param name="childN"></param>
   /// <returns></returns>
-  static bool IsTranspositionSufficientN(bool graphEnabled, float transpositionStopMinSupportRatio, int numVisitsTotalThisIterator, int edgeN, GNode childNode)
+  static bool IsTranspositionSufficientN(bool graphEnabled, float transpositionStopMinSupportRatio, int numVisitsTotalThisIterator, int edgeN, GNode childNode,
+                                         bool disableTranspositionSufficiencyStop = false)
   {
+    if (disableTranspositionSufficiencyStop)
+    {
+      // Inner-node deep rollouts bypass the sufficiency stop so descent continues through
+      // well-visited transposition nodes to a true frontier leaf or terminal.
+      return false;
+    }
+
     if (graphEnabled)
     {
       // This could be a transposition node.

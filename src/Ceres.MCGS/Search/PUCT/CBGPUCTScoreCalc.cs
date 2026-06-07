@@ -88,14 +88,15 @@ internal static class CBGPUCTScoreCalc
   /// using numChildren in its place.
   /// </summary>
   internal static double ComputeLambdaNForSelection(ParamsSelect paramsSelect, double sumN, int numChildren,
-                                                    ReadOnlySpan<double> mu = default)
+                                                    ReadOnlySpan<double> mu = default,
+                                                    double explorationMultiplier = 1.0)
     => ComputeLambdaNCore(paramsSelect.CBGPUCT_SelectLambdaSchedule,
                           paramsSelect.CBGPUCT_SelectLambdaC,
                           paramsSelect.CBGPUCT_SelectLambdaExp,
                           ResolveDenomBase(paramsSelect.CBGPUCT_SelectLambdaDenominatorBase, mu, numChildren),
                           paramsSelect.CBGPUCT_SelectLambdaCLogBase,
                           paramsSelect.CBGPUCT_SelectLambdaCLogFactor,
-                          sumN, numChildren);
+                          sumN, numChildren, explorationMultiplier);
 
 
   /// <summary>
@@ -165,13 +166,19 @@ internal static class CBGPUCTScoreCalc
                                            double lambdaC, double lambdaExp,
                                            double denominatorBase,
                                            double cLogBase, double cLogFactor,
-                                           double sumN, int numChildren)
+                                           double sumN, int numChildren,
+                                           double explorationMultiplier = 1.0)
   {
     double cEffective = lambdaC;
     if (cLogFactor != 0.0 && cLogBase > 0.0)
     {
       cEffective = lambdaC + cLogFactor * Math.Log((sumN + cLogBase + 1.0) / cLogBase);
     }
+
+    // Scale the effective exploration coefficient (parallels how PUCT applies its per-iterator
+    // CPUCT multiplier to the whole CalcCPUCT result). A multiplier of 0 yields lambda_N = 0
+    // (fully greedy / unregularized selection); 1 leaves behavior unchanged.
+    cEffective *= explorationMultiplier;
 
     switch (schedule)
     {
@@ -386,7 +393,8 @@ internal static class CBGPUCTScoreCalc
                                 double qParent, double parentSumPVisited,
                                 int numChildren, int numVisitsToCompute,
                                 Span<double> outputScores, Span<short> outputChildVisitCounts,
-                                double[] qWhenNoChildrenPerChild = null)
+                                double[] qWhenNoChildrenPerChild = null,
+                                double explorationMultiplier = 1.0)
   {
     Debug.Assert(numChildren > 0);
     Debug.Assert(numChildren <= PUCTScoreCalcVector.MAX_CHILDREN);
@@ -505,7 +513,7 @@ internal static class CBGPUCTScoreCalc
     {
       sumNStart += currentN[i];
     }
-    double lambdaN = ComputeLambdaNForSelection(paramsSelect, sumNStart, numChildren, mu);
+    double lambdaN = ComputeLambdaNForSelection(paramsSelect, sumNStart, numChildren, mu, explorationMultiplier);
 
     // Solve for pi_bar.  q is fully filled (no NaN); anchor is ignored for reverse KL.
     Span<double> piBar = stackalloc double[numChildren];

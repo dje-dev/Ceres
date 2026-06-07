@@ -115,7 +115,7 @@ public unsafe static class PUCTScoreCalcVector
                                         qParent, parentSumPVisited,
                                         numChildren, numVisitsToCompute,
                                         outputScores, outputChildVisitCounts,
-                                        qWhenNoChildrenPerChild);
+                                        qWhenNoChildrenPerChild, cpuctMultiplier);
     }
 
     float virtualLossMultiplier;

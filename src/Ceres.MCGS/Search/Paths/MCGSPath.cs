@@ -128,6 +128,21 @@ public partial class MCGSPath : IEquatable<MCGSPath>, IComparable<MCGSPath>
   // If not null, this is the index of the visit at which backup should resume (after a split or a backup resumption)
   public short? PendingResumptionNextSlotToUse;
 
+  /// <summary>
+  /// If this path was launched by MCGSManager.DoSearchInnerNodes (a rollout that begins
+  /// at a specified inner node rather than the search root), this is that inner start node.
+  /// Null for ordinary paths. Used to map a completed path back to its originating node
+  /// (for example to detect when a node's rollout reached a terminal leaf).
+  /// </summary>
+  internal GNode InnerSearchStartNode;
+
+  /// <summary>
+  /// When InnerSearchStartNode is set, the number of forced prefix visits from the search root
+  /// down to that start node (its depth from the search root). The depth descended below the
+  /// start node is then NumVisitsInPath - InnerSearchStartDepth.
+  /// </summary>
+  internal int InnerSearchStartDepth;
+
   #endregion
 
   /// <summary>
@@ -150,6 +165,8 @@ public partial class MCGSPath : IEquatable<MCGSPath>, IComparable<MCGSPath>
     RunningHash = default;
     NumVisitsInPath = default;
     PendingResumptionNextSlotToUse = default;
+    InnerSearchStartNode = default;
+    InnerSearchStartDepth = default;
     // Note: PlySinceLastMove and PlySinceLastMoveTemp are NOT reset here.
     // They are value types that are re-populated when the path is initialized in ExtendPathsRecursively.
     // Their contents are overwritten when Engine.NeedsPlySinceLastMove is true.
@@ -602,6 +619,8 @@ public partial class MCGSPath : IEquatable<MCGSPath>, IComparable<MCGSPath>
     splittingPath.NumVisitsInPath = this.NumVisitsInPath;
     splittingPath.TerminationReason = this.TerminationReason;
     splittingPath.MaxQSubOptimality = this.MaxQSubOptimality;
+    splittingPath.InnerSearchStartNode = this.InnerSearchStartNode;
+    splittingPath.InnerSearchStartDepth = this.InnerSearchStartDepth;
 
     splittingPath.RunningHash = this.RunningHash;
     if (moveWasIrreversibleMove)
