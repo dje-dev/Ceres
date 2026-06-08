@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 using Ceres.Base.Misc;
 using Ceres.Base.OperatingSystem;
@@ -30,282 +31,57 @@ using Ceres.MCGS.Search.Params;
 namespace Ceres.MCGS.Search.Coordination;
 
 /// <summary>
-/// Manages graph reuse and rewrite decisions for MCGS search.
-/// Encapsulates logic for determining when to reuse, rewrite, or abandon a graph.
+/// Manages graph reuse decisions for MCGS search. When a prior graph can be carried forward to the
+/// current position, decides whether to:
+///   - REUSE   it unchanged (search descends from the search root), or
+///   - EXTRACT the subgraph still reachable from the search root into a fresh, smaller graph, or
+///   - ABANDON it and search from scratch.
+///
+/// The decision follows a simple memory / utilization / time policy (see <see cref="DecideAction"/>).
 /// </summary>
 public static class GraphReuseManager
 {
   #region Constants
 
   /// <summary>
-  /// Minimum number of nodes before considering graph rewrite.
+  /// A reused graph whose root has fewer than this many visits (N) is "trivially small":
+  /// it is always reused as-is (never extracted or abandoned).
   /// </summary>
-  public const int SMALL_GRAPH_THRESHOLD = 1_000_000;
+  public const int TRIVIALLY_SMALL_ROOT_N = 1_000_000;
 
   /// <summary>
-  /// Memory usage fraction (relative to MaxMemory allocated to Ceres)
-  /// above which rewrite is triggered.
+  /// Heuristic extraction speed (reachable nodes copied per second) used to estimate extraction cost:
+  /// estimated seconds to extract = reachableNodeCount / EXTRACT_NODES_PER_SEC.
+  /// Calibrated from observed parallel-extraction throughput (~1M nodes/sec).
   /// </summary>
-  public const float MEMORY_PRESSURE_THRESHOLD = 0.90f;
-
-  /// <summary>
-  /// Minimum value of the memory-scaled low-ratio threshold (applied when memory
-  /// usage is at or below <see cref="REWRITE_RATIO_MEM_FRACTION_LOW"/>).
-  /// </summary>
-  public const float REWRITE_RATIO_THRESHOLD_MIN = 0.01f;
-
-  /// <summary>
-  /// Maximum value of the memory-scaled low-ratio threshold (applied when memory
-  /// usage is at or above <see cref="REWRITE_RATIO_MEM_FRACTION_HIGH"/>).
-  /// </summary>
-  public const float REWRITE_RATIO_THRESHOLD_MAX = 0.08f;
-
-  /// <summary>
-  /// Memory usage fraction at or below which the low-ratio threshold sits at its minimum.
-  /// </summary>
-  public const float REWRITE_RATIO_MEM_FRACTION_LOW = 0.20f;
-
-  /// <summary>
-  /// Memory usage fraction at or above which the low-ratio threshold sits at its maximum.
-  /// </summary>
-  public const float REWRITE_RATIO_MEM_FRACTION_HIGH = 0.80f;
-
-  /// <summary>
-  /// Estimated reachability fraction (from sampling) below which the graph
-  /// is abandoned outright, even if rewrite is enabled. The estimate is an
-  /// upper bound, so the true reachable fraction is at most this value.
-  /// </summary>
-  public const float LOW_REACHABILITY_ABANDON_THRESHOLD = 0.15f;
-
-  /// <summary>
-  /// Maximum retention fraction for full rewrite.
-  /// We can't retain a very high fraction because:
-  ///   - would defeat purpose of rewrite (reduce memory usage), and
-  ///   - the rewrite time is mostly a function of the number of nodes retained, 
-  ///     so high retention could lead to problematic rewrite times
-  ///     (although additional logic is in place to avoid that)
-  /// </summary>
-  public const float FULL_REWRITE_MAX_RETENTION = 0.60f;
-
-  /// <summary>
-  /// Target retention fraction for selective rewrite.
-  /// </summary>
-  public const float SELECTIVE_TARGET_RETENTION = 0.40f;
-
-  /// <summary>
-  /// Maximum (estimated) retention fraction at or below which a reused graph is rebuilt by
-  /// COPYING the reachable subgraph into a fresh graph (GraphExtractor) rather than rewriting
-  /// it in place or abandoning it. Kept low because extraction is only advantageous when the
-  /// surviving subgraph is small relative to the whole graph.
-  /// </summary>
-  public const float EXTRACT_MAX_RETENTION = 0.25f;
-
-  /// <summary>
-  /// Maximum fraction of search time allowed for rewrite.
-  /// </summary>
-  public const float MAX_REWRITE_TIME_FRACTION = 0.60f;
-
-  /// <summary>
-  /// Fraction of MaxNodes capacity above which rewrite is triggered
-  /// to avoid running out of node slots during continued search.
-  /// </summary>
-  public const float NODE_CAPACITY_PRESSURE_THRESHOLD = 0.90f;
+  public const double EXTRACT_NODES_PER_SEC = 1_000_000.0;
 
   #endregion
 
-  #region Rewrite Time Estimator
+  #region Action
 
   /// <summary>
-  /// Adaptive estimator for graph rewrite time based on running averages with priors.
-  /// Uses a pseudo-count weighted average approach where prior beliefs are treated
-  /// as initial observations that get diluted as real observations accumulate.
-  /// Thread-safe via locking.
+  /// The action chosen for a reusable graph.
   /// </summary>
-  public static class RewriteTimeEstimator
+  private enum GraphReuseAction
   {
-    // Prior pseudo-observations (equivalent to 1 observation each)
-    const float PRIOR_SECONDS_PER_MILLION_RETAINED = 3.0f;
-    const float PRIOR_SECONDS_PER_MILLION_STARTING = 0.050f;
-    const float PRIOR_WEIGHT = 1.0f;
+    /// <summary>Keep the existing graph unchanged (search descends from the search root).</summary>
+    Reuse,
 
-    // Running statistics
-    static readonly object _lock = new();
-    static float _sumRetainedNodesMillions = PRIOR_WEIGHT;
-    static float _sumRetainedTimeSeconds = PRIOR_WEIGHT * PRIOR_SECONDS_PER_MILLION_RETAINED;
-    static float _sumStartingNodesMillions = PRIOR_WEIGHT;
-    static float _sumStartingOverheadSeconds = PRIOR_WEIGHT * PRIOR_SECONDS_PER_MILLION_STARTING;
-    static int _observationCount = 0;
+    /// <summary>Copy the subgraph reachable from the search root into a fresh, smaller graph.</summary>
+    Extract,
 
-    /// <summary>
-    /// Current estimate of seconds per million retained nodes.
-    /// </summary>
-    public static float SecondsPerMillionRetainedNodes
-    {
-      get
-      {
-        lock (_lock)
-        {
-          return _sumRetainedTimeSeconds / _sumRetainedNodesMillions;
-        }
-      }
-    }
-
-    /// <summary>
-    /// Current estimate of overhead seconds per million starting nodes.
-    /// </summary>
-    public static float SecondsPerMillionStartingNodes
-    {
-      get
-      {
-        lock (_lock)
-        {
-          return _sumStartingOverheadSeconds / _sumStartingNodesMillions;
-        }
-      }
-    }
-
-    /// <summary>
-    /// Number of observations recorded (excluding the prior pseudo-observation).
-    /// </summary>
-    public static int ObservationCount
-    {
-      get
-      {
-        lock (_lock)
-        {
-          return _observationCount;
-        }
-      }
-    }
-
-    /// <summary>
-    /// Estimates the time required for a rewrite operation.
-    /// </summary>
-    /// <param name="startingNodes">Number of nodes in the graph before rewrite.</param>
-    /// <param name="expectedRetainedNodes">Expected number of nodes after rewrite.</param>
-    /// <returns>Estimated time in seconds.</returns>
-    public static float EstimateRewriteTime(int startingNodes, int expectedRetainedNodes)
-    {
-      float startingMillions = startingNodes / 1_000_000f;
-      float retainedMillions = expectedRetainedNodes / 1_000_000f;
-
-      lock (_lock)
-      {
-        float overheadRate = _sumStartingOverheadSeconds / _sumStartingNodesMillions;
-        float retentionRate = _sumRetainedTimeSeconds / _sumRetainedNodesMillions;
-        return (startingMillions * overheadRate) + (retainedMillions * retentionRate);
-      }
-    }
-
-    /// <summary>
-    /// Calculates the maximum retention fraction that fits within a time budget.
-    /// </summary>
-    /// <param name="startingNodes">Number of nodes in the graph.</param>
-    /// <param name="maxTimeSeconds">Maximum allowed time for rewrite.</param>
-    /// <returns>Maximum retention fraction (0 to 1), or 0 if insufficient time for overhead.</returns>
-    public static float MaxRetentionForTimeBudget(int startingNodes, float maxTimeSeconds)
-    {
-      float startingMillions = startingNodes / 1_000_000f;
-
-      lock (_lock)
-      {
-        float overheadRate = _sumStartingOverheadSeconds / _sumStartingNodesMillions;
-        float retentionRate = _sumRetainedTimeSeconds / _sumRetainedNodesMillions;
-
-        float overheadSeconds = startingMillions * overheadRate;
-        float availableTimeForRetention = maxTimeSeconds - overheadSeconds;
-
-        if (availableTimeForRetention <= 0)
-        {
-          return 0;
-        }
-
-        // retainedMillions * retentionRate <= availableTimeForRetention
-        float maxRetainedMillions = availableTimeForRetention / retentionRate;
-        float maxRetainedNodes = maxRetainedMillions * 1_000_000f;
-        return Math.Min(1.0f, maxRetainedNodes / startingNodes);
-      }
-    }
-
-    /// <summary>
-    /// Records an observation from a completed rewrite operation.
-    /// Attributes the total elapsed time proportionally to overhead and retention
-    /// based on current estimates, then updates the running averages.
-    /// </summary>
-    /// <param name="startingNodes">Number of nodes before rewrite.</param>
-    /// <param name="retainedNodes">Number of nodes after rewrite.</param>
-    /// <param name="elapsedSeconds">Total time taken for the rewrite.</param>
-    public static void RecordObservation(int startingNodes, int retainedNodes, float elapsedSeconds)
-    {
-      if (elapsedSeconds <= 0 || startingNodes <= 0)
-      {
-        return;
-      }
-
-      float startingMillions = startingNodes / 1_000_000f;
-      float retainedMillions = retainedNodes / 1_000_000f;
-
-      lock (_lock)
-      {
-        // Attribute actual time proportionally based on current estimates
-        float currentOverheadRate = _sumStartingOverheadSeconds / _sumStartingNodesMillions;
-        float currentRetentionRate = _sumRetainedTimeSeconds / _sumRetainedNodesMillions;
-
-        float estimatedOverhead = startingMillions * currentOverheadRate;
-        float estimatedRetention = retainedMillions * currentRetentionRate;
-        float totalEstimated = estimatedOverhead + estimatedRetention;
-
-        float actualOverhead, actualRetention;
-        if (totalEstimated > 0)
-        {
-          // Proportional attribution
-          actualOverhead = elapsedSeconds * (estimatedOverhead / totalEstimated);
-          actualRetention = elapsedSeconds * (estimatedRetention / totalEstimated);
-        }
-        else
-        {
-          // Fallback: split evenly
-          actualOverhead = elapsedSeconds * 0.5f;
-          actualRetention = elapsedSeconds * 0.5f;
-        }
-
-        // Update running totals
-        _sumStartingNodesMillions += startingMillions;
-        _sumStartingOverheadSeconds += actualOverhead;
-        _sumRetainedNodesMillions += retainedMillions;
-        _sumRetainedTimeSeconds += actualRetention;
-        _observationCount++;
-      }
-    }
-
-    /// <summary>
-    /// Returns a formatted string with current estimates.
-    /// </summary>
-    public static string GetEstimatesString()
-    {
-      lock (_lock)
-      {
-        float retentionRate = _sumRetainedTimeSeconds / _sumRetainedNodesMillions;
-        float overheadRate = _sumStartingOverheadSeconds / _sumStartingNodesMillions;
-        return $"retentionRate={retentionRate:F3}s/M, overheadRate={overheadRate:F4}s/M, observations={_observationCount}";
-      }
-    }
-
-    /// <summary>
-    /// Resets the estimator to its initial state (priors only).
-    /// </summary>
-    public static void Reset()
-    {
-      lock (_lock)
-      {
-        _sumRetainedNodesMillions = PRIOR_WEIGHT;
-        _sumRetainedTimeSeconds = PRIOR_WEIGHT * PRIOR_SECONDS_PER_MILLION_RETAINED;
-        _sumStartingNodesMillions = PRIOR_WEIGHT;
-        _sumStartingOverheadSeconds = PRIOR_WEIGHT * PRIOR_SECONDS_PER_MILLION_STARTING;
-        _observationCount = 0;
-      }
-    }
+    /// <summary>Discard the graph; the next search starts from scratch.</summary>
+    Abandon
   }
+
+  /// <summary>
+  /// Outcome of <see cref="DecideAction"/>: the chosen action, an explanation (null for plain reuse),
+  /// and instrumentation from the reachability check. <see cref="ReachableNodes"/> is -1 when the
+  /// decision short-circuited without running the BFS (trivially-small or low-memory graph).
+  /// </summary>
+  private readonly record struct ReuseDecision(GraphReuseAction Action, string Reason,
+                                               double ReachabilityCheckSeconds, int ReachableNodes);
 
   #endregion
 
@@ -363,18 +139,19 @@ public static class GraphReuseManager
     return graphToPossiblyReuse;
   }
 
+
   /// <summary>
-  /// Processes a reusable graph, potentially performing a rewrite if triggered by
-  /// memory pressure or low retention ratio. Returns the processed graph (which may
-  /// be the original graph, a rewritten graph, or null if abandoned).
+  /// Decides what to do with a reusable graph (reuse / extract / abandon) and carries out the
+  /// decision (disposing the old graph when it is replaced or abandoned). Returns the graph to use
+  /// for the upcoming search: the original graph (reuse), a freshly-extracted smaller graph, or
+  /// null (abandon, or no graph to process).
   /// </summary>
-  /// <param name="graph">The graph to potentially rewrite.</param>
+  /// <param name="graph">The reusable graph (its search root is already set), or null.</param>
   /// <param name="searchRootNodeInfo">Info about the search root node.</param>
-  /// <param name="searchRootPathFromGraphRoot">Path from graph root to search root (modified if rewrite occurs).</param>
-  /// <param name="paramsSearch">Search parameters.</param>
-  /// <param name="searchLimit">Current search limit (for time budget calculations).</param>
-  /// <param name="priorMoves">Position history for the new search.</param>
-  /// <returns>The graph to use (may be null if abandoned).</returns>
+  /// <param name="searchRootPathFromGraphRoot">Path graph-root → search-root; cleared if the graph is replaced/abandoned.</param>
+  /// <param name="paramsSearch">Search parameters (for the memory budget).</param>
+  /// <param name="searchLimit">Current search limit (for the time budget).</param>
+  /// <param name="priorMoves">Position+history for the new search root.</param>
   public static Graph ProcessGraphRewrite(Graph graph,
                                           GraphRootToSearchRootNodeInfo searchRootNodeInfo,
                                           ref List<GraphRootToSearchRootNodeInfo> searchRootPathFromGraphRoot,
@@ -387,289 +164,207 @@ public static class GraphReuseManager
       return null;
     }
 
-    int numNodesUsed = graph.Store.NodesStore.NumUsedNodes;
-    int searchRootN = searchRootNodeInfo.ChildNode.N;
-    float ratioSearchRootToTotal = (float)searchRootN / numNodesUsed;
+    ReuseDecision decision = DecideAction(graph, searchRootNodeInfo, paramsSearch, searchLimit);
+    string reason = decision.Reason;
 
-    // Only consider rewrite for large graphs
-    if (numNodesUsed < SMALL_GRAPH_THRESHOLD)
+    if (decision.Action == GraphReuseAction.Reuse)
     {
+      MaybeLogReachabilityCheck("REUSE", decision, graph);
       return graph;
     }
 
-    // --- Graph rewrite/abandon decision logic ---
-    // Three standard triggers: memory pressure, node capacity, low search-root ratio.
-    // Additionally, a sampled reachability estimate is always computed for large graphs.
-    // If estimated reachable fraction < LOW_REACHABILITY_ABANDON_THRESHOLD (upper bound),
-    // the graph is abandoned outright even if rewrite is enabled, since rewriting a
-    // nearly-unreachable graph is not worth the overhead.
-    GC.Collect(0);
-    HardwareManager.ProcessMemoryInfo memInfo = HardwareManager.GetProcessMemoryInfo();
-    float memFraction = (float)(memInfo.PrivateBytes / (double)paramsSearch.MaxMemoryBytes);
-
-    bool memoryPressure = memFraction >= MEMORY_PRESSURE_THRESHOLD;
-
-    // Scale the low-ratio trigger linearly with memory usage: when little of the
-    // Ceres memory budget is in use we tolerate very sparse graphs (down to 1%
-    // reuse ratio), but as memory fills up we demand a healthier ratio (rising
-    // to 8%) so that unreachable subtrees are reclaimed sooner.
-    float memFracClamped = Math.Clamp(memFraction, REWRITE_RATIO_MEM_FRACTION_LOW, REWRITE_RATIO_MEM_FRACTION_HIGH);
-    float memFracT = (memFracClamped - REWRITE_RATIO_MEM_FRACTION_LOW)
-                   / (REWRITE_RATIO_MEM_FRACTION_HIGH - REWRITE_RATIO_MEM_FRACTION_LOW);
-    float rewriteRatioThreshold = REWRITE_RATIO_THRESHOLD_MIN
-                                + memFracT * (REWRITE_RATIO_THRESHOLD_MAX - REWRITE_RATIO_THRESHOLD_MIN);
-    bool lowRatio = ratioSearchRootToTotal < rewriteRatioThreshold;
-    float nodeCapacityFraction = (float)numNodesUsed / graph.Store.MaxNodes;
-    bool nodeCapacityPressure = nodeCapacityFraction >= NODE_CAPACITY_PRESSURE_THRESHOLD;
-    bool standardTrigger = memoryPressure || nodeCapacityPressure || lowRatio;
-
-    string rewriteReason = memoryPressure ? "memory pressure"
-                         : nodeCapacityPressure ? "node capacity pressure"
-                         : lowRatio ? "low ratio"
-                         : null;
-
-    // Always estimate reachability when graph is large enough to consider.
-    float reachabilityFraction = EstimateReachability(graph, searchRootNodeInfo, priorMoves);
-    bool lowReachability = reachabilityFraction < LOW_REACHABILITY_ABANDON_THRESHOLD;
-
-    // --- Decision: FULLY RETAIN, EXTRACT, REWRITE, or ABANDON ---
-    // A single self-contained block that considers all four possibilities. When extraction is
-    // disabled this is behaviorally identical to the prior logic (retain / abandon / rewrite).
-
-    // (1) FULLY RETAIN: no pressure trigger and reachability is healthy. Keep the existing
-    //     (large) graph as-is; the upcoming search simply descends from the search root.
-    if (!standardTrigger && !lowReachability)
-    {
-      return graph;
-    }
-
-    // (2) EXTRACT: the reachable subgraph is small enough that copying it into a fresh graph is
-    //     cheap (O(reachable) vs the in-place rewrite's O(total nodes)). This beats BOTH a rewrite
-    //     (when a pressure trigger fired) AND outright abandonment (when reachability is low) —
-    //     in the low-reachability case extraction preserves the small subgraph's neural-network
-    //     evaluations instead of discarding them. The reachability estimate is an upper bound, so
-    //     reachabilityFraction <= EXTRACT_MAX_RETENTION implies the actual reachable set is small.
-    if (paramsSearch.GraphReuseExtractEnabled
-     && reachabilityFraction <= EXTRACT_MAX_RETENTION)
+    if (decision.Action == GraphReuseAction.Extract)
     {
       GraphExtractor.ExtractResult ex = GraphExtractor.TryExtract(graph, searchRootNodeInfo.ChildNode.Index, priorMoves);
       if (ex.Succeeded)
       {
-        string extractReason = standardTrigger ? rewriteReason : $"low reachability ({reachabilityFraction:P1})";
-        LogExtraction(ex, searchRootN, extractReason);
+        LogExtraction(ex, searchRootNodeInfo.ChildNode.N, reason, decision.ReachabilityCheckSeconds);
 
-        // Switch over to the new graph and dispose the old one. Returning a different Graph object
-        // is contract-compatible with the caller (it installs whatever graph is returned); the
-        // search root is now the graph root, so clear the path.
+        // Switch over to the new (smaller) graph and dispose the old one. Returning a different
+        // Graph object is contract-compatible with the caller (it installs whatever is returned);
+        // the search root is now the graph root, so clear the path.
         graph.Dispose();
         searchRootPathFromGraphRoot = null;
         return ex.NewGraph;
       }
-      // Extraction declined unexpectedly — fall through to rewrite/abandon below.
+
+      // Extraction unexpectedly failed: fall through to abandonment rather than carry an over-budget graph.
+      reason = "extraction did not complete; " + reason;
     }
 
-    // (3) ABANDON: reachability is too low to justify an (expensive) in-place rewrite and we did
-    //     not extract. Discard the graph; the search starts from scratch.
-    if (lowReachability)
-    {
-      string reason = standardTrigger
-        ? $"{rewriteReason} + low reachability ({reachabilityFraction:P1})"
-        : $"low reachability ({reachabilityFraction:P1})";
-
-      LogGraphAbandonment(graph, searchRootNodeInfo, searchRootN, numNodesUsed,
-                          ratioSearchRootToTotal, memFraction, reason, priorMoves);
-
-      graph.Dispose();
-      searchRootPathFromGraphRoot = null;
-      return null;
-    }
-
-    // (4) REWRITE: a pressure trigger fired with sufficient reachability.
-    if (!paramsSearch.GraphReuseRewriteEnabled)
-    {
-      // Rewrite would have been triggered but the feature is disabled.
-      LogGraphAbandonment(graph, searchRootNodeInfo, searchRootN, numNodesUsed,
-                          ratioSearchRootToTotal, memFraction, rewriteReason, priorMoves);
-
-      graph.Dispose();
-      searchRootPathFromGraphRoot = null;
-      return null;
-    }
-
-    return PerformGraphRewrite(graph, searchRootNodeInfo, ref searchRootPathFromGraphRoot,
-                               searchLimit, priorMoves, searchRootN, numNodesUsed,
-                               ratioSearchRootToTotal, memFraction, rewriteReason);
+    // Abandon (decided, or extraction fell through).
+    LogAbandon(graph, searchRootNodeInfo, reason);
+    MaybeLogReachabilityCheck("ABANDON", decision, graph);
+    graph.Dispose();
+    searchRootPathFromGraphRoot = null;
+    return null;
   }
 
+
   /// <summary>
-  /// Performs the actual graph rewrite operation.
+  /// Decides whether to reuse, extract, or abandon a reusable graph, following a simple
+  /// memory / utilization / time policy. Returns the action and, for non-reuse actions, a short
+  /// human-readable explanation (null for reuse).
+  ///
+  /// Definitions:
+  ///   reachableNodes     = nodes reachable from the search root (exactly what extraction would retain)
+  ///   reachableFraction  = reachableNodes / totalNodes         (how much of the graph actually survives)
+  ///   memoryUsedFraction = process private bytes / configured max memory
+  ///   timeToExtract      = reachableNodes / EXTRACT_NODES_PER_SEC      (estimated seconds)
+  ///   availableTime      = seconds available for the move (MaxValue if the search is not time-based)
+  ///
+  /// reachableNodes is the ACTUAL count (a bounded BFS via <see cref="GraphExtractor.CountReachableNodes"/>),
+  /// not the visit-based searchRoot.N / graphRoot.N proxy: in transposition-heavy graphs (especially
+  /// PositionEquivalence mode) most distinct positions remain reachable from the new root via cross-edges
+  /// even when only a small fraction of VISITS flowed through it, so the visit ratio badly under-predicts
+  /// both retention and copy cost.
+  ///
+  /// Policy:
+  ///   - trivially small graph                                        -> reuse
+  ///   - memory used &lt; 20%                                         -> reuse
+  ///   - memory used &gt; 70%   : extract if it fits the time budget (&le; 80% of available), else abandon
+  ///   - reachableFraction &lt; 30% and timeToExtract &lt; 25% avail   -> extract
+  ///   - reachableFraction &lt; 10% and timeToExtract &lt; 50% avail   -> extract
+  ///   - otherwise                                                    -> reuse
   /// </summary>
-  private static Graph PerformGraphRewrite(Graph graph,
-                                           GraphRootToSearchRootNodeInfo searchRootNodeInfo,
-                                           ref List<GraphRootToSearchRootNodeInfo> searchRootPathFromGraphRoot,
-                                           SearchLimit searchLimit,
-                                           PositionWithHistory priorMoves,
-                                           int searchRootN,
-                                           int numNodesUsed,
-                                           float ratioSearchRootToTotal,
-                                           float memFraction,
-                                           string rewriteReason)
+  private static ReuseDecision DecideAction(
+    Graph graph,
+    GraphRootToSearchRootNodeInfo searchRootNodeInfo,
+    ParamsSearch paramsSearch,
+    SearchLimit searchLimit)
   {
-    NodeIndex newRootIndex = searchRootNodeInfo.ChildNode.Index;
-
-    // Calculate time budget constraint if using time-based search limit
-    float fullRewriteMaxRetention = FULL_REWRITE_MAX_RETENTION;
-    float selectiveTargetRetention = SELECTIVE_TARGET_RETENTION;
-    string timeBudgetInfo = "";
-
-    if (searchLimit.IsTimeLimit)
+    // Trivially small graph: always reuse (no BFS).
+    if (graph.GraphRootNode.N < TRIVIALLY_SMALL_ROOT_N)
     {
-      float maxRewriteTimeSeconds = searchLimit.Value * MAX_REWRITE_TIME_FRACTION;
-      float maxRetentionFromTimeBudget = RewriteTimeEstimator.MaxRetentionForTimeBudget(numNodesUsed, maxRewriteTimeSeconds);
-
-      if (maxRetentionFromTimeBudget <= 0)
-      {
-        // Not enough time even for overhead - skip rewrite entirely
-        float estimatedOverhead = (numNodesUsed / 1_000_000f) * RewriteTimeEstimator.SecondsPerMillionStartingNodes;
-        Log($"SKIPPING REWRITE (insufficient time budget): searchRootN={searchRootN:N0}, " +
-            $"maxRewriteTime={maxRewriteTimeSeconds:F2}s, estimatedOverhead={estimatedOverhead:F2}s, " +
-            $"[{RewriteTimeEstimator.GetEstimatesString()}]", red: true);
-        return graph;
-      }
-
-      // Clamp retention targets to fit within time budget
-      if (maxRetentionFromTimeBudget < fullRewriteMaxRetention)
-      {
-        fullRewriteMaxRetention = Math.Max(0.05f, maxRetentionFromTimeBudget);
-        timeBudgetInfo = $", timeBudgetCappedFullRetention={fullRewriteMaxRetention:P1}";
-      }
-      if (maxRetentionFromTimeBudget < selectiveTargetRetention)
-      {
-        selectiveTargetRetention = Math.Max(0.05f, maxRetentionFromTimeBudget);
-        timeBudgetInfo += $", timeBudgetCappedSelectiveRetention={selectiveTargetRetention:P1}";
-      }
+      return new ReuseDecision(GraphReuseAction.Reuse, null, 0.0, -1);
     }
 
-    // Try full rewrite first with max retention threshold (possibly time-budget adjusted)
-    GraphRewriter.RewriteResult result = GraphRewriter.MakeChildNewRoot(
-      graph, newRootIndex, priorMoves,
-      maxRetentionFraction: fullRewriteMaxRetention);
-
-    // If full rewrite was declined, fall back to selective rewrite
-    if (result.Outcome != GraphRewriter.RewriteOutcome.Rewritten)
+    // Plenty of memory free: reuse (no BFS). Memory is probed only past the trivially-small short-circuit.
+    double memoryUsedFraction = CurrentMemoryUsedFraction(paramsSearch);
+    if (memoryUsedFraction < 0.20)
     {
-      result = GraphRewriter.MakeChildNewRootSelective(
-        graph, newRootIndex, priorMoves,
-        targetRetentionFraction: selectiveTargetRetention);
+      return new ReuseDecision(GraphReuseAction.Reuse, null, 0.0, -1);
     }
 
-    // Record observation for adaptive estimation
-    if (result.Outcome == GraphRewriter.RewriteOutcome.Rewritten
-     || result.Outcome == GraphRewriter.RewriteOutcome.RewrittenSelective)
+    double availableTime = searchLimit.IsTimeLimit ? searchLimit.Value : double.MaxValue;
+    int totalNodes = graph.Store.NodesStore.NumUsedNodes;
+
+    // Count the nodes actually reachable from the search root (== what extraction would retain),
+    // with an early-abort cap so the BFS cost is BOUNDED BY THE MOVE'S TIME BUDGET. Above the largest
+    // count that could still yield an extract we don't need the exact value:
+    //   - the extract branches require timeToExtract (= reachable/rate) below a fraction of the time
+    //     budget, so a reachable set larger than ~0.5 * available * rate can never extract; and
+    //   - under moderate memory, reachableFraction >= 30% reuses regardless.
+    // Hence cap = high mem  : 0.80 * available * rate                         (above -> abandon)
+    //            moderate   : min(0.30 * totalNodes, 0.50 * available * rate)  (above -> reuse)
+    // For non-time-based searches the available*rate terms are infinite and only the fraction cap binds.
+    double timeCapNodes = availableTime >= double.MaxValue
+      ? double.MaxValue
+      : (memoryUsedFraction > 0.70 ? 0.80 : 0.50) * availableTime * EXTRACT_NODES_PER_SEC;
+    double fracCapNodes = memoryUsedFraction > 0.70 ? double.MaxValue : 0.30 * totalNodes;
+    int abortAbove = (int)Math.Min((double)int.MaxValue, Math.Min(timeCapNodes, fracCapNodes));
+
+    Stopwatch sw = Stopwatch.StartNew();
+    int reachableNodes = GraphExtractor.CountReachableNodes(graph, searchRootNodeInfo.ChildNode.Index, abortAbove);
+    double reachabilityCheckSeconds = sw.Elapsed.TotalSeconds;
+
+    double reachableFraction = totalNodes > 0 ? (double)reachableNodes / totalNodes : 0.0;
+    double timeToExtract = reachableNodes / EXTRACT_NODES_PER_SEC;
+
+    // High memory pressure: extract if it fits the time budget, otherwise abandon.
+    if (memoryUsedFraction > 0.70)
     {
-      RewriteTimeEstimator.RecordObservation(result.NodesBeforeRewrite, result.NodesAfterRewrite, (float)result.ElapsedSeconds);
+      return timeToExtract > 0.80 * availableTime
+        ? new ReuseDecision(GraphReuseAction.Abandon, $"high memory {memoryUsedFraction:P0}; extracting {reachableNodes:N0} reachable nodes (~{timeToExtract:F1}s) would exceed 80% of {availableTime:F1}s available", reachabilityCheckSeconds, reachableNodes)
+        : new ReuseDecision(GraphReuseAction.Extract, $"high memory {memoryUsedFraction:P0}; {reachableNodes:N0} reachable nodes (~{timeToExtract:F1}s)", reachabilityCheckSeconds, reachableNodes);
     }
 
-    // Log the outcome with current estimates
-    LogRewriteResult(result, searchRootN, rewriteReason, memFraction, timeBudgetInfo);
-
-    if (result.Outcome == GraphRewriter.RewriteOutcome.Rewritten
-     || result.Outcome == GraphRewriter.RewriteOutcome.RewrittenSelective)
+    // Moderate memory: extract only when most of the graph is stale and extraction is cheap enough.
+    if (reachableFraction < 0.30 && timeToExtract < 0.25 * availableTime)
     {
-      // After rewrite, the search root is now at the graph root index.
-      searchRootPathFromGraphRoot = null;
+      return new ReuseDecision(GraphReuseAction.Extract, $"only {reachableFraction:P0} of nodes reachable; extraction quick (~{timeToExtract:F1}s)", reachabilityCheckSeconds, reachableNodes);
     }
 
-    return graph;
+    if (reachableFraction < 0.10 && timeToExtract < 0.50 * availableTime)
+    {
+      return new ReuseDecision(GraphReuseAction.Extract, $"only {reachableFraction:P0} of nodes reachable; extraction affordable (~{timeToExtract:F1}s)", reachabilityCheckSeconds, reachableNodes);
+    }
+
+    // Otherwise: reuse.
+    return new ReuseDecision(GraphReuseAction.Reuse, null, reachabilityCheckSeconds, reachableNodes);
   }
 
   #endregion
 
-  #region Logging
+  #region Memory + Logging
 
   /// <summary>
-  /// Logs a message if diagnostics are enabled.
+  /// Current process memory usage as a fraction of the configured maximum
+  /// (private bytes / MaxMemoryBytes). A gen-0 collection is forced first so the
+  /// reading is not inflated by short-lived garbage.
   /// </summary>
-  private static void Log(string message, bool red = false)
+  private static double CurrentMemoryUsedFraction(ParamsSearch paramsSearch)
   {
-    if (MCGSParamsFixed.GRAPH_REWRITE_DUMP_REUSE_DIAGNOSTICS)
-    {
-      ConsoleUtils.WriteLineColored(red ? ConsoleColor.Red : ConsoleColor.Yellow, message);
-    }
+    GC.Collect(0);
+    HardwareManager.ProcessMemoryInfo memInfo = HardwareManager.GetProcessMemoryInfo();
+    return memInfo.PrivateBytes / (double)paramsSearch.MaxMemoryBytes;
   }
 
-  /// <summary>
-  /// Estimates the fraction of graph nodes reachable from the search root
-  /// using a fast sampling approach. Returns an upper bound.
-  /// </summary>
-  private static float EstimateReachability(Graph graph,
-                                            GraphRootToSearchRootNodeInfo searchRootNodeInfo,
-                                            PositionWithHistory priorMoves)
-  {
-    NodeIndex newRootIndex = searchRootNodeInfo.ChildNode.Index;
-    GraphRewriter.RewriteResult estimateResult = GraphRewriter.MakeChildNewRoot(
-      graph, newRootIndex, priorMoves,
-      maxRetentionFraction: 0.001f,
-      maxSampledReachabilityFraction: 0.001f);
-    return estimateResult.RetentionFraction;
-  }
-
-  /// <summary>
-  /// Logs graph abandonment information.
-  /// </summary>
-  private static void LogGraphAbandonment(Graph graph,
-                                          GraphRootToSearchRootNodeInfo searchRootNodeInfo,
-                                          int searchRootN,
-                                          int numNodesUsed,
-                                          float ratioSearchRootToTotal,
-                                          float memFraction,
-                                          string rewriteReason,
-                                          PositionWithHistory priorMoves)
-  {
-    Log($"ABANDONING GRAPH: searchRootN={searchRootN:N0}, " +
-        $"reason={rewriteReason}, numNodesUsed={numNodesUsed:N0}, " +
-        $"ratio={ratioSearchRootToTotal:P1}, memFraction={memFraction:P1}", red: false);
-  }
-
-  /// <summary>
-  /// Logs the result of a rewrite operation including current speed estimates.
-  /// </summary>
-  private static void LogRewriteResult(GraphRewriter.RewriteResult result,
-                                       int searchRootN,
-                                       string rewriteReason,
-                                       float memFraction,
-                                       string timeBudgetInfo)
-  {
-    double memReductionMB = (result.ManagedMemoryAtStart - result.ManagedMemoryAtEnd) / (1024.0 * 1024.0);
-
-    // Calculate actual speed metrics for this rewrite
-    float actualRetainedMillions = result.NodesAfterRewrite / 1_000_000f;
-    float actualStartingMillions = result.NodesBeforeRewrite / 1_000_000f;
-    string actualSpeedStr = "";
-    if (result.ElapsedSeconds > 0 && actualRetainedMillions > 0)
-    {
-      // Note: This is the combined rate, not separated overhead vs retention
-      float combinedRate = (float)result.ElapsedSeconds / actualRetainedMillions;
-      actualSpeedStr = $", thisRewrite={combinedRate:F3}s/M";
-    }
-
-    string msg = $"Graph rewrite: searchRootN={searchRootN:N0}, reason={rewriteReason}, outcome={result.Outcome}, " +
-      $"{result.NodesBeforeRewrite:N0} -> {result.NodesAfterRewrite:N0} nodes " +
-      $"({100.0 * result.NodesAfterRewrite / result.NodesBeforeRewrite:F1}%), " +
-      $"{result.ElapsedSeconds * 1000:F0}ms, mem delta {memReductionMB:+0.0;-0.0;0}MB{timeBudgetInfo}{actualSpeedStr}, " +
-      $"[{RewriteTimeEstimator.GetEstimatesString()}]";
-    Log(msg);
-  }
 
   /// <summary>
   /// Logs (unconditionally, in yellow) a one-line summary of a graph EXTRACT decision and its stats.
+  /// When GraphExtractor.LOG_EXTRACT_PHASE_TIMINGS is enabled, also logs a per-phase timing breakdown.
   /// </summary>
-  private static void LogExtraction(GraphExtractor.ExtractResult ex, int searchRootN, string reason)
+  private static void LogExtraction(GraphExtractor.ExtractResult ex, int searchRootN, string reason,
+                                    double reachabilityCheckSeconds)
   {
     ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
-      $"Graph EXTRACT: searchRootN={searchRootN:N0}, reason={reason}, "
-    + $"retention={ex.RetentionFraction:P1} (<= {EXTRACT_MAX_RETENTION:P0}), "
-    + $"{ex.NodesBefore:N0} -> {ex.NodesAfter:N0} nodes, {ex.ElapsedSeconds * 1000:F0}ms");
+      $"Graph EXTRACT: {reason}; searchRootN={searchRootN:N0}, "
+    + $"{ex.NodesBefore:N0} -> {ex.NodesAfter:N0} nodes ({ex.RetentionFraction:P1}), {ex.ElapsedSeconds * 1000:F0}ms");
+
+    if (GraphExtractor.LOG_EXTRACT_PHASE_TIMINGS)
+    {
+      GraphRewriter.FinalizePhaseTimings f = ex.Finalize;
+      // reachCheck = the decision's reachability BFS (separate from enumerate, which is the extractor's own BFS).
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+        $"  EXTRACT timings (ms): reachCheck={reachabilityCheckSeconds * 1000:F1}, "
+      + $"enumerate={ex.EnumerateSeconds * 1000:F1}, "
+      + $"copy={ex.CopySeconds * 1000:F1} [{(ex.UsedParallelCopy ? "parallel" : "serial")}], "
+      + $"finalize={ex.FinalizeSeconds * 1000:F1} "
+      + $"(p5_parents={f.Phase5Parents * 1000:F1}, p5a_N/Q/D={f.Phase5aNodeN * 1000:F1}, "
+      + $"p5b_root={f.Phase5bRoot * 1000:F1}, p6_dicts={f.Phase6Dicts * 1000:F1}, "
+      + $"p6c_siblings={f.Phase6cSiblings * 1000:F1}, p7_cleanup={f.Phase7Cleanup * 1000:F1})");
+    }
+  }
+
+
+  /// <summary>
+  /// When phase timing is enabled (GraphExtractor.LOG_EXTRACT_PHASE_TIMINGS), logs the time spent in
+  /// the reachability BFS check for a non-extract decision (reuse / abandon) — the case where that BFS
+  /// cost is otherwise invisible. No-op when timing is disabled or no BFS ran (trivially-small or
+  /// low-memory short-circuit, indicated by ReachableNodes &lt; 0).
+  /// </summary>
+  private static void MaybeLogReachabilityCheck(string outcome, ReuseDecision decision, Graph graph)
+  {
+    if (!GraphExtractor.LOG_EXTRACT_PHASE_TIMINGS || decision.ReachableNodes < 0)
+    {
+      return;
+    }
+
+    ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+      $"  reachability check ({outcome}): {decision.ReachabilityCheckSeconds * 1000:F1}ms "
+    + $"(reachable {decision.ReachableNodes:N0} of {graph.Store.NodesStore.NumUsedNodes:N0})");
+  }
+
+
+  /// <summary>
+  /// Logs (unconditionally, in yellow) a one-line explanation of a graph ABANDON decision.
+  /// </summary>
+  private static void LogAbandon(Graph graph, GraphRootToSearchRootNodeInfo searchRootNodeInfo, string reason)
+  {
+    ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+      $"Graph ABANDON: {reason} "
+    + $"(graphRootN={graph.GraphRootNode.N:N0}, searchRootN={searchRootNodeInfo.ChildNode.N:N0})");
   }
 
   #endregion

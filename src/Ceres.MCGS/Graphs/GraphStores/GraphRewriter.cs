@@ -803,7 +803,15 @@ public static unsafe class GraphRewriter
   ///   - ParentsHeader may be left arbitrary (it is fully rebuilt here).
   /// The graph must be quiescent (no in-flight visits, nothing locked).
   /// </summary>
-  internal static void FinalizeAfterCopy(Graph graph, int numReachable, PositionWithHistory newPriorMoves)
+  /// <summary>
+  /// Per-phase timing breakdown (seconds) for the shared finalize tail, returned by
+  /// <see cref="FinalizeAfterCopy"/> for diagnostics.
+  /// </summary>
+  public record FinalizePhaseTimings(double Phase5Parents, double Phase5aNodeN, double Phase5bRoot,
+                                     double Phase6Dicts, double Phase6cSiblings, double Phase7Cleanup);
+
+
+  internal static FinalizePhaseTimings FinalizeAfterCopy(Graph graph, int numReachable, PositionWithHistory newPriorMoves)
   {
     // Lazily create and size the scratch buffers on THIS (new) graph.
     // Pass small sizes (numReachable+1) for both: the tail phases only use the retained-sized
@@ -817,25 +825,36 @@ public static unsafe class GraphRewriter
     // Bypass lock assertions during exclusive (single-threaded, quiescent) graph construction.
     graph.Store.IsRewriting = true;
 
+    Stopwatch sw = Stopwatch.StartNew();
+
     // Phase 5: Rebuild parent store from edges (also accumulates incoming edge.N into scratch.GeneralA).
     Phase5RebuildParentStore(graph, numReachable, scratch);
+    double t1 = sw.Elapsed.TotalSeconds;
 
     // Phase 5a: Recalculate node N (from incoming edge N) and Q/D (bottom-up from edges).
     Phase5aRecalculateNodeN(graph, numReachable, scratch.GeneralAPtr);
+    double t2 = sw.Elapsed.TotalSeconds;
 
     // Phase 5b: Set root flags / cached pointers / history.
     Phase5bSetupRootState(graph, newPriorMoves);
+    double t3 = sw.Elapsed.TotalSeconds;
 
     // Phase 6: Rebuild transposition dictionaries and NodeIndexSet store.
     Phase6RebuildDictionaries(graph, numReachable, scratch, out _, out _);
+    double t4 = sw.Elapsed.TotalSeconds;
 
     // Phase 6c: Reconstruct pseudo-transposition sibling contributions (no-op in PositionEquivalence mode).
     Phase6cPossiblyReconstructSiblingContributions(graph, numReachable);
+    double t5 = sw.Elapsed.TotalSeconds;
 
     // Phase 7: Final cleanup (reset counters, resize stores to current usage, DEBUG validate).
     Phase7FinalCleanup(graph);
+    double t6 = sw.Elapsed.TotalSeconds;
 
     graph.Store.IsRewriting = false;
+
+    // Phase 5 timing includes the (small) scratch EnsureCapacity zeroing performed above.
+    return new FinalizePhaseTimings(t1, t2 - t1, t3 - t2, t4 - t3, t5 - t4, t6 - t5);
   }
 
 

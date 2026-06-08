@@ -190,12 +190,21 @@ public class GEdgeStore
       throw new Exception($"GEdgeStore overflow, max size {edgeStoreMemoryBuffer.Length}. ");
     }
 
-    // Thread-safe allocation check and grow
-    lock (lockObj)
+    // Thread-safe allocation check and grow, using double-checked locking so the
+    // common case (capacity already sufficient) is lock-free. This mirrors
+    // MemoryBufferOSBlocked.AllocateEntriesStartBlock and lets many threads allocate
+    // edge blocks concurrently without serializing on lockObj (used by parallel graph
+    // extraction; harmless and beneficial for normal search as well). NumItemsAllocated
+    // is monotonic (only grows), so a stale read can at worst cause an unnecessary lock
+    // entry (then re-checked), never a missed grow.
+    if (edgeStoreMemoryBuffer.NumItemsAllocated <= newNumEntries)
     {
-      if (edgeStoreMemoryBuffer.NumItemsAllocated <= newNumEntries)
+      lock (lockObj)
       {
-        edgeStoreMemoryBuffer.InsureAllocated(newNumEntries);
+        if (edgeStoreMemoryBuffer.NumItemsAllocated <= newNumEntries)
+        {
+          edgeStoreMemoryBuffer.InsureAllocated(newNumEntries);
+        }
       }
     }
 
