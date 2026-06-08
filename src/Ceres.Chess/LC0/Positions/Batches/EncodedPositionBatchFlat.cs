@@ -312,7 +312,6 @@ namespace Ceres.Chess.LC0.Batches
         SetPositions(positions);
       }
 
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
       void WritePairWithValue1(ulong bitmap)
       {
         PosPlaneBitmaps[nextOutPlaneIndex] = bitmap;
@@ -320,7 +319,6 @@ namespace Ceres.Chess.LC0.Batches
         nextOutPlaneIndex++;
       }
 
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
       void WritePair(ulong bitmap, byte value)
       {
         PosPlaneBitmaps[nextOutPlaneIndex] = bitmap;
@@ -753,7 +751,6 @@ namespace Ceres.Chess.LC0.Batches
       return lut;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static unsafe void BitmapRepresentationExpand(ulong[] thisLongs,
                                                          byte[] thisValues,
                                                          Memory<Half> targetArrayMemory,
@@ -795,7 +792,6 @@ namespace Ceres.Chess.LC0.Batches
     /// AVX2-optimized version of BitmapRepresentationExpand.
     /// Uses per-byte fast paths for sparse data with optimized SIMD for general case.
     /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static unsafe void BitmapRepresentationExpandAVX2(ulong[] thisLongs,
                                                                byte[] thisValues,
                                                                Memory<Half> targetArrayMemory,
@@ -905,7 +901,6 @@ namespace Ceres.Chess.LC0.Batches
     /// ARM AdvSimd (NEON) optimized version of BitmapRepresentationExpand.
     /// Uses per-byte fast paths for sparse data with SIMD expansion for general case.
     /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static unsafe void BitmapRepresentationExpandAdvSimd(ulong[] thisLongs,
                                                                   byte[] thisValues,
                                                                   Memory<Half> targetArrayMemory,
@@ -1010,7 +1005,6 @@ namespace Ceres.Chess.LC0.Batches
     /// <summary>
     /// Optimized scalar fallback using lookup table.
     /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static unsafe void BitmapRepresentationExpandScalar(ulong[] thisLongs,
                                                                  byte[] thisValues,
                                                                  Memory<Half> targetArrayMemory,

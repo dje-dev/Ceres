@@ -257,7 +257,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     public Span<MCTSNodeStructChild> SpanForNode(MCTSNodeStructIndex nodeIndex)
     {
       ref readonly MCTSNodeStruct nodeRef = ref nodes[nodeIndex.Index];
@@ -274,7 +273,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     /// <param name="node"></param>
     /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     public Span<MCTSNodeStructChild> SpanForNode(long childStartIndex, byte numPolicyMoves)
     {
       if (numPolicyMoves == 0) return Span<MCTSNodeStructChild>.Empty;

@@ -219,7 +219,6 @@ namespace Ceres.Base.OperatingSystem
     /// <returns></returns>
     public ref T this[long index]
     {
-      [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
       get => ref ((T*)rawMemoryAddress)[index];
     }
 

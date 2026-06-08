@@ -71,7 +71,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
         public ref MCTSNodeStruct Current
         {
-          [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
           get
           {
             Debug.Assert(index <= endIndex);
@@ -95,7 +94,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           nodes = (MCTSNodeStruct*)Store.Nodes.nodes.RawMemory;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
         public bool MoveNext() => unchecked(++index) <= endIndex;
 
         private static void ThrowInvalidOp() => throw new InvalidOperationException();

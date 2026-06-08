@@ -738,7 +738,6 @@ namespace Ceres.Chess
     /// interpretation logic is combined together here.
     /// </summary>
     /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public readonly ulong CalcZobristHash(PositionMiscInfo.HashMove50Mode hashMode, bool includeRepetitions = true)
     {
       if (FastHashTable == null) InitFastHashTable();
@@ -818,7 +817,6 @@ namespace Ceres.Chess
     /// NOTE: For efficiency, the Zobrist hashing logic and position interpretation logic is combined together here.
     /// </summary>
     /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public readonly ulong CalcZobristHashSlow(PositionMiscInfo.HashMove50Mode hashMode)
     {
       ulong[][][] keys = EncodedBoardZobrist.Keys;

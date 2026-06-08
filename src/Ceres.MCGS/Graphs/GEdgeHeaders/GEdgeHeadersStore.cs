@@ -100,7 +100,6 @@ public class GEdgeHeadersStore : MemoryBufferOSBlocked<GEdgeHeaderStruct>
   /// starting at the specified absolute index.
   /// This overload accepts a byte count.
   /// </summary>
-  [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
   public Span<GEdgeHeaderStruct> SpanAtIndex(long childStartIndex, byte numPolicyMoves)
     => SpanAtIndex(childStartIndex, (int)numPolicyMoves);
   
@@ -109,7 +108,6 @@ public class GEdgeHeadersStore : MemoryBufferOSBlocked<GEdgeHeaderStruct>
   /// Returns a span covering move infos for a node starting at the specified block.
   /// This overload accepts a byte count.
   /// </summary>
-  [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
   public Span<GEdgeHeaderStruct> SpanAtBlockIndex(long moveInfosStartBlockIndex, byte numPolicyMoves)
     => SpanAtBlockIndex(moveInfosStartBlockIndex, (int)numPolicyMoves);
 

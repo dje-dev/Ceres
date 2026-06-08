@@ -39,14 +39,14 @@ namespace Ceres.Base.DataTypes
     private static ushort[] baseTable;
     private static sbyte[] shiftTable;
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static unsafe float HalfToSingle(FP16 floatHalfPrecision)
     {
       uint result = mantissaTable[offsetTable[floatHalfPrecision.Value >> 10] + (floatHalfPrecision.Value & 0x3ff)] + exponentTable[floatHalfPrecision.Value >> 10];
       return *((float*)&result);
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static unsafe FP16 SingleToHalf(float single)
     {
       uint value = *((uint*)&single);

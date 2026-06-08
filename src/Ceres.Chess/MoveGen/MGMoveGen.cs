@@ -74,8 +74,6 @@ namespace Ceres.Chess.MoveGen
   /// </summary>
   public static partial class MGMoveGen
   {
-    public static ulong MoveGenCount = 0;
-
     public static void GenerateMoves(in MGPosition P, MGMoveList moves)
     {
       Debug.Assert((~(P.A | P.B | P.C) & P.D) == 0); // Should not be any "black" empty squares
@@ -150,7 +148,6 @@ namespace Ceres.Chess.MoveGen
     public enum MoveGenMode { AllMoves, AtLeastOneMoveIfAnyExists };
 
 
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static bool AtLeastOneLegalMoveExists(in MGPosition P)
     {
       if (movesTemp == null) movesTemp = new MGMoveList();
@@ -165,7 +162,6 @@ namespace Ceres.Chess.MoveGen
     }
 
 
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     static void DoGenWhiteMoves(in MGPosition P, MGMoveList moves, MoveGenMode mode)
     {
       Debug.Assert(moves.NumMovesUsed == 0);
@@ -404,7 +400,6 @@ namespace Ceres.Chess.MoveGen
     }
 
 
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     static void AddWhiteMoveToListIfLegal(in MGPosition P, MGMoveList moves, byte fromsquare, BitBoard to, ulong piece, MGMove.MGChessMoveFlags flags = 0)
     {
       if (to != 0)
@@ -414,7 +409,6 @@ namespace Ceres.Chess.MoveGen
     }
 
 
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     static void DoAddWhiteMoveToListIfLegal(in MGPosition P, MGMoveList moves, byte fromsquare, BitBoard to, ulong piece, MGMove.MGChessMoveFlags flags = 0)
     {
       moves.InsureMoveArrayHasRoom(1);
@@ -575,7 +569,6 @@ namespace Ceres.Chess.MoveGen
     }
 
 
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     static void DoGenBlackMoves(in MGPosition P, MGMoveList moves, MoveGenMode mode)
     {
       Debug.Assert(moves.NumMovesUsed == 0);
@@ -813,7 +806,6 @@ namespace Ceres.Chess.MoveGen
     }
 
 
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     static void AddBlackMoveToListIfLegal(in MGPosition P, MGMoveList moves, byte fromsquare, BitBoard to, ulong piece, MGMove.MGChessMoveFlags flags = 0)
     {
       if (to != 0)
@@ -823,7 +815,6 @@ namespace Ceres.Chess.MoveGen
     }
 
 
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     static void DoAddBlackMoveToListIfLegal(in MGPosition P, MGMoveList moves, byte fromsquare, BitBoard to, ulong piece, MGMove.MGChessMoveFlags flags = 0)
     {
       moves.InsureMoveArrayHasRoom(1);
