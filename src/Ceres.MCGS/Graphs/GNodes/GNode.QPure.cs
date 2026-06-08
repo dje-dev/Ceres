@@ -189,12 +189,6 @@ public partial struct GNode
     }
 
 
-    if (MCGSParamsFixed.TRACK_NODE_EDGE_UNCERTAINTY)
-    {
-      double priorMean = N <= 1 ? newQ : Q; // first point is just the new sample
-      NodeRef.StdDevEstimate.AddSample(priorMean, newQ);
-    }
-
     NodeRef.Q = newQ;
     if (DrawKnownToExistAmongChildren)
     {

@@ -71,7 +71,7 @@ public static class MCGSPosGraphNodeDumper
   private const int W_DEP = 3, W_NUM_MOVES = 3, W_INDEX = 10, W_FLG = 3, W_MOVE = 6;
   private const int W_POLICY = 7, W_VISITPCT = 7, W_PAR_N = 10, W_N = 10, W_REP = 3;
   private const int W_ACTV = 7, W_V = 7, W_Q = 7, W_WDL = 17;
-  private const int W_UNC = 4, W_PIRR = 4, W_VERR = 4;
+  private const int W_UNC = 4, W_PIRR = 4, W_VERR = 4, W_VOL = 4;
 
 
   internal static void DumpNodeStr(MCGSManager manager,
@@ -198,7 +198,8 @@ public static class MCGSPosGraphNodeDumper
     writer.Write(plyUntilIrreversible.HasValue
       ? $"{plyUntilIrreversible.Value,W_PIRR} "
       : $"{"-",W_PIRR} ");
-    writer.Write($"{100 * MathF.Abs(node.V - (float)q),W_VERR:F0}");
+    writer.Write($"{100 * MathF.Abs(node.V - (float)q),W_VERR:F0} ");
+    writer.Write($"{100 * node.LeafValueVolatility,W_VOL:F0}");
 
     if (fullDetail)
     {
@@ -233,7 +234,8 @@ public static class MCGSPosGraphNodeDumper
     writer.Write($"{"VUnc",W_UNC} ");
     writer.Write($"{"PUnc",W_UNC} ");
     writer.Write($"{"PIrr",W_PIRR} ");
-    writer.Write($"{"VErr",W_VERR}");
+    writer.Write($"{"VErr",W_VERR} ");
+    writer.Write($"{"Vol",W_VOL}");
     if (fullDetail) writer.Write("  FEN");
     writer.WriteLine();
 
@@ -256,7 +258,8 @@ public static class MCGSPosGraphNodeDumper
     writer.Write($"{new string('-', W_UNC),W_UNC} ");
     writer.Write($"{new string('-', W_UNC),W_UNC} ");
     writer.Write($"{new string('-', W_PIRR),W_PIRR} ");
-    writer.Write($"{new string('-', W_VERR),W_VERR}");
+    writer.Write($"{new string('-', W_VERR),W_VERR} ");
+    writer.Write($"{new string('-', W_VOL),W_VOL}");
     if (fullDetail) writer.Write("  ---");
     writer.WriteLine();
   }

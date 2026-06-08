@@ -250,7 +250,13 @@ public unsafe partial struct GNodeStruct
 
 
   //    public NodeIndex NodeHashSibling;
-  public RunningStdDevShort StdDevEstimate;
+
+  /// <summary>
+  /// Compact (2 byte) exponentially-weighted (~50-visit) estimate of the volatility of leaf values
+  /// backed up through this node, measured as RMS deviation about the node's Q. Maintained during
+  /// backup only when ParamsSearch.TrackLeafValueVolatility is enabled (otherwise stays zero).
+  /// </summary>
+  public RunningStdDevShort LeafValueVolatility;
   //public readonly short Unused1;
   //public readonly short Unused2;
   //public int NDrawByRepetition;

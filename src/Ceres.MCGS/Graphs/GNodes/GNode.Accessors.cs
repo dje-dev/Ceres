@@ -71,6 +71,13 @@ public readonly partial struct GNode : IComparable<GNode>, IEquatable<GNode>
   public readonly FP16 UncertaintyPolicy => NodeRef.UncertaintyPolicy;
 
   /// <summary>
+  /// Exponentially-weighted (~50-visit) volatility of the leaf values backed up through this node,
+  /// measured as RMS deviation about the node's Q. Nonzero only when search was run with
+  /// ParamsSearch.TrackLeafValueVolatility enabled.
+  /// </summary>
+  public readonly double LeafValueVolatility => NodeRef.LeafValueVolatility.RunningStdDev;
+
+  /// <summary>
   /// Fortress probability metric: minimum P(NEVER) over all pawn squares.
   /// High values indicate a pawn unlikely to ever move, suggesting fortress-like structure.
   /// </summary>

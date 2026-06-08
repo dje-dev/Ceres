@@ -50,6 +50,19 @@ public partial class MCGSBackup
 
     bool haveProcessedLeaf = false;
 
+    // Leaf-value volatility tracking: thread the first two moments (sum and sum-of-squares) of the
+    // leaf value backed up along this path up through the SAME accumulator rails that carry the
+    // visit counts, so each node can maintain an exact windowed dispersion estimate of the leaf
+    // values it sees (rather than only ever seeing the aggregate Q-movement delta, which dilutes
+    // and cancels that dispersion). Gated by the (default off) ParamsSearch flag.
+    bool trackVol = Engine.Manager.ParamsSearch.TrackLeafValueVolatility
+                 && numVisitsAccepted > 0
+                 && !double.IsNaN(initialBackupValue.V);
+    // sV: running sum of leaf values in the CURRENT edge's child perspective (negated once per
+    // level as we ascend); sV2: sum of squares (perspective-invariant). Both mirror numVisitsAccepted.
+    double sV = trackVol ? initialBackupValue.V * numVisitsAccepted : 0;
+    double sV2 = trackVol ? initialBackupValue.V * initialBackupValue.V * numVisitsAccepted : 0;
+
     // Perform backup, starting from the leaf and working toward root.
     foreach (MCGSPathVisitMember visitPair in path.PathVisitsLastBackedUpToRoot)
     {
@@ -81,7 +94,7 @@ public partial class MCGSBackup
               // There are more paths yet to be processed that will pass thru this visit.
               // We'll exit and let them eventually finish the work.
               // But first we have to update the accumulator for the child
-              visitPathRef.Accumulator.DoAdd(numVisitsAttempted, numVisitsAccepted);
+              visitPathRef.Accumulator.DoAdd(numVisitsAttempted, numVisitsAccepted, sV, sV2);
               return;
             }
             else
@@ -92,11 +105,13 @@ public partial class MCGSBackup
                 // We first apply our own update and then reload from accumulator
                 // so we see all accumulated values.
                 ref MCGSBackupAccumulator inFlightAccumulator = ref visitPathRef.Accumulator;
-                inFlightAccumulator.DoAdd(numVisitsAttempted, numVisitsAccepted);
+                inFlightAccumulator.DoAdd(numVisitsAttempted, numVisitsAccepted, sV, sV2);
                 Debug.Assert(inFlightAccumulator.NumVisitsAttempted > 0);
 
                 numVisitsAttempted = inFlightAccumulator.NumVisitsAttempted;
                 numVisitsAccepted = inFlightAccumulator.NumVisitsAccepted;
+                sV = inFlightAccumulator.SumV;
+                sV2 = inFlightAccumulator.SumV2;
               }
             }
 
@@ -120,6 +135,8 @@ public partial class MCGSBackup
             if (visitPathRef.DisconnectFromEdgeNStartingThisVisit)
             {
               numVisitsAccepted = 0;
+              sV = 0;
+              sV2 = 0;
             }
 
             // STEP 2: update the edge: (a) increase N by numVisitsAccepted, and (b) reset Q to be same as child.
@@ -189,10 +206,23 @@ public partial class MCGSBackup
               // For internal edges: use visitEdge.ChildNode.D
               double childD = haveProcessedLeaf ? visitEdge.ChildNode.D : initialBackupValue.D;
               double newParentDeltaD = childD * numVisitsAccepted;
+
+              // Fold the batch of leaf values backed up through this node into its volatility
+              // estimate, measured about the node's pre-update pure Q. The node-perspective leaf
+              // sum is -sV. Skipped when checkmate is known (Q is pinned, dispersion meaningless).
+              if (trackVol && !parentNode.CheckmateKnownToExistAmongChildren)
+              {
+                double qRef = parentNode.N > 0 ? parentNode.ComputeQPure() : (-sV / numVisitsAccepted);
+                parentNode.NodeRef.LeafValueVolatility.AddBatch(qRef, -sV, sV2, numVisitsAccepted);
+              }
+
               strategy.BackupToNode(parentNode, numVisitsAccepted, newEdgeDeltaW, newParentDeltaD);
             }
           }
         }
+
+        // Ascend one ply: flip the leaf-sum sign so sV stays in the next edge's child perspective.
+        sV = -sV;
 
         haveProcessedLeaf = true;
       }

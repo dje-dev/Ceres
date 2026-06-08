@@ -78,10 +78,6 @@ namespace Ceres.Chess.MoveGen
     {
       Debug.Assert((~(P.A | P.B | P.C) & P.D) == 0); // Should not be any "black" empty squares
 
-#if DEBUG
-      MoveGenCount++;
-#endif
-
       if (P.BlackToMove)
       {
         DoGenBlackMoves(in P, moves, MoveGenMode.AllMoves);

@@ -244,7 +244,7 @@ public class MCGSSelect
 
       if (false && parentNode.N > 10 && Engine.Manager.ParamsSearch.SelectExplorationForUncertaintyAtNode > 0)
       {
-        cpuctMultiplier *= 1f + 0.2f * (float)(parentNode.NodeRef.StdDevEstimate.RunningStdDev - 0.1);
+        cpuctMultiplier *= 1f + 0.2f * (float)(parentNode.NodeRef.LeafValueVolatility.RunningStdDev - 0.1);
       }
 
       //#if FEATURE_UNCERTAINTY_POLICY

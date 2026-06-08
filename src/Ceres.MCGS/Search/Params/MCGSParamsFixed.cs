@@ -140,6 +140,13 @@ public static class MCGSParamsFixed
   public const bool TRACK_NODE_EDGE_UNCERTAINTY = false; // methodology is problematic due to aggregated backups
 
   /// <summary>
+  /// If true, after every search completes the engine automatically emits the full search
+  /// information dump (identical to issuing the UCI "dump-info" command), without it being
+  /// explicitly requested. Intended as a debugging/analysis convenience.
+  /// </summary>
+  public const bool ALWAYS_DUMP_SEARCH_INFO = false;
+
+  /// <summary>
   /// Minimum probability threshold for top policy move to be considered for PV auto-extension.
   /// Only moves with policy probability above this threshold will trigger auto-extension.
   /// </summary>

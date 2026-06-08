@@ -37,6 +37,17 @@ public struct MCGSBackupAccumulator
   /// </summary>
   public volatile short NumVisitsAccepted;
 
+  /// <summary>
+  /// Accumulated sum of leaf values (in this node's child-edge perspective) backed up through this
+  /// node so far during backup. Used together with <see cref="SumV2"/> and the accepted-visit count
+  /// to maintain the per-node leaf-value volatility estimate exactly across merge points.
+  /// </summary>
+  public double SumV;
+
+  /// <summary>
+  /// Accumulated sum of squared leaf values backed up through this node so far (perspective-invariant).
+  /// </summary>
+  public double SumV2;
 
 
   /// <summary>
@@ -44,10 +55,12 @@ public struct MCGSBackupAccumulator
   /// </summary>
   /// <param name="numVisitsAttempted"></param>
   /// <param name="numVisitsAccepted"></param>
-  internal void DoAdd(int numVisitsAttempted, int numVisitsAccepted)
+  internal void DoAdd(int numVisitsAttempted, int numVisitsAccepted, double sumV, double sumV2)
   {
     NumVisitsAttempted += (short)numVisitsAttempted;
-    NumVisitsAccepted += (short)numVisitsAccepted;    
+    NumVisitsAccepted += (short)numVisitsAccepted;
+    SumV += sumV;
+    SumV2 += sumV2;
   }
 
 

@@ -427,6 +427,14 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     // Retain the most recent search result so diagnostics can be dumped post-hoc (e.g. blunder analysis).
     LastSearchResult = result;
 
+    // If configured, always emit the full search info dump after every completed search. This lives
+    // at the GameEngine level (below UCI) so it happens for ALL callers -- UCI, tournaments, suites,
+    // and direct programmatic searches -- exactly as if the "dump-info" command had been issued.
+    if (MCGSParamsFixed.ALWAYS_DUMP_SEARCH_INFO)
+    {
+      result.Search.Manager.DumpFullInfo(result, Console.Out, "AUTO");
+    }
+
     // Append search result information to log file (if any).
     StringWriter dumpInfo = new();
     if (SearchLogFileName != null)

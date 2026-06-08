@@ -525,10 +525,19 @@ public record ParamsSearch
   public bool EnableUncertaintyBoosting = false;
 
   /// <summary>
-  /// If the policy uncertainty value should be used to 
+  /// If the policy uncertainty value should be used to
   /// adjust the per-position temperature on the policy.
   /// </summary>
   public bool EnablePolicyUncertaintyTemperatureBoosting = false;
+
+  /// <summary>
+  /// If enabled, each node maintains a compact (~50-visit) exponentially-weighted estimate of the
+  /// volatility (RMS deviation about the node's Q) of the leaf values backed up through it, stored
+  /// in GNodeStruct.LeafValueVolatility. Intended as an "unsettled / on-the-move" signal to later
+  /// bias selection toward uncertain nodes. Off by default; populating it is behavior-neutral
+  /// (the value is currently informational, surfaced in the UCI dump-info "Vol" column).
+  /// </summary>
+  public bool TrackLeafValueVolatility = false;
 
 
   /// <summary>

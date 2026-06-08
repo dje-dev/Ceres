@@ -571,16 +571,17 @@ public class ManagerChooseBestMoveMCGS
     // Tests (using matches) suggest play quality is not highly sensitive to this POWER,
     // with a value of 30 possibly very slightly better than 20.
     const float POWER = 25;
-    const float POWER_PERMISSIVE = 50;
+    const float POWER_PERMISSIVE = 40;
 
-    const float MIN_FRAC_N_REQUIRED_MIN_PERMISSIVE = 0.15f;
+    const float MIN_FRAC_N_REQUIRED_MIN_PERMISSIVE = 0.18f;
 
     float minFrac = MathF.Pow(1.0f - qDifferenceFromBestQ, (permissive ? POWER_PERMISSIVE : POWER));
 
     // Impose absolute minimum fraction.
-    if (minFrac < (permissive ? MIN_FRAC_N_REQUIRED_MIN_PERMISSIVE : MIN_FRAC_N_REQUIRED_MIN))
+    float minFracFloor = permissive ? MIN_FRAC_N_REQUIRED_MIN_PERMISSIVE : MIN_FRAC_N_REQUIRED_MIN;
+    if (minFrac < minFracFloor)
     {
-      minFrac = MIN_FRAC_N_REQUIRED_MIN;
+      minFrac = minFracFloor;
     }
 
     return minFrac;
