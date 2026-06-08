@@ -539,9 +539,20 @@ public record ParamsSearch
   /// </summary>
   public bool TrackLeafValueVolatility = false;
 
+  /// <summary>
+  /// If enabled (and TrackLeafValueVolatility is also enabled), the redescent multiplier
+  /// (transpositionStopMinSupportRatio) is additionally scaled per node by a factor derived from
+  /// the node's leaf value volatility: the volatility (RMS deviation about Q) is clamped to [0, 0.4]
+  /// and linearly mapped to a multiplier running from 0.25 (volatility 0) to 1.0 (volatility 0.4).
+  /// Lower volatility therefore shrinks the required support ratio (stop descent sooner), while
+  /// highly volatile nodes retain the full ratio (descend more deeply). No effect unless both flags
+  /// are set. See <see cref="TrackLeafValueVolatility"/>.
+  /// </summary>
+  public bool RedescentScaleByVolatility = false;
+
 
   /// <summary>
-  /// Amount of time subtracted from time allotments to 
+  /// Amount of time subtracted from time allotments to
   /// compensate for lag or various unpredictable latencies.
   /// </summary>
   public float MoveOverheadSeconds = 0.25f;
@@ -652,6 +663,11 @@ public record ParamsSearch
   /// </summary>
   public void Validate()
   {
+    if (RedescentScaleByVolatility && !TrackLeafValueVolatility)
+    {
+      throw new Exception("TrackLeafValueVolatility must be set to true when RedescentScaleByVolatility is true");
+    }
+
     if (OffPathBackupNumAdditionalLevelsToPropagate > 1
      && Execution.BackupMode == BackupMethodEnum.ReductionMultiThread)
     {

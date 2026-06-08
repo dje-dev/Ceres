@@ -78,6 +78,14 @@ public readonly partial struct GNode : IComparable<GNode>, IEquatable<GNode>
   public readonly double LeafValueVolatility => NodeRef.LeafValueVolatility.RunningStdDev;
 
   /// <summary>
+  /// Bias-corrected variant of <see cref="LeafValueVolatility"/> that removes the EWMA cold-start
+  /// under-reporting by supplying this node's N as the effective sample count. Prefer this over the
+  /// raw value when comparing volatility across nodes with differing visit counts (otherwise small-N
+  /// nodes look spuriously settled). See <see cref="RunningStdDevShort.RunningStdDevDebiased"/>.
+  /// </summary>
+  public readonly double LeafValueVolatilityDebiased => NodeRef.LeafValueVolatility.RunningStdDevDebiased(N);
+
+  /// <summary>
   /// Fortress probability metric: minimum P(NEVER) over all pawn squares.
   /// High values indicate a pawn unlikely to ever move, suggesting fortress-like structure.
   /// </summary>

@@ -30,7 +30,7 @@ namespace Ceres.MCGS.Utils;
 public record struct RunningStdDevShort
 {
   /// <summary>
-  /// Encoded standard deviation (0..65535) � the only per-instance state.
+  /// Encoded standard deviation (0..65535)   the only per-instance state.
   /// </summary>
   public ushort Code;
 
@@ -59,8 +59,8 @@ public record struct RunningStdDevShort
   public void AddSample(double mean, double sample)
   {
     // Bound inputs defensively (sample is documented in [-1.2,1.2], mean should be close).
-    if (sample < -RANGE) 
-    { 
+    if (sample < -RANGE)
+    {
       sample = -RANGE;
     }
     else if (sample > RANGE)
@@ -163,8 +163,41 @@ public record struct RunningStdDevShort
 
   /// <summary>
   /// Current exponentially-weighted standard deviation.
+  /// NOTE: because the estimator is seeded at zero variance, this raw value systematically
+  /// under-reports until it has warmed up (the variance grows as 1 - (1-Beta)^n, so the reported
+  /// sigma is only ~71% of the true value at n == half-life). Prefer <see cref="RunningStdDevDebiased"/>
+  /// when comparing across estimators with differing sample counts.
   /// </summary>
   public double RunningStdDev => DecodeSigma(Code);
+
+  /// <summary>
+  /// Bias-corrected standard deviation that removes the zero-initialization ("cold start") bias of
+  /// the EWMA. The variance is seeded at zero and approaches its true value as 1 - (1-Beta)^n, so the
+  /// raw <see cref="RunningStdDev"/> under-reports for small sample counts; dividing the variance by
+  /// that factor (Adam-style debiasing) recovers an approximately unbiased estimate. Since the struct
+  /// stores no sample count (only the 2-byte encoded sigma), the effective number of folded samples
+  /// must be supplied by the caller (e.g. the owning node's N). At very small n the correction is
+  /// large (e.g. ~8.5x at n == 1) and the corrected value is correspondingly noisy.
+  /// </summary>
+  /// <param name="sampleCount">Effective number of samples folded into this estimate (e.g. node N).</param>
+  public double RunningStdDevDebiased(int sampleCount)
+  {
+    double sigma = DecodeSigma(Code);
+    if (sampleCount <= 0 || sigma <= 0)
+    {
+      return sigma;
+    }
+
+    double biasCorrection = 1.0 - Math.Pow(1.0 - Beta, sampleCount);
+    if (biasCorrection <= 0)
+    {
+      return sigma; // degenerate (sampleCount effectively 0); fall back to raw
+    }
+
+    double corrected = sigma / Math.Sqrt(biasCorrection);
+    return corrected > RANGE ? RANGE : corrected;
+  }
+
 
   /// <summary>
   /// Encoding: sigma in [0, RANGE] -> ushort (linear).
@@ -177,7 +210,7 @@ public record struct RunningStdDevShort
     }
 
     if (sigma >= RANGE)
-    { 
+    {
       return ushort.MaxValue;
     }
 
@@ -191,7 +224,7 @@ public record struct RunningStdDevShort
       int lo = (int)Math.Floor(scaled);
       double frac = scaled - lo;
 
-      // Cheap, deterministic �random� in [0,1): hash the mantissae of sigma and Beta.
+      // Cheap, deterministic  random  in [0,1): hash the mantissae of sigma and Beta.
       ulong bits = (ulong)BitConverter.DoubleToInt64Bits(sigma) * 0x9E3779B97F4A7C15UL
                  ^ (ulong)BitConverter.DoubleToInt64Bits(beta) * 0xBF58476D1CE4E5B9UL;
       bits ^= bits >> 33; bits *= 0x62A9D9ED799705F5UL; bits ^= bits >> 28; bits *= 0xCB24D0A5C88C35B3UL; bits ^= bits >> 32;

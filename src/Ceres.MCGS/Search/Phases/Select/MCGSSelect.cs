@@ -660,6 +660,10 @@ public class MCGSSelect
     float transpositionStopMinSupportRatio = paramsSearch.PathTranspositionMode == PathMode.PositionAndHistoryEquivalence
                                            ? paramsSearch.TranspositionStopMinSupportRatioPositionAndHistoryMode
                                            : paramsSearch.TranspositionStopMinSupportRatioPositionMode;
+
+    // Optionally scale the redescent multiplier per transposed child by that child's leaf value
+    // volatility (applied within IsTranspositionSufficientN, where the child node is in hand).
+    bool scaleRedescentByChildVolatility = paramsSearch.RedescentScaleByVolatility && paramsSearch.TrackLeafValueVolatility;
     bool parallelEnabled = paramsSearch.Execution.SelectOperationParallelThresholdNumVisits < int.MaxValue;
     int THRESHOLD_PARALLEL = ParallelThresholdToUse;
 
@@ -749,8 +753,8 @@ public class MCGSSelect
         ProcessExpandedChild(iterator, path, pathsSet, parentNode, childEdge, childNode,
                              numVisitsToAssign, childVisitCounts, childIndex,
                              ref childPosInfo, graphEnabled,
-                             transpositionStopMinSupportRatio, numVisitsRemaining,
-                             canLaunchParallel, ref deferredSubPaths);
+                             transpositionStopMinSupportRatio, scaleRedescentByChildVolatility,
+                             numVisitsRemaining, canLaunchParallel, ref deferredSubPaths);
       }
       else // not expanded
       {
@@ -759,7 +763,8 @@ public class MCGSSelect
         ProcessUnexpandedChild(iterator, path, pathsSet, parentNode, childIndex,
                                ref childPosInfo, childVisitCounts, numVisitsToAssign,
                                numVisitsRemaining, minRepetitionCountForDraw,
-                               graphEnabled, transpositionStopMinSupportRatio, canLaunchParallel, ref deferredSubPaths);
+                               graphEnabled, transpositionStopMinSupportRatio, scaleRedescentByChildVolatility,
+                               canLaunchParallel, ref deferredSubPaths);
       }
     }
 
@@ -884,6 +889,7 @@ public class MCGSSelect
                                     int numVisitsThisChild, Span<short> childVisitCounts, int childIndex,
                                     ref ChildPositionInfo childPosInfo,
                                     bool graphEnabled, float transpositionStopMinSupportRatio,
+                                    bool scaleRedescentByChildVolatility,
                                     int numVisitsRemaining, bool canLaunchParallel,
                                     ref ListBounded<DeferredSubPath> deferredSubPaths)
   {
@@ -932,7 +938,7 @@ public class MCGSSelect
     }
     else if (IsTranspositionSufficientN(graphEnabled, transpositionStopMinSupportRatio,
                                         childEdge.NInFlightForIterator(iterator.IteratorID), childEdge.N, childNode,
-                                        iterator.DisableTranspositionSufficiencyStop))
+                                        iterator.DisableTranspositionSufficiencyStop, scaleRedescentByChildVolatility))
     {
       // Already expanded, connects to a transposition node with already sufficient N, stop descent.
       //  Revisit transposition node with sufficient visits --> extract evaluation, end descent.
@@ -991,6 +997,7 @@ public class MCGSSelect
                                       Span<short> childVisitCounts, int numVisitsThisChild,
                                       int numVisitsRemaining, int minRepetitionCountForDraw,
                                       bool graphEnabled, float transpositionStopMinSupportRatio,
+                                      bool scaleRedescentByChildVolatility,
                                       bool canLaunchParallel,
                                       ref ListBounded<DeferredSubPath> deferredSubPaths)
   {
@@ -1015,6 +1022,7 @@ public class MCGSSelect
                                         childVisitCounts, numVisitsThisChild,
                                         childPosInfo.isDrawByRepetitionInCoalesceMode, numVisitsRemaining,
                                         graphEnabled, transpositionStopMinSupportRatio,
+                                        scaleRedescentByChildVolatility,
                                         canLaunchParallel, ref deferredSubPaths);
   }
 
@@ -1066,6 +1074,7 @@ public class MCGSSelect
                                             bool isDrawByRepetitionInCoalesceMode,
                                             int numVisitsRemaining, bool graphEnabled,
                                             float transpositionStopMinSupportRatio,
+                                            bool scaleRedescentByChildVolatility,
                                             bool canLaunchParallel,
                                             ref ListBounded<DeferredSubPath> deferredSubPaths)
   {
@@ -1144,7 +1153,7 @@ public class MCGSSelect
       bool handled = DoTranspositionLink(iterator, path, pathsSet, childEdge, childNode,
                                          ref childPosInfo, childVisitCounts, childIndex,
                                          numVisitsThisChild, numVisitsRemaining, graphEnabled,
-                                         transpositionStopMinSupportRatio);
+                                         transpositionStopMinSupportRatio, scaleRedescentByChildVolatility);
 
       if (!handled)
       {
@@ -1221,7 +1230,8 @@ public class MCGSSelect
                                    GEdge childEdge, GNode childNode, ref ChildPositionInfo childPosInfo,
                                    Span<short> childVisitCounts, int childIndex,
                                    int numVisitsThisChild, int numVisitsRemaining,
-                                   bool graphEnabled, float transpositionStopMinSupportRatio)
+                                   bool graphEnabled, float transpositionStopMinSupportRatio,
+                                   bool scaleRedescentByChildVolatility)
   {
     GNodeStruct.UpdateEdgeNInFlightForIterator(childEdge, path.IteratorID, numVisitsThisChild);
 
@@ -1243,8 +1253,9 @@ public class MCGSSelect
       pathsSet.AddPath(newVisitPiggy, numVisitsToAccept);
     }
     else if (IsTranspositionSufficientN(graphEnabled, transpositionStopMinSupportRatio,
-                                        childEdge.NInFlightForIterator(iterator.IteratorID), 
-                                        childEdge.N, childNode, iterator.DisableTranspositionSufficiencyStop))
+                                        childEdge.NInFlightForIterator(iterator.IteratorID),
+                                        childEdge.N, childNode, iterator.DisableTranspositionSufficiencyStop,
+                                        scaleRedescentByChildVolatility))
     {
       // Sufficient visit transposition node --> create edge, extract evaluation, end descent.
       // It must have nonzero visits and thus be able to satisfy our needs without going deeper
@@ -1379,7 +1390,8 @@ public class MCGSSelect
   /// <returns></returns>
   static bool IsTranspositionSufficientN(bool graphEnabled, float transpositionStopMinSupportRatio,
                                          int numVisitsTotalThisIterator, int edgeN, GNode childNode,
-                                         bool disableTranspositionSufficiencyStop)
+                                         bool disableTranspositionSufficiencyStop,
+                                         bool scaleRedescentByChildVolatility)
   {
     if (disableTranspositionSufficiencyStop)
     {
@@ -1395,6 +1407,22 @@ public class MCGSSelect
       // than direclty requested from each individaul node (since serach effort is shared).
       // Based on some configurable scaling factor we decide if this subtree is
       // "already big enough" that we can stop descent here and just use the subtree value as is.
+      if (scaleRedescentByChildVolatility && childNode.N > 50)
+      {
+        // Scale the redescent multiplier by this transposed child's leaf value volatility:
+        // clamp volatility (RMS deviation about Q) to [0, 0.4] and map linearly to a factor
+        // running from 0.25 (volatility 0) to 1.0 (volatility 0.4).
+        // A volatile (still-unsettled) child keeps the full support requirement (descend, send it more visits);
+        // a settled, low-volatility child has its requirement reduced (trust the cached value, stop sooner).
+        // NOTE: we don't bother calling the debiased version of RunningStdDev because at childNode.N > 50 it differs little
+        const float VOL_CLAMP_MAX = 0.4f;
+        const float MIN_VOL_MULTIPLIER = 0.25f;
+        float volClamped = Math.Clamp((float)childNode.NodeRef.LeafValueVolatility.RunningStdDev, 0f, VOL_CLAMP_MAX);
+        float volMultiplier = MIN_VOL_MULTIPLIER + (1.0f - MIN_VOL_MULTIPLIER) * (volClamped / VOL_CLAMP_MAX);
+//Console.WriteLine(childNode.N + " " + volClamped + " " + volMultiplier);
+        transpositionStopMinSupportRatio *= volMultiplier;
+      }
+
       int scaledTargetN = (int)MathF.Round(transpositionStopMinSupportRatio * (edgeN + numVisitsTotalThisIterator));
 
       if (MCGSParamsFixed.REDESCENT_MUTIPLIER_ADJUST && childNode.N < 30)

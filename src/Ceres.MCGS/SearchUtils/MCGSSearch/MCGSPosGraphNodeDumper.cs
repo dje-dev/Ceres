@@ -199,7 +199,7 @@ public static class MCGSPosGraphNodeDumper
       ? $"{plyUntilIrreversible.Value,W_PIRR} "
       : $"{"-",W_PIRR} ");
     writer.Write($"{100 * MathF.Abs(node.V - (float)q),W_VERR:F0} ");
-    writer.Write($"{100 * node.LeafValueVolatility,W_VOL:F0}");
+    writer.Write($"{100 * node.LeafValueVolatilityDebiased,W_VOL:F0}");
 
     if (fullDetail)
     {
