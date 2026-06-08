@@ -39,9 +39,8 @@ namespace Ceres.MCGS.Graphs.GraphStores;
 ///   The in-place rewrite is O(total old nodes): Phase 2 moves/clears every node slot of the old
 ///   graph regardless of how few survive. Extraction is O(reachable): it visits only the reachable
 ///   nodes and their edges, then disposes the old graph wholesale (an O(1) native free). When
-///   retention is low (the trigger threshold is ~25%), extraction is far cheaper and additionally
-///   lets us KEEP low-reachability graphs that would otherwise be abandoned (discarding all their
-///   neural-network evaluations).
+///   retention is low, extraction is far cheaper and additionally lets us KEEP low-reachability
+///   graphs that would otherwise be abandoned (discarding all their neural-network evaluations).
 ///
 /// HOW CORRECTNESS IS SHARED, NOT REIMPLEMENTED
 ///   The extractor only reproduces the compacted node+edge LAYOUT that the rewriter's Phases 2-4
@@ -51,22 +50,21 @@ namespace Ceres.MCGS.Graphs.GraphStores;
 ///   recomputation, root/history setup, dictionary and sibling reconstruction, cleanup + DEBUG
 ///   Validate). All the subtle derived-state logic is therefore identical code, not a second copy.
 ///
+/// TWO-STEP API (single BFS)
+///   <see cref="EnumerateReachable"/> performs the one BFS over reachable nodes (with an early-abort
+///   cap) and returns a <see cref="ReachableSet"/>. The reuse decision uses its count to decide, and
+///   — if it decides to extract — passes the SAME set to <see cref="ExtractFromReachable"/> so the
+///   subgraph is enumerated only once (no redundant probe-then-enumerate BFS).
+///
 /// PARALLELISM
 ///   The per-node copy (struct + edge headers + edges) is embarrassingly parallel: every node writes
 ///   only to its own node slot and its own freshly-allocated, disjoint header/edge blocks; the source
 ///   graph and the old->new index map are read-only; and block allocation is thread-safe (Interlocked
 ///   index bump with lock-free fast path). It is parallelized via <see cref="USE_PARALLEL_COPY"/>.
-///   (The reused finalize phases are independently parallel where the rewriter already makes them so —
-///   e.g. dictionary rebuild — and serial elsewhere; per-phase timings are reported to expose this.)
-///
-/// SCOPE (v1): always copies the FULL reachable set. The caller decides whether to extract (based on
-/// an estimated retention fraction). The <c>maxNodesToExtract</c> argument is reserved for a future
-/// partial/truncated mode and is NOT enforced here.
 ///
 /// PRECONDITIONS: the graph must be quiescent (between searches: no in-flight visits, nothing
-/// locked), and <paramref name="newRootIndex"/> must be an evaluated node in <paramref name="oldGraph"/>.
-/// Works for both PositionEquivalence ("Position") and PositionAndHistory modes (the mode is carried
-/// into the new graph and the shared finalize phases branch on it as needed).
+/// locked), and the root must be an evaluated node in the source graph. Works for both
+/// PositionEquivalence ("Position") and PositionAndHistory modes.
 /// </summary>
 public static unsafe class GraphExtractor
 {
@@ -84,16 +82,26 @@ public static unsafe class GraphExtractor
   const int PARALLEL_COPY_MIN_NODES = 2048;
 
   /// <summary>
-  /// If true, the per-phase timing breakdown (enumerate / copy / finalize sub-phases) is logged
-  /// in yellow after each extraction. Off by default; turn on to profile where extraction time goes.
-  /// (The timings are always populated in <see cref="ExtractResult"/> regardless of this flag.)
+  /// If true, the per-phase timing breakdown (BFS / copy / finalize sub-phases) is logged
+  /// in yellow after each extraction (and the reachability BFS time for reuse/abandon decisions).
+  /// Off by default; turn on to profile where the time goes.
   /// </summary>
   internal const bool LOG_EXTRACT_PHASE_TIMINGS = false;
 
 
   /// <summary>
+  /// Result of <see cref="EnumerateReachable"/>: the nodes reachable from a root, in BFS order.
+  /// <see cref="NewToOld"/>[k] is the old node index that becomes new index (k+1); it is null when
+  /// the enumeration aborted early (<see cref="Aborted"/> == true), in which case only
+  /// <see cref="Count"/> (a lower bound greater than the abort threshold) is meaningful.
+  /// </summary>
+  public readonly record struct ReachableSet(int Count, List<int> NewToOld, bool Aborted);
+
+
+  /// <summary>
   /// Statistics describing an extraction operation (and the resulting graph), including a
-  /// per-phase timing breakdown (all times in seconds).
+  /// per-phase timing breakdown (all times in seconds). <see cref="EnumerateSeconds"/> is the
+  /// single reachability BFS (performed by the caller's <see cref="EnumerateReachable"/> and passed in).
   /// </summary>
   public record ExtractResult(Graph NewGraph, int NodesBefore, int NodesAfter,
                               double ElapsedSeconds, float RetentionFraction, bool Succeeded,
@@ -102,45 +110,33 @@ public static unsafe class GraphExtractor
 
 
   /// <summary>
-  /// Attempts to build a new Graph containing the subgraph reachable from <paramref name="newRootIndex"/>.
-  /// On success the returned <see cref="ExtractResult.NewGraph"/> is a fully finalized graph whose
-  /// graph root (index 1) is the former search root. The CALLER is responsible for disposing
-  /// <paramref name="oldGraph"/> after switching over to the new graph.
+  /// Enumerates (via one BFS, following expanded child edges) the nodes reachable from
+  /// <paramref name="rootIndex"/> — exactly the set <see cref="ExtractFromReachable"/> would retain.
+  /// Assigns new contiguous indices in BFS order (parent &lt; child for tree edges, which keeps the
+  /// downstream Phase 5a single-pass Q/D recomputation accurate). Mirrors
+  /// GraphRewriter.Phase1FindReachableNodes.
+  ///
+  /// Stops early and returns <see cref="ReachableSet.Aborted"/> == true (with NewToOld == null) once
+  /// the running count exceeds <paramref name="abortAbove"/>, so cost is bounded to
+  /// O(min(reachable, abortAbove)) when the caller only needs a thresholded answer (reuse/abandon).
+  /// Uses a cheap BitArray for the visited set; the full old->new index map (a large int[]) is built
+  /// only later, in <see cref="ExtractFromReachable"/>, i.e. only when we actually extract.
   /// </summary>
-  /// <param name="oldGraph">Source graph (read only; not modified).</param>
-  /// <param name="newRootIndex">Index in <paramref name="oldGraph"/> of the node to become the new root.</param>
-  /// <param name="priorMoves">Position+history for the new root (used to initialize root state/hashes).</param>
-  /// <param name="maxNodesToExtract">RESERVED — not enforced in v1 (full reachable set is always copied).</param>
-  public static ExtractResult TryExtract(Graph oldGraph, NodeIndex newRootIndex,
-                                         PositionWithHistory priorMoves,
-                                         int maxNodesToExtract = int.MaxValue)
+  public static ReachableSet EnumerateReachable(Graph graph, NodeIndex rootIndex, int abortAbove = int.MaxValue)
   {
-    Stopwatch swTotal = Stopwatch.StartNew();
-    Stopwatch swPhase = Stopwatch.StartNew();
-
-    int numNodesOld = oldGraph.NodesStore.NumTotalNodes;   // includes null node at index 0
-    int numUsedOld = oldGraph.NodesStore.NumUsedNodes;
-
-    Debug.Assert(!newRootIndex.IsNull && newRootIndex.Index > 0 && newRootIndex.Index < numNodesOld);
-
-    // ---- Phase E1: BFS enumerate reachable nodes and assign new contiguous indices ----
-    // BFS order yields parent < child for tree edges, which keeps the downstream Phase 5a
-    // single-pass Q/D recomputation accurate. Mirrors GraphRewriter.Phase1FindReachableNodes,
-    // but also produces the old->new index map and an ordered list of old indices.
-    // (Kept serial: it is read-only fan-out whose cost is modest relative to the copy; a parallel
-    // level-synchronous BFS is possible later if profiling shows it dominates.)
-    int[] oldToNew = new int[numNodesOld];                 // 0 == not reachable
-    List<int> newToOld = new(Math.Min(numUsedOld, 1024));  // newToOld[k] -> old index of new index (k+1)
-
+    int numNodes = graph.NodesStore.NumTotalNodes;
+    BitArray visited = new(numNodes);
+    List<int> newToOld = new(Math.Min(graph.NodesStore.NumUsedNodes, 1024));
     Queue<int> queue = new();
-    oldToNew[newRootIndex.Index] = 1;
-    newToOld.Add(newRootIndex.Index);
-    queue.Enqueue(newRootIndex.Index);
+
+    visited.Set(rootIndex.Index, true);
+    newToOld.Add(rootIndex.Index);
+    queue.Enqueue(rootIndex.Index);
 
     while (queue.Count > 0)
     {
       int oldIdx = queue.Dequeue();
-      ref GNodeStruct nr = ref oldGraph.NodesBufferOS[oldIdx];
+      ref GNodeStruct nr = ref graph.NodesBufferOS[oldIdx];
 
       int numExpanded = nr.NumEdgesExpanded;
       if (numExpanded == 0
@@ -152,7 +148,7 @@ public static unsafe class GraphExtractor
       }
 
       int headerBlockIdx = nr.edgeHeaderBlockIndexOrDeferredNode.BlockIndexIntoEdgeHeaderStore;
-      Span<GEdgeHeaderStruct> headers = oldGraph.EdgeHeadersStore.SpanAtBlockIndex(headerBlockIdx, nr.NumPolicyMoves);
+      Span<GEdgeHeaderStruct> headers = graph.EdgeHeadersStore.SpanAtBlockIndex(headerBlockIdx, nr.NumPolicyMoves);
 
       int lastEdgeBlock = -1;
       Span<GEdgeStruct> cachedEdgeSpan = default;
@@ -166,7 +162,7 @@ public static unsafe class GraphExtractor
         int edgeBlock = headers[i].EdgeStoreBlockIndex;
         if (edgeBlock != lastEdgeBlock)
         {
-          cachedEdgeSpan = oldGraph.EdgesStore.SpanAtBlockIndex(edgeBlock);
+          cachedEdgeSpan = graph.EdgesStore.SpanAtBlockIndex(edgeBlock);
           lastEdgeBlock = edgeBlock;
         }
         ref GEdgeStruct edge = ref cachedEdgeSpan[i % GEdgeStore.NUM_EDGES_PER_BLOCK];
@@ -174,29 +170,80 @@ public static unsafe class GraphExtractor
         if (edge.Type == GEdgeStruct.EdgeType.ChildEdge && !edge.ChildNodeIndex.IsNull)
         {
           int childIdx = edge.ChildNodeIndex.Index;
-          if (oldToNew[childIdx] == 0)
+          if (!visited.Get(childIdx))
           {
-            oldToNew[childIdx] = newToOld.Count + 1;
+            visited.Set(childIdx, true);
             newToOld.Add(childIdx);
+            if (newToOld.Count > abortAbove)
+            {
+              // Beyond the threshold the caller cares about; drop the (now useless) ordering list.
+              return new ReachableSet(newToOld.Count, null, true);
+            }
             queue.Enqueue(childIdx);
           }
         }
       }
     }
 
-    int numReachable = newToOld.Count;
-    double enumerateSeconds = swPhase.Elapsed.TotalSeconds;
+    return new ReachableSet(newToOld.Count, newToOld, false);
+  }
 
-    if (numReachable <= 0)
+
+  /// <summary>
+  /// Convenience wrapper: enumerate the full reachable set and extract it. Used by callers that do not
+  /// run their own decision/enumeration. The reuse decision instead calls <see cref="EnumerateReachable"/>
+  /// and <see cref="ExtractFromReachable"/> directly so the BFS is shared with the decision.
+  /// <paramref name="maxNodesToExtract"/> is RESERVED — not enforced in v1 (full reachable set is copied).
+  /// </summary>
+  public static ExtractResult TryExtract(Graph oldGraph, NodeIndex newRootIndex,
+                                         PositionWithHistory priorMoves,
+                                         int maxNodesToExtract = int.MaxValue)
+  {
+    Stopwatch sw = Stopwatch.StartNew();
+    ReachableSet reachable = EnumerateReachable(oldGraph, newRootIndex, int.MaxValue);
+    double enumerateSeconds = sw.Elapsed.TotalSeconds;
+    return ExtractFromReachable(oldGraph, newRootIndex, priorMoves, reachable, enumerateSeconds);
+  }
+
+
+  /// <summary>
+  /// Builds a new Graph containing the already-enumerated reachable subgraph. On success the returned
+  /// <see cref="ExtractResult.NewGraph"/> is a fully finalized graph whose graph root (index 1) is the
+  /// former search root; the CALLER disposes <paramref name="oldGraph"/> after switching over.
+  /// </summary>
+  /// <param name="oldGraph">Source graph (read only; not modified).</param>
+  /// <param name="newRootIndex">Index in <paramref name="oldGraph"/> of the node that becomes the new root.</param>
+  /// <param name="priorMoves">Position+history for the new root (initializes root state/hashes).</param>
+  /// <param name="reachable">The reachable set from <see cref="EnumerateReachable"/> (must not be aborted).</param>
+  /// <param name="enumerateSeconds">Time already spent enumerating (for reporting in the result).</param>
+  public static ExtractResult ExtractFromReachable(Graph oldGraph, NodeIndex newRootIndex,
+                                                   PositionWithHistory priorMoves,
+                                                   ReachableSet reachable, double enumerateSeconds)
+  {
+    int numUsedOld = oldGraph.NodesStore.NumUsedNodes;
+    int numReachable = reachable.Count;
+    List<int> newToOld = reachable.NewToOld;
+
+    if (reachable.Aborted || newToOld == null || numReachable <= 0)
     {
-      // Should not happen (root is always reachable); decline defensively.
-      swTotal.Stop();
-      return new ExtractResult(null, numUsedOld, 0, swTotal.Elapsed.TotalSeconds, 0f, false,
+      // Caller should only extract a complete (non-aborted) set; decline defensively.
+      return new ExtractResult(null, numUsedOld, 0, enumerateSeconds, 0f, false,
                                enumerateSeconds, 0, 0, null, false);
     }
 
+    int numNodesOld = oldGraph.NodesStore.NumTotalNodes;   // includes null node at index 0
+
+    Stopwatch swPhase = Stopwatch.StartNew();
+
     // ---- Phase E2/E3/E4: construct twin graph and copy the reachable subgraph ----
-    swPhase.Restart();
+    // Build the old->new index map from the BFS order. This is the only large (int[numNodesOld])
+    // allocation, and it happens only here on the extract path (the reuse/abandon decision used the
+    // cheap BitArray inside EnumerateReachable and never reaches this point).
+    int[] oldToNew = new int[numNodesOld];                 // 0 == not reachable
+    for (int k = 0; k < numReachable; k++)
+    {
+      oldToNew[newToOld[k]] = k + 1;
+    }
 
     Graph newGraph = new(maxNodes: oldGraph.Store.MaxNodes,
                          hasAction: oldGraph.Store.HasAction,
@@ -248,87 +295,10 @@ public static unsafe class GraphExtractor
     // re-attach site only runs on the from-scratch branch, so we must propagate it here.
     newGraph.ReuseGraphProvider = oldGraph.ReuseGraphProvider;
 
-    swTotal.Stop();
-
     float retention = numUsedOld > 0 ? (float)numReachable / numUsedOld : 0f;
-    return new ExtractResult(newGraph, numUsedOld, numReachable, swTotal.Elapsed.TotalSeconds, retention, true,
+    double elapsedSeconds = enumerateSeconds + copySeconds + finalizeSeconds;
+    return new ExtractResult(newGraph, numUsedOld, numReachable, elapsedSeconds, retention, true,
                              enumerateSeconds, copySeconds, finalizeSeconds, finalizeTimings, useParallel);
-  }
-
-
-  /// <summary>
-  /// Counts the nodes reachable from <paramref name="rootIndex"/> by following expanded child edges —
-  /// i.e. exactly the set <see cref="TryExtract"/> would retain (this is the same traversal as Phase E1,
-  /// which itself mirrors GraphRewriter.Phase1FindReachableNodes). Stops early once the running count
-  /// exceeds <paramref name="abortAbove"/> (returning abortAbove + 1), so cost is bounded to
-  /// O(min(reachable, abortAbove)) when the caller only needs a thresholded answer.
-  ///
-  /// Used by the reuse decision to base extract/abandon on the ACTUAL reachable-node count rather than
-  /// the (visit-based) searchRoot.N proxy, which badly under-predicts retention in transposition-heavy
-  /// graphs (e.g. PositionEquivalence mode). NOTE: keep this traversal in sync with Phase E1 in
-  /// <see cref="TryExtract"/> so the count equals what extraction actually retains.
-  /// </summary>
-  public static int CountReachableNodes(Graph graph, NodeIndex rootIndex, int abortAbove = int.MaxValue)
-  {
-    int numNodes = graph.NodesStore.NumTotalNodes;
-    BitArray visited = new(numNodes);
-    Queue<int> queue = new();
-
-    visited.Set(rootIndex.Index, true);
-    queue.Enqueue(rootIndex.Index);
-    int count = 1;
-
-    while (queue.Count > 0)
-    {
-      int oldIdx = queue.Dequeue();
-      ref GNodeStruct nr = ref graph.NodesBufferOS[oldIdx];
-
-      int numExpanded = nr.NumEdgesExpanded;
-      if (numExpanded == 0
-       || nr.NumPolicyMoves == 0
-       || nr.edgeHeaderBlockIndexOrDeferredNode.IsNull
-       || nr.edgeHeaderBlockIndexOrDeferredNode.IsNodeIndex)
-      {
-        continue;
-      }
-
-      int headerBlockIdx = nr.edgeHeaderBlockIndexOrDeferredNode.BlockIndexIntoEdgeHeaderStore;
-      Span<GEdgeHeaderStruct> headers = graph.EdgeHeadersStore.SpanAtBlockIndex(headerBlockIdx, nr.NumPolicyMoves);
-
-      int lastEdgeBlock = -1;
-      Span<GEdgeStruct> cachedEdgeSpan = default;
-      for (int i = 0; i < numExpanded; i++)
-      {
-        if (!headers[i].IsExpanded)
-        {
-          continue;
-        }
-
-        int edgeBlock = headers[i].EdgeStoreBlockIndex;
-        if (edgeBlock != lastEdgeBlock)
-        {
-          cachedEdgeSpan = graph.EdgesStore.SpanAtBlockIndex(edgeBlock);
-          lastEdgeBlock = edgeBlock;
-        }
-        ref GEdgeStruct edge = ref cachedEdgeSpan[i % GEdgeStore.NUM_EDGES_PER_BLOCK];
-
-        if (edge.Type == GEdgeStruct.EdgeType.ChildEdge && !edge.ChildNodeIndex.IsNull)
-        {
-          int childIdx = edge.ChildNodeIndex.Index;
-          if (!visited.Get(childIdx))
-          {
-            visited.Set(childIdx, true);
-            if (++count > abortAbove)
-            {
-              return count;   // exceeded the threshold the caller cares about
-            }
-            queue.Enqueue(childIdx);
-          }
-        }
-      }
-    }
-
-    return count;
   }
 
 

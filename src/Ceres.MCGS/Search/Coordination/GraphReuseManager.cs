@@ -56,6 +56,15 @@ public static class GraphReuseManager
   /// </summary>
   public const double EXTRACT_NODES_PER_SEC = 1_000_000.0;
 
+  /// <summary>
+  /// Under high memory pressure, extraction is only worthwhile if it frees a meaningful fraction of
+  /// the graph. Extract only when the reachable (retained) fraction is at or below this ceiling;
+  /// above it, extraction barely shrinks the graph, so we reuse it (or abandon when memory is
+  /// critical). Without this, a graph that is ~entirely reachable would be "extracted" at ~100%
+  /// retention — paying the full copy cost to free almost nothing.
+  /// </summary>
+  public const double HIGH_MEM_EXTRACT_MAX_RETENTION = 0.50;
+
   #endregion
 
   #region Action
@@ -81,7 +90,8 @@ public static class GraphReuseManager
   /// decision short-circuited without running the BFS (trivially-small or low-memory graph).
   /// </summary>
   private readonly record struct ReuseDecision(GraphReuseAction Action, string Reason,
-                                               double ReachabilityCheckSeconds, int ReachableNodes);
+                                               double ReachabilityCheckSeconds, int ReachableNodes,
+                                               GraphExtractor.ReachableSet Reachable);
 
   #endregion
 
@@ -175,10 +185,12 @@ public static class GraphReuseManager
 
     if (decision.Action == GraphReuseAction.Extract)
     {
-      GraphExtractor.ExtractResult ex = GraphExtractor.TryExtract(graph, searchRootNodeInfo.ChildNode.Index, priorMoves);
+      // Reuse the reachable set the decision already enumerated — single BFS, no re-enumeration.
+      GraphExtractor.ExtractResult ex = GraphExtractor.ExtractFromReachable(
+        graph, searchRootNodeInfo.ChildNode.Index, priorMoves, decision.Reachable, decision.ReachabilityCheckSeconds);
       if (ex.Succeeded)
       {
-        LogExtraction(ex, searchRootNodeInfo.ChildNode.N, reason, decision.ReachabilityCheckSeconds);
+        LogExtraction(ex, searchRootNodeInfo.ChildNode.N, reason);
 
         // Switch over to the new (smaller) graph and dispose the old one. Returning a different
         // Graph object is contract-compatible with the caller (it installs whatever is returned);
@@ -213,19 +225,22 @@ public static class GraphReuseManager
   ///   timeToExtract      = reachableNodes / EXTRACT_NODES_PER_SEC      (estimated seconds)
   ///   availableTime      = seconds available for the move (MaxValue if the search is not time-based)
   ///
-  /// reachableNodes is the ACTUAL count (a bounded BFS via <see cref="GraphExtractor.CountReachableNodes"/>),
-  /// not the visit-based searchRoot.N / graphRoot.N proxy: in transposition-heavy graphs (especially
-  /// PositionEquivalence mode) most distinct positions remain reachable from the new root via cross-edges
-  /// even when only a small fraction of VISITS flowed through it, so the visit ratio badly under-predicts
-  /// both retention and copy cost.
+  /// reachableNodes is the ACTUAL count (a bounded BFS via <see cref="GraphExtractor.EnumerateReachable"/>,
+  /// whose result is reused by extraction so there is only one BFS), not the visit-based
+  /// searchRoot.N / graphRoot.N proxy: in transposition-heavy graphs (especially PositionEquivalence
+  /// mode) most distinct positions remain reachable from the new root via cross-edges even when only a
+  /// small fraction of VISITS flowed through it, so the visit ratio badly under-predicts both retention
+  /// and copy cost.
   ///
   /// Policy:
-  ///   - trivially small graph                                        -> reuse
-  ///   - memory used &lt; 20%                                         -> reuse
-  ///   - memory used &gt; 70%   : extract if it fits the time budget (&le; 80% of available), else abandon
-  ///   - reachableFraction &lt; 30% and timeToExtract &lt; 25% avail   -> extract
-  ///   - reachableFraction &lt; 10% and timeToExtract &lt; 50% avail   -> extract
-  ///   - otherwise                                                    -> reuse
+  ///   - trivially small graph                                              -> reuse
+  ///   - memory used &lt; 20%                                               -> reuse
+  ///   - memory used &gt; 70% (high): extract if it frees enough (reachableFraction &le;
+  ///         HIGH_MEM_EXTRACT_MAX_RETENTION) AND fits time (timeToExtract &le; 80% avail);
+  ///         else reuse, unless memory is critical (&gt; 90%) in which case abandon to free it
+  ///   - reachableFraction &lt; 30% and timeToExtract &lt; 25% avail         -> extract
+  ///   - reachableFraction &lt; 10% and timeToExtract &lt; 50% avail         -> extract
+  ///   - otherwise                                                          -> reuse
   /// </summary>
   private static ReuseDecision DecideAction(
     Graph graph,
@@ -236,62 +251,78 @@ public static class GraphReuseManager
     // Trivially small graph: always reuse (no BFS).
     if (graph.GraphRootNode.N < TRIVIALLY_SMALL_ROOT_N)
     {
-      return new ReuseDecision(GraphReuseAction.Reuse, null, 0.0, -1);
+      return new ReuseDecision(GraphReuseAction.Reuse, null, 0.0, -1, default);
     }
 
     // Plenty of memory free: reuse (no BFS). Memory is probed only past the trivially-small short-circuit.
     double memoryUsedFraction = CurrentMemoryUsedFraction(paramsSearch);
     if (memoryUsedFraction < 0.20)
     {
-      return new ReuseDecision(GraphReuseAction.Reuse, null, 0.0, -1);
+      return new ReuseDecision(GraphReuseAction.Reuse, null, 0.0, -1, default);
     }
 
     double availableTime = searchLimit.IsTimeLimit ? searchLimit.Value : double.MaxValue;
     int totalNodes = graph.Store.NodesStore.NumUsedNodes;
+    bool highMemory = memoryUsedFraction > 0.70;
 
-    // Count the nodes actually reachable from the search root (== what extraction would retain),
-    // with an early-abort cap so the BFS cost is BOUNDED BY THE MOVE'S TIME BUDGET. Above the largest
-    // count that could still yield an extract we don't need the exact value:
-    //   - the extract branches require timeToExtract (= reachable/rate) below a fraction of the time
-    //     budget, so a reachable set larger than ~0.5 * available * rate can never extract; and
-    //   - under moderate memory, reachableFraction >= 30% reuses regardless.
-    // Hence cap = high mem  : 0.80 * available * rate                         (above -> abandon)
-    //            moderate   : min(0.30 * totalNodes, 0.50 * available * rate)  (above -> reuse)
-    // For non-time-based searches the available*rate terms are infinite and only the fraction cap binds.
+    // Enumerate the nodes actually reachable from the search root (== what extraction would retain).
+    // This single BFS is reused by extraction (no second enumeration). It is early-aborted at the
+    // largest count that could still yield an extract, so its cost is bounded by the move's time
+    // budget and the retention ceiling:
+    //   retention ceiling: high mem -> HIGH_MEM_EXTRACT_MAX_RETENTION, moderate -> 0.30
+    //   time factor:       high mem -> 0.80,                           moderate -> 0.50 (loosest gate)
+    // For non-time-based searches the available*rate term is infinite and only the fraction cap binds.
+    double fracCeiling = highMemory ? HIGH_MEM_EXTRACT_MAX_RETENTION : 0.30;
+    double timeFactor = highMemory ? 0.80 : 0.50;
+    double fracCapNodes = fracCeiling * totalNodes;
     double timeCapNodes = availableTime >= double.MaxValue
       ? double.MaxValue
-      : (memoryUsedFraction > 0.70 ? 0.80 : 0.50) * availableTime * EXTRACT_NODES_PER_SEC;
-    double fracCapNodes = memoryUsedFraction > 0.70 ? double.MaxValue : 0.30 * totalNodes;
-    int abortAbove = (int)Math.Min((double)int.MaxValue, Math.Min(timeCapNodes, fracCapNodes));
+      : timeFactor * availableTime * EXTRACT_NODES_PER_SEC;
+    int abortAbove = (int)Math.Min((double)int.MaxValue, Math.Min(fracCapNodes, timeCapNodes));
 
     Stopwatch sw = Stopwatch.StartNew();
-    int reachableNodes = GraphExtractor.CountReachableNodes(graph, searchRootNodeInfo.ChildNode.Index, abortAbove);
-    double reachabilityCheckSeconds = sw.Elapsed.TotalSeconds;
+    GraphExtractor.ReachableSet reachable = GraphExtractor.EnumerateReachable(graph, searchRootNodeInfo.ChildNode.Index, abortAbove);
+    double reachabilitySeconds = sw.Elapsed.TotalSeconds;
 
+    int reachableNodes = reachable.Count;
     double reachableFraction = totalNodes > 0 ? (double)reachableNodes / totalNodes : 0.0;
     double timeToExtract = reachableNodes / EXTRACT_NODES_PER_SEC;
 
-    // High memory pressure: extract if it fits the time budget, otherwise abandon.
-    if (memoryUsedFraction > 0.70)
+    if (highMemory)
     {
-      return timeToExtract > 0.80 * availableTime
-        ? new ReuseDecision(GraphReuseAction.Abandon, $"high memory {memoryUsedFraction:P0}; extracting {reachableNodes:N0} reachable nodes (~{timeToExtract:F1}s) would exceed 80% of {availableTime:F1}s available", reachabilityCheckSeconds, reachableNodes)
-        : new ReuseDecision(GraphReuseAction.Extract, $"high memory {memoryUsedFraction:P0}; {reachableNodes:N0} reachable nodes (~{timeToExtract:F1}s)", reachabilityCheckSeconds, reachableNodes);
+      // Extract only if it frees a meaningful fraction AND fits the time budget.
+      if (reachableFraction <= HIGH_MEM_EXTRACT_MAX_RETENTION && timeToExtract <= 0.80 * availableTime)
+      {
+        return new ReuseDecision(GraphReuseAction.Extract,
+          $"high memory {memoryUsedFraction:P0}; {reachableNodes:N0} reachable ({reachableFraction:P0}, ~{timeToExtract:F1}s)",
+          reachabilitySeconds, reachableNodes, reachable);
+      }
+
+      // Can't usefully shrink: free the memory only when it is critical (> 90%); otherwise keep the graph.
+      return memoryUsedFraction > 0.90
+        ? new ReuseDecision(GraphReuseAction.Abandon,
+            $"critical memory {memoryUsedFraction:P0}; extraction won't help ({reachableFraction:P0} reachable)",
+            reachabilitySeconds, reachableNodes, reachable)
+        : new ReuseDecision(GraphReuseAction.Reuse, null, reachabilitySeconds, reachableNodes, reachable);
     }
 
-    // Moderate memory: extract only when most of the graph is stale and extraction is cheap enough.
+    // Moderate memory (0.20 - 0.70): extract only when most of the graph is stale and extraction is cheap.
     if (reachableFraction < 0.30 && timeToExtract < 0.25 * availableTime)
     {
-      return new ReuseDecision(GraphReuseAction.Extract, $"only {reachableFraction:P0} of nodes reachable; extraction quick (~{timeToExtract:F1}s)", reachabilityCheckSeconds, reachableNodes);
+      return new ReuseDecision(GraphReuseAction.Extract,
+        $"only {reachableFraction:P0} of nodes reachable; extraction quick (~{timeToExtract:F1}s)",
+        reachabilitySeconds, reachableNodes, reachable);
     }
 
     if (reachableFraction < 0.10 && timeToExtract < 0.50 * availableTime)
     {
-      return new ReuseDecision(GraphReuseAction.Extract, $"only {reachableFraction:P0} of nodes reachable; extraction affordable (~{timeToExtract:F1}s)", reachabilityCheckSeconds, reachableNodes);
+      return new ReuseDecision(GraphReuseAction.Extract,
+        $"only {reachableFraction:P0} of nodes reachable; extraction affordable (~{timeToExtract:F1}s)",
+        reachabilitySeconds, reachableNodes, reachable);
     }
 
     // Otherwise: reuse.
-    return new ReuseDecision(GraphReuseAction.Reuse, null, reachabilityCheckSeconds, reachableNodes);
+    return new ReuseDecision(GraphReuseAction.Reuse, null, reachabilitySeconds, reachableNodes, reachable);
   }
 
   #endregion
@@ -315,8 +346,7 @@ public static class GraphReuseManager
   /// Logs (unconditionally, in yellow) a one-line summary of a graph EXTRACT decision and its stats.
   /// When GraphExtractor.LOG_EXTRACT_PHASE_TIMINGS is enabled, also logs a per-phase timing breakdown.
   /// </summary>
-  private static void LogExtraction(GraphExtractor.ExtractResult ex, int searchRootN, string reason,
-                                    double reachabilityCheckSeconds)
+  private static void LogExtraction(GraphExtractor.ExtractResult ex, int searchRootN, string reason)
   {
     ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
       $"Graph EXTRACT: {reason}; searchRootN={searchRootN:N0}, "
@@ -325,10 +355,9 @@ public static class GraphReuseManager
     if (GraphExtractor.LOG_EXTRACT_PHASE_TIMINGS)
     {
       GraphRewriter.FinalizePhaseTimings f = ex.Finalize;
-      // reachCheck = the decision's reachability BFS (separate from enumerate, which is the extractor's own BFS).
+      // bfs = the single reachability BFS (shared by the decision and extraction; no longer doubled).
       ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
-        $"  EXTRACT timings (ms): reachCheck={reachabilityCheckSeconds * 1000:F1}, "
-      + $"enumerate={ex.EnumerateSeconds * 1000:F1}, "
+        $"  EXTRACT timings (ms): bfs={ex.EnumerateSeconds * 1000:F1}, "
       + $"copy={ex.CopySeconds * 1000:F1} [{(ex.UsedParallelCopy ? "parallel" : "serial")}], "
       + $"finalize={ex.FinalizeSeconds * 1000:F1} "
       + $"(p5_parents={f.Phase5Parents * 1000:F1}, p5a_N/Q/D={f.Phase5aNodeN * 1000:F1}, "
