@@ -343,8 +343,8 @@ public class ManagerChooseBestMoveMCGS
                                   BestNSecond, childrenSortedN[0], edgesSortedQ[0]);
       return TryOverrideWithMoreIrreversibleMove(position, result, edgesSortedQ);
     }
-    else if (Manager.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientNPermissive
-          || Manager.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientN)
+    else if (Manager.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientN
+          || Manager.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientNStrict)
     {
       float qOfBestNMove = (float)childrenSortedN[0].Q;
 
@@ -363,7 +363,7 @@ public class ManagerChooseBestMoveMCGS
 
         float differenceFromQOfBestN = MathF.Abs((float)candidate.Q - (float)childrenSortedN[0].Q);
 
-        float minFrac = MinFractionNToUseQ(Node, differenceFromQOfBestN, Manager.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientNPermissive);
+        float minFrac = MinFractionNToUseQ(Node, differenceFromQOfBestN, Manager.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientN);
 
         int minNToBeConsideredForBestQ = (int)(nOfChildWithHighestN * minFrac);
         if (candidate.N > minNToBeConsideredForBestQ)
@@ -478,7 +478,7 @@ public class ManagerChooseBestMoveMCGS
       // has enough visits to be considered reliable. The candidate must have at least
       // a minimum fraction of the best move's N, where the fraction depends on the Q difference.
       float minFrac = MinFractionNToUseQ(Node, qDifference, 
-                                         Manager.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientNPermissive);
+                                         Manager.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientN);
       int minNRequired = (int)(moveA.N * minFrac);
       if (candidateB.N < minNRequired)
       {

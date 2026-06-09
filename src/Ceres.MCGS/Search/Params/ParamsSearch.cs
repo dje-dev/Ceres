@@ -90,16 +90,16 @@ public record ParamsSearch
     TopN,
 
     /// <summary>
-    /// The move having the best Q value is chosen, subject to 
-    /// also having certain minimum number of visits.
+    /// The move having the best Q value is chosen, subject to
+    /// also having certain (less permissive) minimum number of visits
     /// </summary>
     TopQIfSufficientN,
 
     /// <summary>
-    /// The move having the best Q value is chosen, subject to
-    /// also having certain (less permissive) minimum number of visits
+    /// The move having the best Q value is chosen, subject to 
+    /// also having certain minimum number of visits (strictly close to that of topN node).
     /// </summary>
-    TopQIfSufficientNPermissive,
+    TopQIfSufficientNStrict,
 
     /// <summary>
     /// Use policy regularization (low intensity) using the method described in:
