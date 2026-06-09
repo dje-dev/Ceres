@@ -703,6 +703,22 @@ public record ParamsSelect
   /// </summary>
   internal bool CBGPUCT_SelectCrossParentNEnabled => CBGPUCT_SelectCrossParentNFraction > 0.0f;
 
+  /// <summary>
+  /// Optional value-uncertainty (leaf value volatility) scaling of the "actual child N"
+  /// that the CB-GPUCT visit-target deficit compares against the RPO-justified target
+  /// (pi_bar * (sumN + 1)).  When nonzero, each child's actual N is multiplied by
+  ///   1 - CBGPUCT_SelectValueUncertaintyScalingFactor * (child.LeafValueVolatilityDebiased - 0.20)
+  /// (applied only to children whose child.N exceeds 5, where the debiased volatility
+  /// estimate is meaningful; the factor is floored at 0).  0.20 is the assumed average
+  /// leaf-value volatility, so a child less (more) volatile than average is treated as if
+  /// MORE (FEWER) visits had been performed to it - shrinking (growing) its deficit and
+  /// thereby steering exploration toward the less-settled, more volatile children.
+  ///
+  /// Requires ParamsSearch.TrackLeafValueVolatility = true (enforced in ValidateAgainst).
+  /// 0 disables.
+  /// </summary>
+  public float CBGPUCT_SelectValueUncertaintyScalingFactor = 0;
+
   #endregion
 
   /// <summary>
@@ -913,6 +929,12 @@ public record ParamsSelect
   /// <param name="paramsSearch"></param>
   internal void ValidateAgainst(ParamsSearch paramsSearch)
   {
+    if (CBGPUCT_SelectValueUncertaintyScalingFactor != 0 && !paramsSearch.TrackLeafValueVolatility)
+    {
+      throw new Exception("TrackLeafValueVolatility must be set to true when "
+                        + "CBGPUCT_SelectValueUncertaintyScalingFactor is nonzero.");
+    }
+
     if (CBGPUCT_Mode != CBGPUCTModeType.None)
     {
       if (!paramsSearch.EnableGraph)

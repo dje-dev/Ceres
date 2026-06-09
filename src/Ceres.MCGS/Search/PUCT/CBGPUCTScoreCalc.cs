@@ -415,6 +415,17 @@ internal static class CBGPUCTScoreCalc
     // (child.N minus per-edge.N) so that transposition children visited heavily via
     // other parents are partially counted toward this parent's visit target.
     float crossParentFraction = paramsSelect.CBGPUCT_SelectCrossParentNFraction;
+
+    // Optional value-uncertainty (leaf value volatility) scaling of the actual child N.
+    // The 0.20 anchor is the assumed average debiased leaf-value volatility; children below
+    // (above) it are treated as having received more (fewer) visits.  Only applied to
+    // expanded children with child.N > VOL_SCALING_MIN_CHILD_N (debiased volatility is
+    // unreliable at very low N).  Validated to require TrackLeafValueVolatility.
+    float volUncertaintyScaling = paramsSelect.CBGPUCT_SelectValueUncertaintyScalingFactor;
+    bool volScalingActive = volUncertaintyScaling != 0.0f;
+    const double VOL_AVG = 0.20;
+    const int VOL_SCALING_MIN_CHILD_N = 5;
+
     Span<double> mu = stackalloc double[numChildren];
     Span<double> qIn = stackalloc double[numChildren];
     Span<double> currentN = stackalloc double[numChildren];
@@ -451,6 +462,23 @@ internal static class CBGPUCTScoreCalc
         }
       }
       currentN[i] = effectiveN + nInFlight[i];
+
+      // Value-uncertainty (volatility) scaling: act as if more (fewer) visits had been
+      // performed to a less (more) volatile child than the VOL_AVG average, shrinking
+      // (growing) its deficit so exploration is steered toward the less-settled children.
+      if (volScalingActive && i < parentNode.NumEdgesExpanded)
+      {
+        GEdge edge = parentNode.ChildEdgeAtIndex(i);
+        if (edge.Type == GEdgeStruct.EdgeType.ChildEdge)
+        {
+          GNode childNode = edge.ChildNode;
+          if (childNode.NodeRef.N > VOL_SCALING_MIN_CHILD_N)
+          {
+            double factor = 1.0 - volUncertaintyScaling * (childNode.LeafValueVolatilityDebiased - VOL_AVG);
+            currentN[i] *= factor > 0.0 ? factor : 0.0;
+          }
+        }
+      }
     }
 
     // Snapshot qIn before any modification (shrinkage / fixed-point) so the optional
