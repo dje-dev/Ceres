@@ -406,13 +406,21 @@ This changes selection behavior even when ACTION_ENABLED is not defined and adds
       Vector<double> vQWhenNoChildren;
       if (qWhenNoChildrenPerChild != null)
       {
-        double[] qPerChildPadded = t_simdQChildBuffer ??= new double[Vector<double>.Count];
-        int remaining = qWhenNoChildrenPerChild.Length - startOffset;
-        for (int i = 0; i < simdWidth; i++)
+        ReadOnlySpan<double> qNoChildrenSpan = qWhenNoChildrenPerChild.AsSpan(startOffset);
+
+        if (qNoChildrenSpan.Length >= Vector<double>.Count)
         {
-          qPerChildPadded[i] = i < remaining ? qWhenNoChildrenPerChild[startOffset + i] : qWhenNoChildren;
+          // Hot path: a full vector is available — load straight from the array.
+          vQWhenNoChildren = new Vector<double>(qNoChildrenSpan);
         }
-        vQWhenNoChildren = new Vector<double>(qPerChildPadded);
+        else
+        {
+          // Tail only: pad the missing lanes with the scalar fallback.
+          Span<double> padded = stackalloc double[Vector<double>.Count];
+          padded.Fill(qWhenNoChildren);
+          qNoChildrenSpan.CopyTo(padded);
+          vQWhenNoChildren = new Vector<double>(padded);
+        }
       }
       else
       {
