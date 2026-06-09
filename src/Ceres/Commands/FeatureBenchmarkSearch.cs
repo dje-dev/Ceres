@@ -24,6 +24,7 @@ using Ceres.Chess.Positions;
 using Ceres.MCTS.Params;
 using Ceres.Features.GameEngines;
 using Ceres.MCTS.GameEngines;
+using Ceres.MCGS.GameEngines;
 
 #endregion
 
@@ -90,9 +91,25 @@ namespace Ceres.Commands
       Console.WriteLine();
       Console.WriteLine($"Benchmark Position Performance Test using {nnDefCeres}");
 
-      ParamsSearch paramsSearch = new ParamsSearch();
-      paramsSearch.FutilityPruningStopSearchEnabled = false;
-      GameEngineCeresInProcess engineCeres = new GameEngineCeresInProcess("Ceres", nnDefCeres, null, paramsSearch);
+      // Benchmark whichever engine version is currently active
+      // (MCGS v2 by default, or the legacy MCTS v1 engine if /v1 was specified on the command line).
+      // Only MCGS tracks evaluations-per-second (eps); MCTS reports eps as 0.
+      GameEngine engineCeres;
+      float moveOverheadSeconds;
+      if (CeresEngineConfig.IsMCGS)
+      {
+        Ceres.MCGS.Search.Params.ParamsSearch paramsSearch = new();
+        paramsSearch.FutilityPruningStopSearchEnabled = false;
+        engineCeres = new GameEngineCeresMCGSInProcess("Ceres", nnDefCeres, paramsSearch);
+        moveOverheadSeconds = paramsSearch.MoveOverheadSeconds;
+      }
+      else
+      {
+        ParamsSearch paramsSearch = new();
+        paramsSearch.FutilityPruningStopSearchEnabled = false;
+        engineCeres = new GameEngineCeresInProcess("Ceres", nnDefCeres, null, paramsSearch);
+        moveOverheadSeconds = paramsSearch.MoveOverheadSeconds;
+      }
       engineCeres.Warmup();
       engineCeres.ResetGame();
 
@@ -122,32 +139,41 @@ namespace Ceres.Commands
       if (searchLimit.IsTimeLimit)
       {
         // No need for move overhead
-        searchLimit = searchLimit with { Value = searchLimit.Value + engineCeres.SearchParams.MoveOverheadSeconds };
+        searchLimit = searchLimit with { Value = searchLimit.Value + moveOverheadSeconds };
       }
 
       long numNodesCeres = 0;
       long timeMSCeres = 0;
+      double cpuSecsCeres = 0;
       long numNodesLC0 = 0;
       long timeMSLC0 = 0;
       int countCeresFaster = 0;
+
+      // Used to measure process CPU time (summed across all threads) consumed by each search.
+      System.Diagnostics.Process benchProcess = System.Diagnostics.Process.GetCurrentProcess();
 
       for (int i = 0; i < Math.Min(BENCHMARK_POS.Length, maxPositions); i++)
       {
         string fen = BENCHMARK_POS[i];
         PositionWithHistory benchmarkPos = PositionWithHistory.FromFENAndMovesUCI(fen);
 
-        GameEngineSearchResultCeres resultCeres = engineCeres.SearchCeres(benchmarkPos, searchLimit);
+        benchProcess.Refresh();
+        TimeSpan cpuBefore = benchProcess.TotalProcessorTime;
+        GameEngineSearchResult resultCeres = engineCeres.Search(benchmarkPos, searchLimit);
+        benchProcess.Refresh();
+        float cpuSecs = (float)(benchProcess.TotalProcessorTime - cpuBefore).TotalSeconds;
         float ceresSearchSecs = (float)resultCeres.TimingStats.ElapsedTimeSecs;
         float thisNpsCeres = resultCeres.FinalN / ceresSearchSecs;
         float thisEpsCeres = resultCeres.EPS;
         npsCeres.Add(thisNpsCeres);
         epsCeres.Add(thisEpsCeres);
 
-        Console.WriteLine($"{i + 1,5:N0}. {resultCeres.FinalN,10:N0} nodes " + $" {ceresSearchSecs,7:F2} secs  {thisNpsCeres,8:N0} / sec  {thisEpsCeres,8:N0} eps "
+        Console.WriteLine($"{i + 1,5:N0}. {resultCeres.FinalN,10:N0} nodes " + $" {ceresSearchSecs,7:F2} secs  {cpuSecs,7:F2} cpu  {thisNpsCeres,8:N0} / sec  {thisEpsCeres,8:N0} eps "
           + $"  {resultCeres.ScoreCentipawns,6:N0} cp {resultCeres.MoveString,7}      {fen}");
 
-        numNodesCeres += resultCeres.Search.SearchRootNode.N;
-        timeMSCeres += (long)(Math.Round(resultCeres.Search.TimingInfo.ElapsedTimeSecs * 1000, 0));
+        numNodesCeres += resultCeres.FinalN;
+        timeMSCeres += (long)(Math.Round(resultCeres.TimingStats.ElapsedTimeSecs * 1000, 0));
+        cpuSecsCeres += cpuSecs;
 
         if (withLC0)
         {
@@ -175,6 +201,7 @@ namespace Ceres.Commands
       Console.WriteLine();
       Console.WriteLine("Ceres Benchmark Results =======");
       Console.WriteLine($"Total time(ms)   : {timeMSCeres,12:N0}");
+      Console.WriteLine($"Total CPU time(s): {cpuSecsCeres,12:N1}");
       Console.WriteLine($"Nodes searched   : {numNodesCeres,12:N0}");
       Console.WriteLine($"Avg nodes/sec    : {1000 * numNodesCeres / timeMSCeres,12:N0}");
       Console.WriteLine($"Median nodes/sec : {npsCeres[npsCeres.Count / 2],12:N0}");
