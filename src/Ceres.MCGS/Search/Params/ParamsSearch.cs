@@ -191,6 +191,33 @@ public record ParamsSearch
   public bool EnablePseudoTranspositionBlending => EnablePseudoTranspositionBlendingInPositionAndEquivalenceMode
                                                 && PathTranspositionMode == PathMode.PositionAndHistoryEquivalence;
 
+  /// <summary>
+  /// If transposition auto-extension is enabled (PositionAndHistoryEquivalence mode only):
+  /// when a new node is created with its value/policy copied from an evaluated pseudo-twin
+  /// (TranspositionCopyValues) and the twin has at least TranspositionAutoExtensionMinTwinN
+  /// visits, the deterministic next visit from that node (always its top-policy child,
+  /// per the select fast path) is performed synchronously as well: the child is expanded
+  /// (value-copied from its own transposition, linked to an existing node, or created as a
+  /// terminal edge) and the new node is installed with N=2 and the exact two-visit Q via the
+  /// standard backup primitives. The path's single accepted visit then backs up a value
+  /// informed two plies deeper.
+  ///
+  /// Motivation: in history mode, pseudo-duplicated regions must be re-expanded one visit
+  /// at a time, so depth grows much more slowly than in Position mode; auto-extension gains
+  /// depth 2 per pseudo-twin expansion instead of 1, with no additional NN evaluations and
+  /// no approximation (all bookkeeping is exact). If the child has no available evaluation
+  /// source (and is not terminal), the extension is simply skipped.
+  /// </summary>
+  public bool EnableTranspositionAutoExtension = false;
+
+  /// <summary>
+  /// Minimum visit count of the pseudo-twin (the value-copy source) required for
+  /// transposition auto-extension to be attempted. With at least 2 visits the twin's own
+  /// top-policy child was already expanded, so the extension child's evaluation source
+  /// is very likely to exist.
+  /// </summary>
+  public int TranspositionAutoExtensionMinTwinN = 2;
+
   // Optionally stop descent at a transposition node only if it has a
   // sufficiently large number of visits. 
   // This parameter is the cutoff value of a transposed child�s visit count
@@ -679,6 +706,16 @@ public record ParamsSearch
     if (!EnableGraph && PathTranspositionMode == PathMode.PositionAndHistoryEquivalence)
     {
       throw new Exception("Cannot use PathTranspositionMode PositionAndHistoryEquivalence when graph is disabled.");
+    }
+
+    if (EnableTranspositionAutoExtension
+     && (!EnableGraph || PathTranspositionMode != PathMode.PositionAndHistoryEquivalence))
+    {
+      // The extension relies on history-mode invariants (terminal draw edges valid for
+      // every path into a node; per-history node identity); in PositionEquivalence mode
+      // creating terminal draw edges for repetitions is incorrect (coalesced nodes).
+      throw new Exception("EnableTranspositionAutoExtension requires EnableGraph=true and "
+                        + "PathTranspositionMode=PositionAndHistoryEquivalence.");
     }
 
     if (!TwofoldDrawEnabled)

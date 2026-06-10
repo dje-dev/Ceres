@@ -128,6 +128,27 @@ public struct SpinLockByte
 
 
   /// <summary>
+  /// Attempts to acquire the lock without blocking.
+  /// Returns false immediately if the lock is currently held
+  /// (including when held by this same thread, making it also safe
+  /// against inadvertent reentrancy).
+  /// </summary>
+  [MethodImpl(MethodImplOptions.AggressiveInlining)]
+  public bool TryAcquire()
+  {
+    Debug.Assert(state != VALUE_ILLEGAL, "TryAcquireFoundIllegal");
+
+    int tid = System.Environment.CurrentManagedThreadId;
+    byte stateValueToUse =
+        (CHECK_THREAD_REENTRANCY && IsTrackableThreadId(tid))
+          ? StateValueToUseForThreadID(tid)
+          : VALUE_LOCKED_NO_THREAD_TRACKING;
+
+    return Interlocked.CompareExchange(ref state, stateValueToUse, VALUE_UNLOCKED) == VALUE_UNLOCKED;
+  }
+
+
+  /// <summary>
   /// Releases the lock.
   /// </summary>
   [MethodImpl(MethodImplOptions.AggressiveInlining)]

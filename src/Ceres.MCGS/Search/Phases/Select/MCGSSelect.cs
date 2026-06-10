@@ -1204,6 +1204,19 @@ public class MCGSSelect
 
       bool copyPolicyImmediate = standaloneTranspositionNode.Graph != Engine.Graph;
       Engine.Graph.CopyNodeValues(0, standaloneTranspositionNode, childEdge.ChildNode, copyPolicyImmediate);
+
+      // Optionally auto-extend: synchronously perform the deterministic next visit from the
+      // new node (its top-policy child), installing it with N=2 and the exact two-visit Q.
+      // On success the termination reason changes so the backup phase does not re-apply
+      // the leaf node update (the node is fully installed here).
+      if (Engine.Manager.ParamsSearch.EnableTranspositionAutoExtension
+       && TranspositionAutoExtension.TryExtend(Engine, path, childEdge.ChildNode,
+                                               standaloneTranspositionNode,
+                                               in childPosInfo.childPos, childPosInfo.childPositionHash96,
+                                               childPosInfo.wasIrreversibleMove))
+      {
+        path.TerminationReason = MCGSPathTerminationReason.TranspositionCopyValuesAutoExtended;
+      }
     }
     else
     {

@@ -389,7 +389,8 @@ public unsafe partial class Graph : IDisposable
   /// <param name="okToCreate"></param>
   /// <returns></returns>
   (GNode node, bool wasCreated, bool wasCollision) LookupOrCreateAndAcquire(
-    PosHash96MultisetFinalized hash, PosHash64WithMove50AndReps standaloneKey, bool okToCreate)
+    PosHash96MultisetFinalized hash, PosHash64WithMove50AndReps standaloneKey, bool okToCreate,
+    bool nonBlockingExistingNodeLock = false)
   {
     int index;
     GNode node;
@@ -415,7 +416,17 @@ public unsafe partial class Graph : IDisposable
           ? setIndex.DirectNodeIndex
           : NodeIndexSetStore.sets[setIndex.NodeSetIndex][0].Index;
         node = this[existingIdx];
-        node.AcquireLock();
+        if (nonBlockingExistingNodeLock)
+        {
+          if (!node.TryAcquireLock())
+          {
+            return (default, false, false);
+          }
+        }
+        else
+        {
+          node.AcquireLock();
+        }
         return (node, false, false);
       }
 
@@ -446,7 +457,17 @@ public unsafe partial class Graph : IDisposable
             ? setIndex.DirectNodeIndex
             : NodeIndexSetStore.sets[setIndex.NodeSetIndex][0].Index;
           GNode collisionNode = this[existingIdx];
-          collisionNode.AcquireLock();
+          if (nonBlockingExistingNodeLock)
+          {
+            if (!collisionNode.TryAcquireLock())
+            {
+              return (default, false, false);
+            }
+          }
+          else
+          {
+            collisionNode.AcquireLock();
+          }
           return (collisionNode, false, true);
         }
         else
@@ -460,7 +481,17 @@ public unsafe partial class Graph : IDisposable
     if (transpositionPositionAndSequence.TryGetValue(hash, out index))
     {
       node = this[index];
-      node.AcquireLock();
+      if (nonBlockingExistingNodeLock)
+      {
+        if (!node.TryAcquireLock())
+        {
+          return (default, false, false);
+        }
+      }
+      else
+      {
+        node.AcquireLock();
+      }
       return (node, false, false);
     }
 
@@ -497,7 +528,17 @@ public unsafe partial class Graph : IDisposable
       if (transpositionPositionAndSequence.TryGetValue(hash, out index))
       {
         GNode collisionNode = this[index];
-        collisionNode.AcquireLock();
+        if (nonBlockingExistingNodeLock)
+        {
+          if (!collisionNode.TryAcquireLock())
+          {
+            return (default, false, false);
+          }
+        }
+        else
+        {
+          collisionNode.AcquireLock();
+        }
         return (collisionNode, false, true);
       }
       else
@@ -519,6 +560,24 @@ public unsafe partial class Graph : IDisposable
   internal static readonly LiveStats fiftyMoveCounter50 = MCGSParamsFixed.LOG_LIVE_STATS ? new LiveStats("50 move rule, over 50 ply", 1) : null;
   internal static readonly LiveStats fiftyMoveCounter90 = MCGSParamsFixed.LOG_LIVE_STATS ? new LiveStats("50 move rule, over 90 ply", 1) : null;
 
+
+
+  /// <summary>
+  /// Read-only (lock-free) probe of the 96-bit position+sequence dictionary,
+  /// returning the exact node registered under the specified key (or null node).
+  /// </summary>
+  /// <param name="hash"></param>
+  /// <returns></returns>
+  internal GNode TryGetNodeByPositionAndSequence(PosHash96MultisetFinalized hash)
+  {
+    if (transpositionPositionAndSequence != null
+     && transpositionPositionAndSequence.TryGetValue(hash, out int index))
+    {
+      return this[index];
+    }
+
+    return default;
+  }
 
 
   /// <summary>
@@ -811,6 +870,9 @@ public unsafe partial class Graph : IDisposable
   /// <param name="standaloneHash">A hash representing the position on a standalone basis.</param>
   /// <param name="lookupHash">A cumulative hash representing the sequence, order-insensitive except for the last element.</param>
   /// <param name="moves">A reference to the list of moves used to initialize the child node.</param>
+  /// <param name="nonBlockingExistingNodeLock">If acquisition of an EXISTING node's lock should be attempted
+  /// non-blockingly; on contention the method returns a default (null) edge without creating anything.
+  /// Used by callers (e.g. transposition auto-extension) which hold other node locks and must not block.</param>
   /// <returns>The edge connecting the parent node to the new or existing child node.</returns>
   public (GEdge childNode, bool wasCollision) AddEdgeToNewOrExistingNode(GNode parentNode,
                                                                          int indexOfChildInParent,
@@ -820,7 +882,8 @@ public unsafe partial class Graph : IDisposable
                                                                          MGMoveList moves,
                                                                          out bool wasCreated,
                                                                          out GNode standaloneTranspositionNode,
-                                                                         bool okToCreate)
+                                                                         bool okToCreate,
+                                                                         bool nonBlockingExistingNodeLock = false)
   {
     Debug.Assert(parentNode.IsLocked);
 
@@ -838,14 +901,16 @@ public unsafe partial class Graph : IDisposable
       ? MGPositionHashing.Hash64WithMove50AndRepsAdded(standaloneHash, 0, default)
       : default;
 
-    (GNode childNode, wasCreated, bool wasCollision) = LookupOrCreateAndAcquire(lookupHash, standaloneKey, okToCreate);
+    (GNode childNode, wasCreated, bool wasCollision) = LookupOrCreateAndAcquire(lookupHash, standaloneKey, okToCreate,
+                                                                                nonBlockingExistingNodeLock);
     Debug.Assert(childNode.IsNull || childNode.IsLocked);
 
     if (!wasCreated)
     {
       standaloneTranspositionNode = default;
-      if (!okToCreate && childNode.IsNull)
+      if (childNode.IsNull)
       {
+        // Not found (okToCreate false), or existing node lock unavailable (non-blocking mode).
         return default;
       }
       else

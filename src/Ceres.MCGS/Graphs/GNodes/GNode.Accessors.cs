@@ -349,6 +349,12 @@ public readonly partial struct GNode : IComparable<GNode>, IEquatable<GNode>
   public void AcquireLock() => NodeRef.LockRef.Acquire();
 
   /// <summary>
+  /// Attempts to acquire the lock for this node without blocking,
+  /// returning false if the lock is currently held (by any thread, including this one).
+  /// </summary>
+  public bool TryAcquireLock() => NodeRef.LockRef.TryAcquire();
+
+  /// <summary>
   /// Releases the lock for this node.
   /// Delegates to the underlying NodeRef.LockRef to ensure atomic operations on the actual lock byte.
   /// </summary>

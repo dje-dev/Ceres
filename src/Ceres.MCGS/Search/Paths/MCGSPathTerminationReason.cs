@@ -75,4 +75,16 @@ public enum MCGSPathTerminationReason : byte
   /// Unable to continue backup descent.
   /// </summary>
   Abort,
+
+  /// <summary>
+  /// Same as TranspositionCopyValues, except that the new node was additionally
+  /// auto-extended during the select phase: its top-policy child was synchronously
+  /// expanded (value-copied from a transposition or created as a terminal edge) and
+  /// the new node was fully installed with N=2 and the exact two-visit Q.
+  /// The backup phase must therefore NOT apply the usual leaf node update
+  /// (it would double-count), while the backed-up path value is the node's
+  /// stored (two-visit) Q as usual.
+  /// N.B. Appended at end of enum because diagnostics arrays index by (int)reason.
+  /// </summary>
+  TranspositionCopyValuesAutoExtended,
 }

@@ -75,8 +75,16 @@ public partial class MCGSBackup
 
       case MCGSPathTerminationReason.TranspositionCopyValues:
         // deltaD = DrawP * numToApply for running average accumulation
-        Engine.Strategy.BackupToNode(leafNode, numToApply, leafNode.V, 
+        Engine.Strategy.BackupToNode(leafNode, numToApply, leafNode.V,
           numToApply * (overrideDrawP ?? leafNode.DrawP));
+        break;
+
+      case MCGSPathTerminationReason.TranspositionCopyValuesAutoExtended:
+        // The node was already fully installed during the select phase
+        // (own evaluation visit plus one auto-extension visit into its top-policy child,
+        // applied via the same BackupToNode/BackupToEdge primitives).
+        // Applying the usual leaf update here would double-count.
+        Debug.Assert(leafNode.IsEvaluated && leafNode.N >= 1);
         break;
 
       case MCGSPathTerminationReason.Terminal:
@@ -221,6 +229,7 @@ public partial class MCGSBackup
         return new BackupValue(leafEdge.ChildNode.Q, leafEdge.ChildNode.D);
 
       case MCGSPathTerminationReason.TranspositionCopyValues:
+      case MCGSPathTerminationReason.TranspositionCopyValuesAutoExtended:
         Debug.Assert(leafEdge.ChildNode.IsEvaluated);
         return new BackupValue(leafEdge.ChildNode.Q, leafEdge.ChildNode.D);
 
