@@ -99,18 +99,34 @@ namespace Ceres.Chess.MoveGen
     /// <returns></returns>
     public static MGMoveList GeneratedMoves(in MGPosition P)
     {
+      MGMoveList scratch = GeneratedMovesIntoThreadStaticScratch(in P);
+
+      // Create a new MGMoveList sized exactly to the number of moves and copy
+      int numMoves = scratch.NumMovesUsed;
+      MGMoveList result = new MGMoveList(numMoves);
+      result.NumMovesUsed = numMoves;
+      scratch.MovesArray.AsSpan(0, numMoves).CopyTo(result.MovesArray);
+
+      return result;
+    }
+
+
+    /// <summary>
+    /// Generates all legal moves for the given position into a reusable thread-local scratch list
+    /// (no allocation after warmup) and returns it.
+    /// The returned list is invalidated by the next call on the same thread; callers which
+    /// retain the list beyond that window must make an exactly-sized copy themselves.
+    /// </summary>
+    /// <param name="P"></param>
+    /// <returns></returns>
+    public static MGMoveList GeneratedMovesIntoThreadStaticScratch(in MGPosition P)
+    {
       movesTempForGeneratedMoves ??= new MGMoveList();
       movesTempForGeneratedMoves.NumMovesUsed = 0;
 
       GenerateMoves(in P, movesTempForGeneratedMoves);
 
-      // Create a new MGMoveList sized exactly to the number of moves and copy
-      int numMoves = movesTempForGeneratedMoves.NumMovesUsed;
-      MGMoveList result = new MGMoveList(numMoves);
-      result.NumMovesUsed = numMoves;
-      movesTempForGeneratedMoves.MovesArray.AsSpan(0, numMoves).CopyTo(result.MovesArray);
-
-      return result;
+      return movesTempForGeneratedMoves;
     }
 
 

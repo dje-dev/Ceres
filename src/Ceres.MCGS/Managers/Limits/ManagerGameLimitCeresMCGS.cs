@@ -16,6 +16,7 @@
 using System;
 
 using Ceres.Chess;
+using Ceres.MCGS.Search.Params;
 
 #endregion
 
@@ -350,7 +351,7 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
       bool isEarlyUnsmooth = baselineValid
                           && inputs.RootN < earlySmothingBaselineFrac * earlySmoothingBaselineN;
 
-      if (canStillAdjust && isEarlyUnsmooth)
+      if (MCGSParamsFixed.DUMP_EARLY_SMOOTHING_BOOST && canStillAdjust && isEarlyUnsmooth)
       {
         earlySmoothingAdjustsApplied++;
         totalValueUse *= EARLY_SMOOTHING_BOOST;

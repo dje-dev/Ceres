@@ -1014,7 +1014,11 @@ public class MCGSSelect
                                       bool canLaunchParallel,
                                       ref ListBounded<DeferredSubPath> deferredSubPaths)
   {
-    MGMoveList childMoves = MGMoveGen.GeneratedMoves(in childPosInfo.childPos);
+    // Generate into the thread-local scratch list (no allocation): most callees below only
+    // read the list, and the dominant outcomes (transposition link, collision piggyback)
+    // never retain it. The retention points (DoNewlyCreatedNode, via newVisit.MovesList)
+    // make their own exactly-sized copy.
+    MGMoveList childMoves = MGMoveGen.GeneratedMovesIntoThreadStaticScratch(in childPosInfo.childPos);
 
     // Determine if game result can be immediately determined (various mate and draw conditions).
     const bool possiblyUseTablebase = true;
@@ -1083,7 +1087,9 @@ public class MCGSSelect
     MCGSPath newPath = path.PossiblyBranched(numVisitsRemaining, numVisitsThisChild,
                                              childPosInfo.childPositionHash96, childPosInfo.wasIrreversibleMove,
                                              childPosInfo.moveMG);
-    newVisit.MovesList = childMoves;
+    // MovesList deliberately left null: terminal-edge visits have no NN evaluation, and no
+    // consumer reads Moves for them (the lazy regeneration in MCGSPathVisit.Moves is the
+    // safety net if one ever does). childMoves is the shared scratch and must not be retained.
     pathsSet.AddPath(newPath, numVisitsThisChild);
     childVisitCounts[childIndex] = 0;
     return true;
@@ -1209,6 +1215,11 @@ public class MCGSSelect
                                      int numVisitsThisChild, int numVisitsRemaining,
                                      bool isDrawByRepetitionInCoalesceMode)
   {
+    // childMoves arrives as the shared thread-local scratch but is retained below (assigned
+    // into the path visit's MovesList, later read by NN batch assembly). Make the exactly-sized
+    // copy immediately - this also frees the scratch for reuse by TranspositionAutoExtension.
+    childMoves = new MGMoveList(childMoves);
+
     Debug.Assert(!(isDrawByRepetitionInCoalesceMode && childNode.Terminal.IsTerminal()));
 
     int numToAccept = (childNode.Terminal.IsTerminal() || isDrawByRepetitionInCoalesceMode) ? numVisitsThisChild : 1;
@@ -1237,7 +1248,8 @@ public class MCGSSelect
       if (Engine.Manager.ParamsSearch.EnablePseudoTranspositionQBorrow)
       {
         PseudoTranspositionQBorrow.TryApply(Engine, path, childEdge.ChildNode,
-                                            in childPosInfo.childPos, childPosInfo.childPositionHash64);
+                                            in childPosInfo.childPos, childPosInfo.childPositionHash64,
+                                            childPosInfo.wasIrreversibleMove);
       }
 
       // Optionally auto-extend: synchronously perform the deterministic next visit from the

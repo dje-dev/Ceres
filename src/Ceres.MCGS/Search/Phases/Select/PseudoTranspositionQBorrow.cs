@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
@@ -56,16 +57,72 @@ namespace Ceres.MCGS.Search.Phases;
 /// </summary>
 internal static class PseudoTranspositionQBorrow
 {
-  // Diagnostic counters (lock-free; read for logging/analysis).
-  internal static long NumBorrowsApplied;
-  internal static long NumBorrowsAbortedOverlap;
-  internal static long NumBorrowsSkippedNoDonor;
-  internal static double SumLambdaApplied;
+  /// <summary>
+  /// Diagnostic counters, kept in per-thread cells with plain (non-atomic) increments on
+  /// thread-private cache lines and aggregated only when the stats string is built.
+  /// Shared Interlocked counters here would cost a cross-socket locked operation per
+  /// new-node expansion at high transposition rates.
+  /// </summary>
+  private sealed class StatsCell
+  {
+    public long NumBorrowsApplied;
+    public long NumBorrowsAbortedOverlap;
+    public long NumBorrowsSkippedNoDonor;
+    public long NumFastPathFullClean;
+    public long NumWalks;
+    public long NumWalkNodesExamined;
+    public long NumDonorBusy;
+    public double SumLambdaApplied;
+  }
+
+  [ThreadStatic]
+  static StatsCell statsCellForThread;
+
+  static readonly ConcurrentQueue<StatsCell> allStatsCells = new();
+
+  static StatsCell StatsCellThisThread
+  {
+    get
+    {
+      StatsCell cell = statsCellForThread;
+      if (cell == null)
+      {
+        cell = new StatsCell();
+        statsCellForThread = cell;
+        allStatsCells.Enqueue(cell);
+      }
+      return cell;
+    }
+  }
+
 
   internal static string StatsString
-    => $"PTQB applied={NumBorrowsApplied:N0} (avgLambda="
-     + $"{(NumBorrowsApplied == 0 ? 0 : SumLambdaApplied / NumBorrowsApplied):F3}) "
-     + $"blockedContamination={NumBorrowsAbortedOverlap:N0} noDonor={NumBorrowsSkippedNoDonor:N0}";
+  {
+    get
+    {
+      // Aggregate over per-thread cells (reads of aligned long/double are atomic on x64;
+      // tearing-free but possibly slightly stale, acceptable for diagnostics).
+      long applied = 0, aborted = 0, noDonor = 0, fastPath = 0, walks = 0, walkNodes = 0, donorBusy = 0;
+      double sumLambda = 0;
+      foreach (StatsCell cell in allStatsCells)
+      {
+        applied += cell.NumBorrowsApplied;
+        aborted += cell.NumBorrowsAbortedOverlap;
+        noDonor += cell.NumBorrowsSkippedNoDonor;
+        fastPath += cell.NumFastPathFullClean;
+        walks += cell.NumWalks;
+        walkNodes += cell.NumWalkNodesExamined;
+        donorBusy += cell.NumDonorBusy;
+        sumLambda += cell.SumLambdaApplied;
+      }
+
+      return $"PTQB applied={applied:N0} (avgLambda="
+           + $"{(applied == 0 ? 0 : sumLambda / applied):F3}) "
+           + $"blockedContamination={aborted:N0} noDonor={noDonor:N0} "
+           + $"fastPathFullClean={fastPath:N0} donorBusy={donorBusy:N0} walks={walks:N0} "
+           + $"avgWalkNodes={(walks == 0 ? 0 : (double)walkNodes / walks):F1}";
+    }
+  }
 
 
   /// <summary>
@@ -81,11 +138,13 @@ internal static class PseudoTranspositionQBorrow
   /// elapsed since the last dump. Called from TryApply, so dumps occur only while the
   /// feature is enabled and actually being exercised. The CompareExchange guarantees a
   /// single dump per interval under concurrent callers.
+  /// (The hot-path read is a plain Volatile.Read: an Interlocked.Read would be a bus-locked
+  /// RMW taking the cache line exclusive on every call from every thread.)
   /// </summary>
   static void PossiblyDumpStats()
   {
     long nowMS = System.Environment.TickCount64;
-    long last = Interlocked.Read(ref lastStatsDumpTimeMS);
+    long last = Volatile.Read(ref lastStatsDumpTimeMS);
     if (nowMS - last >= STATS_DUMP_INTERVAL_MS
      && Interlocked.CompareExchange(ref lastStatsDumpTimeMS, nowMS, last) == last)
     {
@@ -105,13 +164,14 @@ internal static class PseudoTranspositionQBorrow
   /// <param name="newNode">The newly created (N=0, value-copied) node.</param>
   /// <param name="childPos">The new node's position.</param>
   /// <param name="childHash64">Standalone hash of the new node's position.</param>
+  /// <param name="moveToNewNodeIrreversible">If the move into the new node was irreversible
+  /// (enables the full-clean fast path which skips the verification walk).</param>
   internal static void TryApply(MCGSEngine engine, MCGSPath path, GNode newNode,
-                                in MGPosition childPos, PosHash64 childHash64)
+                                in MGPosition childPos, PosHash64 childHash64,
+                                bool moveToNewNodeIrreversible)
   {
     ParamsSearch paramsSearch = engine.Manager.ParamsSearch;
     Debug.Assert(paramsSearch.EnablePseudoTranspositionQBorrow);
-
-    PossiblyDumpStats();
 
     if (childPos.Rule50Count > paramsSearch.PseudoTranspositionQBorrowMaxRule50)
     {
@@ -119,6 +179,8 @@ internal static class PseudoTranspositionQBorrow
       // lower rule50 count) become unreliable for our context.
       return;
     }
+
+    PossiblyDumpStats();
 
     // Locate the donor: the maximum-N eligible member of the pseudo-transposition set
     // for this position (which may differ from the arbitrary first member used as the
@@ -141,53 +203,81 @@ internal static class PseudoTranspositionQBorrow
       // (When PseudoTranspositionBlendingRequiresCleanSubgraph is enabled, eligibility in
       //  MaxNSiblingNode pre-excludes tainted donors before we ever see them - that flag
       //  trades this refinement for an O(1) screen.)
-      Interlocked.Increment(ref NumBorrowsSkippedNoDonor);
+      StatsCellThisThread.NumBorrowsSkippedNoDonor++;
       return;
     }
 
-    // Build the set of standalone hashes of OUR reversible run (positions which a future
-    // line could repeat). Empty when the move into the new node was irreversible.
-    // The new node's own (junction) position is deliberately excluded: it occurs once in
-    // both contexts, and any RE-occurrence inside the donor's subgraph is handled by the
-    // walk (for the donor it was a repetition of its own root position, hence tainted).
-    HashSet<PosHash64> ourReversibleRunHashes = BuildOurReversibleRunHashes(engine, path, graph);
+    long cleanN;
+    long contaminatedN;
 
-    // Verification walk over the donor's subgraph (fat edges first, memoized, budget-bounded),
-    // classifying visit mass into clean / contaminated / unverified buckets.
-    if (!TryVerifyAndMeasure(graph, donor, ourReversibleRunHashes,
-                             paramsSearch.PseudoTranspositionQBorrowMaxVerifyNodes,
-                             out long cleanN, out long contaminatedN))
+    if (moveToNewNodeIrreversible && !donor.HistorySensitiveSubgraph)
     {
-      // Donor busy (locked by another thread); no verification information obtained.
-      return;
+      // FAST PATH: the donor's full mass is provably clean, no walk needed.
+      //   - The move into the new node was irreversible, so OUR reversible run is empty:
+      //     no donor-subgraph position can be a repetition under our history.
+      //   - The donor is untainted, and taint floods to ALL ancestors of any
+      //     repetition/rule50 terminal, so no reachable descendant is tainted either:
+      //     the walk's only other contamination sources (tainted-parent drawn terminals,
+      //     unlocalizable taint on lock failure) cannot fire.
+      // The walk could therefore only ever UNDER-measure cleanN here (budget/lock
+      // artifacts leaving unverified tail mass); cleanN = donor.N is the exact answer.
+      // PTBVerifiedCleanFrac is deliberately NOT written: the encoded "never verified"
+      // default already decodes to 1.0 (the consumer no-ops), and skipping the write
+      // preserves the raw byte's diagnostic distinction.
+      // (A stale read of a concurrently-flooding taint flag is tolerated, exactly as the
+      // walk tolerates racy edge.N reads; the missed mass is bounded by the few visits
+      // of a just-created repetition terminal, and the PTB refresh decays the borrow.)
+      cleanN = donor.N;
+      contaminatedN = 0;
+      StatsCellThisThread.NumFastPathFullClean++;
     }
-
-    // Contamination RATE is judged over the verified mass only (clean + contaminated):
-    // the fat-first walk verifies the dominant mass, and unverified tail mass should not
-    // be presumed dirty. Incidental contamination perturbs the donor Q linearly in its
-    // mass fraction; rates above the threshold instead signal structural repetition
-    // dynamics where the donor's whole estimate (including its policy) diverged from our
-    // context, so the node is blocked entirely and permanently.
-    long verifiedN = cleanN + contaminatedN;
-    double contaminationRate = verifiedN <= 0 ? 0 : (double)contaminatedN / verifiedN;
-    bool blocked = contaminationRate > paramsSearch.PseudoTranspositionQBorrowMaxContaminationFraction;
-
-    // Persist the verdict for the node's lifetime (read by the PTB sibling refresh as a
-    // multiplicative cap on future blending) - but only when backed by sufficient verified
-    // mass, since with only a handful of verified visits the contamination rate is
-    // dominated by small-sample noise and a permanent verdict is not warranted.
-    // The verdict is path-invariant in history mode: every path into this node shares the
-    // same multiset since the last irreversible move, so it holds for all future visits.
-    // (Single-byte write; atomic without a lock.)
-    if (verifiedN >= paramsSearch.PseudoTranspositionQBorrowMinVerifiedNForCap)
+    else
     {
-      newNode.NodeRef.SetPTBVerifiedCleanFrac(blocked ? 0 : (1.0 - contaminationRate));
-    }
+      // Build the set of standalone hashes of OUR reversible run (positions which a future
+      // line could repeat). Empty when the move into the new node was irreversible.
+      // The new node's own (junction) position is deliberately excluded: it occurs once in
+      // both contexts, and any RE-occurrence inside the donor's subgraph is handled by the
+      // walk (for the donor it was a repetition of its own root position, hence tainted).
+      HashSet<PosHash64> ourReversibleRunHashes = BuildOurReversibleRunHashes(engine, path, graph);
 
-    if (blocked)
-    {
-      Interlocked.Increment(ref NumBorrowsAbortedOverlap);
-      return;
+      // Verification walk over the donor's subgraph (fat edges first, memoized, budget-bounded),
+      // classifying visit mass into clean / contaminated / unverified buckets.
+      if (!TryVerifyAndMeasure(graph, donor, ourReversibleRunHashes,
+                               paramsSearch.PseudoTranspositionQBorrowMaxVerifyNodes,
+                               out cleanN, out contaminatedN))
+      {
+        // Donor busy (locked by another thread); no verification information obtained.
+        StatsCellThisThread.NumDonorBusy++;
+        return;
+      }
+
+      // Contamination RATE is judged over the verified mass only (clean + contaminated):
+      // the fat-first walk verifies the dominant mass, and unverified tail mass should not
+      // be presumed dirty. Incidental contamination perturbs the donor Q linearly in its
+      // mass fraction; rates above the threshold instead signal structural repetition
+      // dynamics where the donor's whole estimate (including its policy) diverged from our
+      // context, so the node is blocked entirely and permanently.
+      long verifiedN = cleanN + contaminatedN;
+      double contaminationRate = verifiedN <= 0 ? 0 : (double)contaminatedN / verifiedN;
+      bool blocked = contaminationRate > paramsSearch.PseudoTranspositionQBorrowMaxContaminationFraction;
+
+      // Persist the verdict for the node's lifetime (read by the PTB sibling refresh as a
+      // multiplicative cap on future blending) - but only when backed by sufficient verified
+      // mass, since with only a handful of verified visits the contamination rate is
+      // dominated by small-sample noise and a permanent verdict is not warranted.
+      // The verdict is path-invariant in history mode: every path into this node shares the
+      // same multiset since the last irreversible move, so it holds for all future visits.
+      // (Single-byte write; atomic without a lock.)
+      if (verifiedN >= paramsSearch.PseudoTranspositionQBorrowMinVerifiedNForCap)
+      {
+        newNode.NodeRef.SetPTBVerifiedCleanFrac(blocked ? 0 : (1.0 - contaminationRate));
+      }
+
+      if (blocked)
+      {
+        StatsCellThisThread.NumBorrowsAbortedOverlap++;
+        return;
+      }
     }
 
     // Immediate borrow weight:
@@ -226,8 +316,9 @@ internal static class PseudoTranspositionQBorrow
       newNode.ReleaseLock();
     }
 
-    Interlocked.Increment(ref NumBorrowsApplied);
-    InterlockedAddDouble(ref SumLambdaApplied, lambda);
+    StatsCell statsCell = StatsCellThisThread;
+    statsCell.NumBorrowsApplied++;
+    statsCell.SumLambdaApplied += lambda;
   }
 
 
@@ -238,9 +329,21 @@ internal static class PseudoTranspositionQBorrow
   /// the graph-root-to-search-root spine, and game prehistory with the same cutoff.
   /// Mirrors the enumeration structure of MCGSPath.HashFoundInHistoryOrPrehistory.
   /// </summary>
+  // Reusable per-thread collections for TryApply (cleared at the start of each use, so an
+  // exception cannot leave stale state visible to the next call). Capacities stay small and
+  // bounded: the run-hash set by the reversible run length, the walk structures by
+  // PseudoTranspositionQBorrowMaxVerifyNodes. Pooling these eliminates 3-4 heap allocations
+  // per newly created node (performed while holding the expansion parent's lock).
+  [ThreadStatic] static HashSet<PosHash64> cachedRunHashes;
+  [ThreadStatic] static PriorityQueue<(int ChildIndex, int EdgeN), int> cachedFrontier;
+  [ThreadStatic] static HashSet<int> cachedVisited;
+  [ThreadStatic] static HashSet<int> cachedContaminated;
+
+
   private static HashSet<PosHash64> BuildOurReversibleRunHashes(MCGSEngine engine, MCGSPath path, Graph graph)
   {
-    HashSet<PosHash64> hashes = new();
+    HashSet<PosHash64> hashes = cachedRunHashes ??= new();
+    hashes.Clear();
 
     // Path visits, leaf to root. The first (leaf) visit is the new node itself: skip its
     // hash but honor its irreversibility flag (if the move INTO the new node was
@@ -341,9 +444,13 @@ internal static class PseudoTranspositionQBorrow
     contaminatedN = 0;
 
     // Max-heap by edge.N (PriorityQueue is a min-heap, so negate).
-    PriorityQueue<(int ChildIndex, int EdgeN), int> frontier = new();
-    HashSet<int> visited = new() { donor.Index.Index };
-    HashSet<int> contaminatedNodes = null;
+    PriorityQueue<(int ChildIndex, int EdgeN), int> frontier = cachedFrontier ??= new();
+    frontier.Clear();
+    HashSet<int> visited = cachedVisited ??= new();
+    visited.Clear();
+    visited.Add(donor.Index.Index);
+    HashSet<int> contaminatedNodes = cachedContaminated ??= new();
+    contaminatedNodes.Clear();
     long frontierN = 0;
     long localContaminatedN = 0;
 
@@ -355,6 +462,7 @@ internal static class PseudoTranspositionQBorrow
     }
 
     int budget = maxVerifyNodes;
+    int numNodesExamined = 0;
     while (frontier.Count > 0 && budget > 0)
     {
       (int childIndex, int edgeN) = frontier.Dequeue();
@@ -365,13 +473,14 @@ internal static class PseudoTranspositionQBorrow
         // Duplicate in-edge (DAG): the node was already classified. Mass through an edge
         // into a contaminated node is itself contaminated; otherwise it was absorbed into
         // the walked (clean-by-subtraction) region.
-        if (contaminatedNodes != null && contaminatedNodes.Contains(childIndex))
+        if (contaminatedNodes.Contains(childIndex))
         {
           localContaminatedN += edgeN;
         }
         continue;
       }
       budget--;
+      numNodesExamined++;
 
       GNode node = graph[childIndex];
 
@@ -382,7 +491,7 @@ internal static class PseudoTranspositionQBorrow
         // Classify the whole in-edge mass as contaminated; nothing below is reachable
         // for us, so do not descend.
         localContaminatedN += edgeN;
-        (contaminatedNodes ??= new()).Add(childIndex);
+        contaminatedNodes.Add(childIndex);
         continue;
       }
 
@@ -394,7 +503,7 @@ internal static class PseudoTranspositionQBorrow
           // Contamination exists somewhere below but cannot be localized now: classify
           // the whole subtree mass as contaminated (conservative).
           localContaminatedN += edgeN;
-          (contaminatedNodes ??= new()).Add(childIndex);
+          contaminatedNodes.Add(childIndex);
         }
         else
         {
@@ -413,6 +522,9 @@ internal static class PseudoTranspositionQBorrow
       cleanN = 0;
     }
 
+    StatsCell statsCell = StatsCellThisThread;
+    statsCell.NumWalks++;
+    statsCell.NumWalkNodesExamined += numNodesExamined;
     return true;
   }
 
@@ -479,18 +591,4 @@ internal static class PseudoTranspositionQBorrow
   }
 
 
-  private static void InterlockedAddDouble(ref double target, double value)
-  {
-    double current = Volatile.Read(ref target);
-    while (true)
-    {
-      double next = current + value;
-      double prior = Interlocked.CompareExchange(ref target, next, current);
-      if (prior == current)
-      {
-        return;
-      }
-      current = prior;
-    }
-  }
 }

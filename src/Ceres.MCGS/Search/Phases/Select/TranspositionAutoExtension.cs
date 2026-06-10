@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading;
 
@@ -63,16 +64,62 @@ namespace Ceres.MCGS.Search.Phases;
 /// </summary>
 internal static class TranspositionAutoExtension
 {
-  // Diagnostic counters (lock-free; read for logging/analysis).
-  internal static long NumExtendedNewNode;
-  internal static long NumExtendedLinked;
-  internal static long NumExtendedTerminal;
-  internal static long NumExtendedDegenerate;
-  internal static long NumSkipped;
+  /// <summary>
+  /// Diagnostic counters, kept in per-thread cells with plain (non-atomic) increments on
+  /// thread-private cache lines and aggregated only when the stats string is built.
+  /// Shared Interlocked counters here would cost a cross-socket locked operation per
+  /// extension attempt at high transposition rates.
+  /// </summary>
+  private sealed class StatsCell
+  {
+    public long NumExtendedNewNode;
+    public long NumExtendedLinked;
+    public long NumExtendedTerminal;
+    public long NumExtendedDegenerate;
+    public long NumSkipped;
+  }
+
+  [ThreadStatic]
+  static StatsCell statsCellForThread;
+
+  static readonly ConcurrentQueue<StatsCell> allStatsCells = new();
+
+  static StatsCell StatsCellThisThread
+  {
+    get
+    {
+      StatsCell cell = statsCellForThread;
+      if (cell == null)
+      {
+        cell = new StatsCell();
+        statsCellForThread = cell;
+        allStatsCells.Enqueue(cell);
+      }
+      return cell;
+    }
+  }
+
 
   internal static string StatsString
-    => $"AutoExtend newNode={NumExtendedNewNode:N0} linked={NumExtendedLinked:N0} "
-     + $"terminal={NumExtendedTerminal:N0} degenerate={NumExtendedDegenerate:N0} skipped={NumSkipped:N0}";
+  {
+    get
+    {
+      // Aggregate over per-thread cells (reads of aligned longs are atomic on x64;
+      // tearing-free but possibly slightly stale, acceptable for diagnostics).
+      long newNode = 0, linked = 0, terminal = 0, degenerate = 0, skipped = 0;
+      foreach (StatsCell cell in allStatsCells)
+      {
+        newNode += cell.NumExtendedNewNode;
+        linked += cell.NumExtendedLinked;
+        terminal += cell.NumExtendedTerminal;
+        degenerate += cell.NumExtendedDegenerate;
+        skipped += cell.NumSkipped;
+      }
+
+      return $"AutoExtend newNode={newNode:N0} linked={linked:N0} "
+           + $"terminal={terminal:N0} degenerate={degenerate:N0} skipped={skipped:N0}";
+    }
+  }
 
 
   /// <summary>
@@ -88,17 +135,24 @@ internal static class TranspositionAutoExtension
   /// elapsed since the last dump. Called from TryExtend, so dumps occur only while the
   /// feature is enabled and being exercised. The CompareExchange guarantees a single
   /// dump per interval under concurrent callers.
+  /// (The hot-path read is a plain Volatile.Read: an Interlocked.Read would be a bus-locked
+  /// RMW taking the cache line exclusive on every call from every thread.)
   /// </summary>
   static void PossiblyDumpStats()
   {
     long nowMS = System.Environment.TickCount64;
-    long last = Interlocked.Read(ref lastStatsDumpTimeMS);
+    long last = Volatile.Read(ref lastStatsDumpTimeMS);
     if (nowMS - last >= STATS_DUMP_INTERVAL_MS
      && Interlocked.CompareExchange(ref lastStatsDumpTimeMS, nowMS, last) == last)
     {
       ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, StatsString);
     }
   }
+
+
+  // Reusable per-thread move list for n2 move generation in TryExtend (reset at each use).
+  [ThreadStatic]
+  static MGMoveList n2MovesScratch;
 
 
   /// <summary>
@@ -143,13 +197,13 @@ internal static class TranspositionAutoExtension
      || paramsSearch.MoveOrderingPhase != ParamsSearch.MoveOrderingPhaseEnum.None
      || actionResortActive)
     {
-      Interlocked.Increment(ref NumSkipped);
+      StatsCellThisThread.NumSkipped++;
       return false;
     }
 
     if (!n1.TryAcquireLock())
     {
-      Interlocked.Increment(ref NumSkipped);
+      StatsCellThisThread.NumSkipped++;
       return false;
     }
 
@@ -158,7 +212,7 @@ internal static class TranspositionAutoExtension
       // Defensive: n1 was created moments ago by this thread and must still be untouched.
       if (n1.NodeRef.N != 0 || n1.NumEdgesExpanded != 0)
       {
-        Interlocked.Increment(ref NumSkipped);
+        StatsCellThisThread.NumSkipped++;
         return false;
       }
 
@@ -171,7 +225,7 @@ internal static class TranspositionAutoExtension
         GNode policySource = engine.Graph[n1.NodeRef.edgeHeaderBlockIndexOrDeferredNode.NodeIndex];
         if (!policySource.TryAcquireLock())
         {
-          Interlocked.Increment(ref NumSkipped);
+          StatsCellThisThread.NumSkipped++;
           return false;
         }
         try
@@ -187,7 +241,7 @@ internal static class TranspositionAutoExtension
 
       if (n1.NumPolicyMoves == 0)
       {
-        Interlocked.Increment(ref NumSkipped);
+        StatsCellThisThread.NumSkipped++;
         return false;
       }
 
@@ -215,7 +269,14 @@ internal static class TranspositionAutoExtension
       bool positionDuplicate = path.HashFoundInHistoryOrPrehistory(n2Hash64);
       n2Pos.RepetitionCount = (byte)(positionDuplicate ? 1 : 0);
 
-      MGMoveList n2Moves = MGMoveGen.GeneratedMoves(in n2Pos);
+      // Generate into this class's own reusable scratch list (no allocation): n2Moves is
+      // fully consumed before return (terminality check and node initialization only read it,
+      // never retain it). A scratch distinct from the select phase's is used because the
+      // caller's childMoves may share that one.
+      n2MovesScratch ??= new MGMoveList();
+      n2MovesScratch.NumMovesUsed = 0;
+      MGMoveGen.GenerateMoves(in n2Pos, n2MovesScratch);
+      MGMoveList n2Moves = n2MovesScratch;
       int minRepetitionCountForDraw = paramsSearch.TwofoldDrawEnabled ? 1 : 2;
       (GameResult result, float v, float d, bool wasDrawByRepetition) resultInfo =
         path.CalcPathTerminationFromUnexpandedLeaf(minRepetitionCountForDraw, in n2Pos, n2Moves, possiblyUseTablebase: true);
@@ -249,7 +310,7 @@ internal static class TranspositionAutoExtension
         strategy.BackupToEdge(terminalEdge, 1, resultInfo.v, resultInfo.d, false);
         strategy.BackupToNode(n1, 1, -resultInfo.v, resultInfo.d);
 
-        Interlocked.Increment(ref NumExtendedTerminal);
+        StatsCellThisThread.NumExtendedTerminal++;
         return true;
       }
 
@@ -257,7 +318,7 @@ internal static class TranspositionAutoExtension
       {
         // Nonterminal duplicate (possible in 3-fold configuration): the normal flow
         // excludes duplicates from transposition value copying; skip the extension.
-        Interlocked.Increment(ref NumSkipped);
+        StatsCellThisThread.NumSkipped++;
         return false;
       }
 
@@ -267,7 +328,7 @@ internal static class TranspositionAutoExtension
       {
         // Exists but still in flight (unevaluated/unvisited): linking it now would add an
         // edge we cannot value yet; skip entirely (no edge created).
-        Interlocked.Increment(ref NumSkipped);
+        StatsCellThisThread.NumSkipped++;
         return false;
       }
 
@@ -284,7 +345,7 @@ internal static class TranspositionAutoExtension
         {
           // No same-graph evaluation source (foreign-graph sources excluded: deferred
           // policy copy does not support cross-graph and their lifecycle is unmanaged here).
-          Interlocked.Increment(ref NumSkipped);
+          StatsCellThisThread.NumSkipped++;
           return false;
         }
       }
@@ -298,7 +359,7 @@ internal static class TranspositionAutoExtension
       if (edge.edgeStructPtr == null)
       {
         // Existing node's lock unavailable; nothing was created or changed.
-        Interlocked.Increment(ref NumSkipped);
+        StatsCellThisThread.NumSkipped++;
         return false;
       }
 
@@ -316,7 +377,7 @@ internal static class TranspositionAutoExtension
         strategy.BackupToEdge(edge, 1, n2.Q, n2.D, false);
         strategy.BackupToNode(n1, 1, -n2.Q, n2.D);
 
-        Interlocked.Increment(ref NumExtendedNewNode);
+        StatsCellThisThread.NumExtendedNewNode++;
         return true;
       }
 
@@ -328,7 +389,7 @@ internal static class TranspositionAutoExtension
         strategy.BackupToEdge(edge, 1, n2.Q, n2.D, false);
         strategy.BackupToNode(n1, 1, -n2.Q, n2.D);
 
-        Interlocked.Increment(ref NumExtendedLinked);
+        StatsCellThisThread.NumExtendedLinked++;
         return true;
       }
 
@@ -337,7 +398,7 @@ internal static class TranspositionAutoExtension
       // N == sum(edge.N) + 1 with edge.N = 0); its creator will complete the node, and
       // ordinary selection will visit the edge later.
       strategy.BackupToNode(n1, 1, v1, d1);
-      Interlocked.Increment(ref NumExtendedDegenerate);
+      StatsCellThisThread.NumExtendedDegenerate++;
       return true;
     }
     finally

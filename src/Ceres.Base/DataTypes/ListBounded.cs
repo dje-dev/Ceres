@@ -19,6 +19,7 @@ using System.Buffers;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 
 #endregion
 
@@ -191,6 +192,33 @@ namespace Ceres.Base.DataTypes
     {
       version++;
       array[length++] = t;
+    }
+
+
+    /// <summary>
+    /// Adds a specified item, safe for concurrent writers (lock-free slot reservation
+    /// via Interlocked increment of the length).
+    ///
+    /// CONSTRAINTS:
+    ///  - must not be mixed with the plain Add methods within the same concurrent phase
+    ///    (their unsynchronized length update would race the reservation);
+    ///  - readers (Count, indexer, enumeration) must be separated from concurrent
+    ///    AddConcurrent callers by a synchronization barrier (e.g. thread join/wait),
+    ///    which also makes the slot writes visible;
+    ///  - version is deliberately not updated (enumerators must not be live during the
+    ///    concurrent phase anyway).
+    /// </summary>
+    /// <param name="t"></param>
+    public void AddConcurrent(T t)
+    {
+      int index = Interlocked.Increment(ref length) - 1;
+
+      // N.B. the backing array may be ArrayPool-rented and larger than MaxLength,
+      //      so an out-of-bounds write would NOT necessarily throw; this assert is
+      //      the only capacity guard.
+      Debug.Assert(index < MaxLength);
+
+      array[index] = t;
     }
 
 

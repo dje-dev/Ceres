@@ -115,10 +115,11 @@ public partial class MCGSPathsSet : IDisposable
 
       if (path.TerminationReason == MCGSPathTerminationReason.PendingNeuralNetEval)
       {
-        lock (NNPaths)
-        {
-          NNPaths.Add(path);
-        }
+        // Lock-free: NNPaths is preallocated to maxBatchSize and all readers run only
+        // after the select-phase barrier (worker pool WaitAll), so slot reservation via
+        // Interlocked suffices and the prior Monitor lock (a contention point under
+        // parallel select) is unnecessary.
+        NNPaths.AddConcurrent(path);
       }
     }
 

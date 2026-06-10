@@ -37,6 +37,8 @@ public static class MCGSParamsFixed
   /// </summary>
   public const bool GRAPH_REWRITE_DUMP_REUSE_DIAGNOSTICS = true;
 
+  public const bool DUMP_EARLY_SMOOTHING_BOOST = false;
+
   public const bool LOG_LIVE_STATS = false;
 
   /// <summary>
