@@ -221,6 +221,10 @@ internal static class TranspositionAutoExtension
         path.CalcPathTerminationFromUnexpandedLeaf(minRepetitionCountForDraw, in n2Pos, n2Moves, possiblyUseTablebase: true);
 
       MCGSSelectBackupStrategyBase strategy = engine.Strategy;
+      // N.B. n1's SiblingsQ/SiblingsQFrac may have been pre-installed by pseudo-transposition
+      //      Q-borrowing (PTQB); the BackupToNode calls below compose that blend with the
+      //      (extension-improved) pure Q automatically, since ResetNodeQUsingNewQPure reads
+      //      the stored sibling fields with exact-inversion bookkeeping.
       double v1 = n1.V;
       double d1 = n1.DrawP;
 
@@ -231,6 +235,15 @@ internal static class TranspositionAutoExtension
         // edge backup so the node.N == sum(edge.N) + 1 invariant holds at each step.
         bool propagateAsDraw = resultInfo.v == 0;
         GEdge terminalEdge = engine.Graph.AddNewTerminalEdge(n1, 0, resultInfo.v, resultInfo.d, 1, propagateAsDraw);
+
+        // Repetition/50-move draws are history-sensitive results; flood the taint flag so
+        // pseudo-transposition borrowing features know this subgraph is not history-neutral
+        // (mirrors the equivalent hook in DoTerminalUnexpandedChild, which is bypassed here).
+        if (resultInfo.wasDrawByRepetition
+         || (resultInfo.result == GameResult.Draw && n2Pos.Rule50Count >= 100))
+        {
+          engine.Graph.FloodHistorySensitiveToAncestors(n1.Index);
+        }
 
         strategy.BackupToNode(n1, 1, v1, d1);
         strategy.BackupToEdge(terminalEdge, 1, resultInfo.v, resultInfo.d, false);

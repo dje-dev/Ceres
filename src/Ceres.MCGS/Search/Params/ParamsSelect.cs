@@ -935,6 +935,15 @@ public record ParamsSelect
                         + "CBGPUCT_SelectValueUncertaintyScalingFactor is nonzero.");
     }
 
+    if (paramsSearch.EnablePseudoTranspositionQBorrow && CBGPUCTBackupActive)
+    {
+      // CBGPUCT backup writes node Q directly (vBar) and bypasses the sibling-blend
+      // bookkeeping that the Q-borrow relies upon, which would leave the node's stored
+      // SiblingsQFrac inconsistent with its Q. (Currently unreachable in practice since
+      // CBGPUCT also requires PositionEquivalence mode, but enforced explicitly.)
+      throw new Exception("EnablePseudoTranspositionQBorrow is not supported with CBGPUCT backup mode.");
+    }
+
     if (CBGPUCT_Mode != CBGPUCTModeType.None)
     {
       if (!paramsSearch.EnableGraph)

@@ -607,6 +607,17 @@ public class MCGSSelect
     (extraNFromTranspositionAlias, siblingAvgQ)
       = parentNode.Graph.GetTranspositionStats(parentNode, parentNode.N + numPendingVisitsParentNode, hash64WithMove50AndReps);
 
+    // Scale by the verified-clean fraction recorded at node creation (if any) by the
+    // pseudo-transposition Q-borrow verification walk. In history mode the verification
+    // verdict is path-invariant for this node (all paths share the same multiset since
+    // the last irreversible move), so it remains a valid lifetime cap on how much
+    // pseudo-twin information may be blended here (1.0 when never verified).
+    double verifiedCleanFrac = parentNode.NodeRef.PTBVerifiedCleanFracOrOne;
+    if (verifiedCleanFrac < 1.0)
+    {
+      extraNFromTranspositionAlias = (float)(extraNFromTranspositionAlias * verifiedCleanFrac);
+    }
+
     // Limit sibling contribution to maintain MAX_FRACTION_SIBLING of total effective N
     const float SCALING_TERM = (MCGSParamsFixed.SIBLING_WT_MAX_FRACTION / (1 - MCGSParamsFixed.SIBLING_WT_MAX_FRACTION));
     extraNFromTranspositionAlias = Math.Min(extraNFromTranspositionAlias, SCALING_TERM * (parentNode.N + numPendingVisitsParentNode));
@@ -1054,6 +1065,19 @@ public class MCGSSelect
     newVisit.ParentChildEdge = newEdge;
     GNodeStruct.UpdateEdgeNInFlightForIterator(newEdge, path.IteratorID, numVisitsThisChild);
 
+    // Repetition and 50-move-rule draws are history-sensitive results: they hold only for
+    // histories like the current one, unlike stalemate/material/tablebase terminals.
+    // Mark the parent (and transitively all ancestors) so that features which borrow value
+    // information across pseudo-transpositions know this subgraph is not history-neutral.
+    // (The result tuple alone cannot distinguish the rule50 case from stalemate, so classify
+    // here where the child position is in hand. Maintained unconditionally so the flag is
+    // valid whenever a consumer feature is later enabled.)
+    if (resultInfo.wasDrawByRepetition
+     || (resultInfo.result == GameResult.Draw && childPosInfo.childPos.Rule50Count >= 100))
+    {
+      path.Graph.FloodHistorySensitiveToAncestors(parentNode.Index);
+    }
+
     path.TerminationReason = MCGSPathTerminationReason.TerminalEdge;
 
     MCGSPath newPath = path.PossiblyBranched(numVisitsRemaining, numVisitsThisChild,
@@ -1204,6 +1228,17 @@ public class MCGSSelect
 
       bool copyPolicyImmediate = standaloneTranspositionNode.Graph != Engine.Graph;
       Engine.Graph.CopyNodeValues(0, standaloneTranspositionNode, childEdge.ChildNode, copyPolicyImmediate);
+
+      // Optionally also borrow the search-refined Q of the best pseudo-twin (verified
+      // history-safe) into the new node's initial value via the sibling-blend fields.
+      // N.B. must run BEFORE the auto-extension below: the extension performs the node's
+      //      first backups, whose ResetNodeQUsingNewQPure composes the stored sibling
+      //      blend with the (extension-improved) pure Q.
+      if (Engine.Manager.ParamsSearch.EnablePseudoTranspositionQBorrow)
+      {
+        PseudoTranspositionQBorrow.TryApply(Engine, path, childEdge.ChildNode,
+                                            in childPosInfo.childPos, childPosInfo.childPositionHash64);
+      }
 
       // Optionally auto-extend: synchronously perform the deterministic next visit from the
       // new node (its top-policy child), installing it with N=2 and the exact two-visit Q.

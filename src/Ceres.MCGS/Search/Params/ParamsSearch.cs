@@ -218,6 +218,100 @@ public record ParamsSearch
   /// </summary>
   public int TranspositionAutoExtensionMinTwinN = 2;
 
+  /// <summary>
+  /// If PTQB (pseudo-transposition Q-borrowing) is enabled: when a new node is created whose
+  /// position matches an existing node reached via a different history (a "pseudo-twin"),
+  /// the search-refined Q of the twin is blended into the new node's initial value
+  /// (via the SiblingsQ mechanism) instead of backing up only the twin's raw NN value V.
+  ///
+  /// The borrow is verified for history-safety first: a bounded fat-edges-first walk of
+  /// the twin's subgraph classifies its visit mass into clean / contaminated / unverified,
+  /// where contaminated mass = positions repeating the current path's own (reversible-run)
+  /// history, plus repetition/50-move terminal draw mass localized by descending into
+  /// HistorySensitiveSubgraph-tainted regions. Incidental contamination only discounts
+  /// the borrow weight proportionally (donor Q error is linear in contaminated mass);
+  /// rates above PseudoTranspositionQBorrowMaxContaminationFraction block the node.
+  /// The verified-clean fraction is persisted on the node (path-invariant in history mode)
+  /// and thereafter caps this node's ordinary PTB sibling blending as well.
+  ///
+  /// Composes with EnableTranspositionAutoExtension: PTQB owns the sibling-blend component
+  /// of the new node's stored Q while the auto-extension upgrades the pure component, i.e.
+  /// Q = lambda*twinQ + (1-lambda)*(V1-Q2)/2 when both are active.
+  ///
+  /// Requires EnablePseudoTranspositionBlending (whose select-phase refresh later replaces
+  /// the creation-time blend, providing natural decay) and is unsupported with
+  /// CBGPUCT backup mode (which bypasses the sibling-blend bookkeeping).
+  /// Default false to support A/B testing.
+  /// </summary>
+  public bool EnablePseudoTranspositionQBorrow = false;
+
+  /// <summary>
+  /// Maximum fraction of the new node's initial value contributed by the borrowed twin Q
+  /// (scaled down further by the fraction of the twin's visit mass actually verified
+  /// and by the donor-confidence shrinkage).
+  /// </summary>
+  public float PseudoTranspositionQBorrowMaxWeight = 0.5f;
+
+  /// <summary>
+  /// Budget on number of twin-subgraph nodes examined by the history-safety verification walk.
+  /// </summary>
+  public int PseudoTranspositionQBorrowMaxVerifyNodes = 32;
+
+  /// <summary>
+  /// Minimum visit count of the pseudo-twin for Q-borrowing to be attempted
+  /// (below this the twin's Q differs little from its V and the walk is not worthwhile).
+  /// </summary>
+  public int PseudoTranspositionQBorrowMinTwinN = 8;
+
+  /// <summary>
+  /// Shrinkage constant k applied to the borrow weight as donorN / (donorN + k),
+  /// scaling the borrowed weight by the donor's statistical confidence. Low-visit donors
+  /// (whose Q differs little from raw V and may itself still be dominated by an earlier
+  /// borrow) thus contribute proportionally less, preventing high-weight borrow cascades
+  /// through chains of small nodes; large donors approach full weight.
+  /// </summary>
+  public float PseudoTranspositionQBorrowShrinkageK = 8;
+
+  /// <summary>
+  /// Minimum verified visit mass (clean + contaminated) from the verification walk
+  /// required to PERSIST a verdict into the node's lifetime blending cap
+  /// (including a blocking verdict). Below this, contamination-rate estimates are
+  /// dominated by small-sample noise - a single contaminated visit out of a few would
+  /// otherwise permanently disable blending at the node. The immediate borrow decision
+  /// still uses the evidence; only the persistence is gated.
+  /// </summary>
+  public int PseudoTranspositionQBorrowMinVerifiedNForCap = 16;
+
+  /// <summary>
+  /// Maximum Rule50 count of the position being expanded for Q-borrowing to be attempted.
+  /// Near the 50-move horizon the twin's deeper statistics (accumulated under a possibly
+  /// much lower rule50 count) become unreliable for the current context.
+  /// </summary>
+  public int PseudoTranspositionQBorrowMaxRule50 = 60;
+
+  /// <summary>
+  /// Maximum tolerated contamination rate among the verified mass of the donor's subgraph,
+  /// where contamination = visit mass of positions that repeat our history, of repetition/
+  /// 50-move terminal draws localized beneath tainted nodes, and of unlocalizable taint.
+  ///
+  /// Incidental contamination perturbs the donor's Q only linearly in its mass fraction,
+  /// so small rates are tolerated (the verified-clean fraction proportionally discounts
+  /// both the immediate borrow weight and, persistently, this node's future PTB blending).
+  /// Rates above this threshold signal STRUCTURAL repetition dynamics (fortress probing,
+  /// shuffling) where the donor's policy itself diverged from our context and linear
+  /// discounting is no longer a valid error model; such nodes are blocked entirely
+  /// (clean fraction recorded as 0).
+  /// </summary>
+  public float PseudoTranspositionQBorrowMaxContaminationFraction = 0.12f;
+
+  /// <summary>
+  /// If pseudotransposition blending (PTB) donors are additionally required to have no
+  /// history-sensitive result anywhere in their subgraph (HistorySensitiveSubgraph unset).
+  /// Without this, PTB's only repetition guard is the non-transitive
+  /// DrawKnownToExistAmongChildren check. Default false to support A/B testing.
+  /// </summary>
+  public bool PseudoTranspositionBlendingRequiresCleanSubgraph = false;
+
   // Optionally stop descent at a transposition node only if it has a
   // sufficiently large number of visits. 
   // This parameter is the cutoff value of a transposed child�s visit count
@@ -716,6 +810,16 @@ public record ParamsSearch
       // creating terminal draw edges for repetitions is incorrect (coalesced nodes).
       throw new Exception("EnableTranspositionAutoExtension requires EnableGraph=true and "
                         + "PathTranspositionMode=PositionAndHistoryEquivalence.");
+    }
+
+    if (EnablePseudoTranspositionQBorrow && !EnablePseudoTranspositionBlending)
+    {
+      // PTB's select-phase sibling refresh is what later replaces the creation-time borrow
+      // weight with the standard excess-N blend; without it the borrowed weight would
+      // never decay and permanently distort the node's Q.
+      throw new Exception("EnablePseudoTranspositionQBorrow requires pseudotransposition blending "
+                        + "(EnablePseudoTranspositionBlendingInPositionAndEquivalenceMode=true and "
+                        + "PathTranspositionMode=PositionAndHistoryEquivalence).");
     }
 
     if (!TwofoldDrawEnabled)

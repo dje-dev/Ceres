@@ -180,8 +180,11 @@ internal class GraphStoreValidator
       //       then it is evaluated multiple times by the NN and the values may not match exactly
       //       because they arrive at the same node but have history fed to the NN which differs.
       //       Thus we use much larger threshold for now.
+      // Compare the PURE Q against V: a leaf may legitimately carry a sibling-blend
+      // contribution in its stored Q (e.g. installed at creation by pseudo-transposition
+      // Q-borrowing); ComputeQPure exactly inverts that blend back to the V-derived part.
       float THRESHOLD = node.NumParents > 1 ? 0.20f : 0.005f;
-      AssertNode(Math.Abs(node.Q - nodeR.V) < THRESHOLD, () => $"Node #{i} has N=1 but Q={node.Q} != V={node.V}", i, true);  
+      AssertNode(Math.Abs(node.ComputeQPure() - nodeR.V) < THRESHOLD, () => $"Node #{i} has N=1 but QPure={node.ComputeQPure()} != V={node.V} (Q={node.Q})", i, true);
     }
 
     AssertNode(node.NumPieces >= 2 && nodeR.NumPieces <= 32, $"NumPieces {node.NumPieces} not in [2,32]", i, in nodeR, true);

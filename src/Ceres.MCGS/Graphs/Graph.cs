@@ -145,6 +145,15 @@ public unsafe partial class Graph : IDisposable
 
   public int NumLinksToExistingNodes;
 
+  /// <summary>
+  /// If pseudotransposition blending donors must additionally have no history-sensitive
+  /// result anywhere in their subgraph (HistorySensitiveSubgraph unset).
+  /// Mirror of ParamsSearch.PseudoTranspositionBlendingRequiresCleanSubgraph,
+  /// copied here (per engine construction) because donor eligibility checks
+  /// have access only to the node/graph.
+  /// </summary>
+  internal bool PTBRequiresCleanSubgraph;
+
   public bool HasState => Store.HasState;
 
   public bool HasAction => Store.HasAction;
@@ -857,6 +866,47 @@ public unsafe partial class Graph : IDisposable
 
 
   /// <summary>
+  /// Marks the specified node as having a history-sensitive subgraph (a repetition or
+  /// 50-move-rule terminal draw beneath it) and floods the flag to all ancestors,
+  /// stopping at nodes already marked (the flag is monotone, so each node is flooded
+  /// through at most once over the graph's lifetime - amortized O(total parent edges)).
+  ///
+  /// Lock-free by design: the flag is a dedicated atomically-written byte, and parents
+  /// are enumerated via the parents store indices directly (NOT ParentEdgesEnumerator,
+  /// which throws for a parent registered before its edge is materialized).
+  /// Set-before-enumerate ordering closes the race with a concurrent linker, whose
+  /// post-link taint check (in AddEdgeToNewOrExistingNode) covers a link added after
+  /// this flood enumerated the node's parents.
+  /// </summary>
+  internal void FloodHistorySensitiveToAncestors(NodeIndex startNodeIndex)
+  {
+    if (this[startNodeIndex].NodeRef.HistorySensitiveSubgraph)
+    {
+      return;
+    }
+
+    this[startNodeIndex].NodeRef.HistorySensitiveSubgraph = true;
+
+    Stack<int> worklist = new();
+    worklist.Push(startNodeIndex.Index);
+
+    while (worklist.Count > 0)
+    {
+      NodeIndex thisIndex = new(worklist.Pop());
+      foreach (int parentIndex in Store.ParentsStore.NodeParentsInfo(thisIndex))
+      {
+        ref GNodeStruct parentRef = ref this[parentIndex].NodeRef;
+        if (!parentRef.HistorySensitiveSubgraph)
+        {
+          parentRef.HistorySensitiveSubgraph = true;
+          worklist.Push(parentIndex);
+        }
+      }
+    }
+  }
+
+
+  /// <summary>
   /// Adds an edge to a new or existing child node, initializing the child node if necessary.
   /// In graph mode the returned GEdge may point to a child node already extant.
   /// </summary>
@@ -951,6 +1001,14 @@ public unsafe partial class Graph : IDisposable
         "Newly created node's first parent should be the creating parent");
     }
 #endif
+
+    // Linking to an existing node whose subgraph contains a history-sensitive result
+    // makes that true of this parent's subgraph as well (this post-link check also closes
+    // the race with a flood that enumerated the child's parents before this link existed).
+    if (!wasCreated && childNode.NodeRef.HistorySensitiveSubgraph)
+    {
+      FloodHistorySensitiveToAncestors(parentNode.Index);
+    }
 
     GEdge ret = CreateEdge(parentNode, childNode, indexOfChildInParent);
 

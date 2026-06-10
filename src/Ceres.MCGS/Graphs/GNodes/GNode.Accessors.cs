@@ -190,6 +190,12 @@ public readonly partial struct GNode : IComparable<GNode>, IEquatable<GNode>
   public readonly bool HasRepetitions => NodeRef.miscFields.HasRepetitions;
 
   /// <summary>
+  /// If this node's subgraph is known to contain a history-sensitive result
+  /// (repetition or 50-move-rule terminal draw edge beneath it).
+  /// </summary>
+  public readonly bool HistorySensitiveSubgraph => NodeRef.HistorySensitiveSubgraph;
+
+  /// <summary>
   /// Number of pieces on board.
   /// </summary>
   public readonly byte NumPieces => NodeRef.miscFields.NumPieces;
