@@ -681,6 +681,16 @@ public record ParamsSearch
       throw new Exception("Cannot use PathTranspositionMode PositionAndHistoryEquivalence when graph is disabled.");
     }
 
+    if (!TwofoldDrawEnabled)
+    {
+      // In-search repetition detection records only a single prior occurrence
+      // (RepetitionCount is set to 0 or 1), so the 3-fold threshold of 2 implied by
+      // TwofoldDrawEnabled=false could never be met and repetition draws would go
+      // entirely undetected (with cycles spinning out new nodes until the 50-move rule).
+      throw new Exception("TwofoldDrawEnabled=false is not supported: repetition draw detection "
+                        + "tracks at most one prior occurrence, so 3-fold would never trigger.");
+    }
+
     if (EnablePseudoTranspositionBlending &&
         !MCGSParamsFixed.REFRESH_SIBLING_DURING_SELECT_PHASE
       && !MCGSParamsFixed.REFRESH_SIBLING_DURING_BACKUP_PHASE)

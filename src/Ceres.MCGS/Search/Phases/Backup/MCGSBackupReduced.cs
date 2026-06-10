@@ -20,9 +20,7 @@ using System.Threading;
 using Ceres.Base.DataTypes;
 using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GNodes;
-using Ceres.MCGS.Search.Params;
 using Ceres.MCGS.Search.Paths;
-using Ceres.MCGS.Search.Phases;
 using Ceres.MCGS.Search.Strategies;
 
 #endregion
@@ -38,8 +36,6 @@ public partial class MCGSBackup
 {
   public void BackupReduced(MCGSSelectBackupStrategyBase strategy, MCGSPath path, int iteratorID)
   {
-    bool enablePseudoTranspositionBlending = Engine.Manager.ParamsSearch.EnablePseudoTranspositionBlending;
-
     ref MCGSPathVisit leafVisitRef = ref path.LeafVisitRef;
 
     int numVisitsAttempted = leafVisitRef.NumVisitsAttempted;

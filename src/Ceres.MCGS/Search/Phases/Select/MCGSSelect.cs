@@ -852,15 +852,17 @@ public class MCGSSelect
     info.wasIrreversibleMove = parentPosMG.IsIrreversibleMove(moveMG, in info.childPos);
 
     info.childPositionHash64 = MGPositionHashing.Hash64(in info.childPos);
-    PosHash64WithMove50AndReps posHash64WithMove50AndReps = MGPositionHashing.Hash64WithMove50AndRepsAdded(
-      info.childPositionHash64, info.childPos.RepetitionCount, info.childPos.Move50Category);
     info.childPositionHash96 = MGPositionHashing.Hash96(in info.childPos);
 
     if (graphEnabled && path.PathMode == PathMode.PositionAndHistoryEquivalence)
     {
       // Update running hash with this position (but resetting history if was irreversible).
+      // N.B. The epoch-start form must match the convention used by graph root initialization
+      //      and the GraphRewriter/GraphExtractor dictionary rebuilds (which compute
+      //      default.Finalized(hash)); a raw (High, Low) construction here would key the same
+      //      logical node differently and silently break transposition merging after extraction.
       info.childPositionAndSequenceHashFinalized = info.wasIrreversibleMove
-        ? new PosHash96MultisetFinalized(info.childPositionHash96.High, info.childPositionHash96.Low)
+        ? PosHash96MultisetRunning.EpochStartFinalized(info.childPositionHash96)
         : path.RunningHash.Finalized(info.childPositionHash96);
     }
     else

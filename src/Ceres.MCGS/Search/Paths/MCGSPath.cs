@@ -1144,10 +1144,15 @@ public partial class MCGSPath : IEquatable<MCGSPath>, IComparable<MCGSPath>
   {
     ReadOnlySpan<PosHash64> prehistoryHashes = graph.Store.HistoryHashes.PriorPositionsHashes64;
 
-    // Process all nodes (if any) from the search root node up to the graph root node.
-    // Do not process the node at index 0 (search root node) since it is already tested by caller.
+    // Process the spine nodes from the search root down to (and including) the first node below the graph root.
+    // NOTE: element ^1 is the search root and element 0 is the first node BELOW the graph root.
+    // (The previous bound of i >= 1 skipped element 0 under the mistaken belief that index 0 was the
+    //  search root, thereby missing repetitions against the position just below the graph root, which
+    //  is checked nowhere else.) We still iterate element ^1 because the irreversibility of the move INTO
+    //  the search root must act as a cutoff; its hash compare is harmless because all callers exclude
+    //  child == search root before calling this method.
     int arrayLength = nodesGraphToSearchRoot.Length;
-    for (int i = arrayLength - 1; i >= 1; i--)
+    for (int i = arrayLength - 1; i >= 0; i--)
     {
       ref readonly GraphRootToSearchRootNodeInfo nodeFromGraphRootToSearchRoot = ref nodesGraphToSearchRoot[i];
       Debug.Assert(nodeFromGraphRootToSearchRoot.ChildNode.HashStandalone == nodeFromGraphRootToSearchRoot.ChildHashStandalone64);
@@ -1167,10 +1172,14 @@ public partial class MCGSPath : IEquatable<MCGSPath>, IComparable<MCGSPath>
       }
     }
 
-    // Process all prehistory visits (this will also include the root node move).
-    // TODO: For efficiency add tracking and checking of irreversibility also in the prehistory.
+    // Process prehistory positions from newest (the graph root) back toward the start of the game,
+    // stopping at the most recent irreversible move: a position before an irreversible move can never
+    // be a repetition of any position in the current reversible run (a pawn move or capture changes the
+    // board permanently). MoveAfterPositionWasIrreversible[j] is true when the move played FROM
+    // prehistory position j (into position j+1) was irreversible.
+    bool[] prehistoryMoveIrreversible = graph.Store.HistoryHashes.MoveAfterPositionWasIrreversible;
     int numPriorPositions = prehistoryHashes.Length;
-    for (int i = 0; i < numPriorPositions; i++)
+    for (int i = numPriorPositions - 1; i >= 0; i--)
     {
       if (prehistoryHashes[i] == matchHashValue)
       {
@@ -1179,6 +1188,12 @@ public partial class MCGSPath : IEquatable<MCGSPath>, IComparable<MCGSPath>
           return true;
         }
         haveSeenRepetition = true;
+      }
+
+      // Stop once the move leading into position i was irreversible (nothing earlier can be a repetition).
+      if (i == 0 || prehistoryMoveIrreversible[i - 1])
+      {
+        break;
       }
     }
 

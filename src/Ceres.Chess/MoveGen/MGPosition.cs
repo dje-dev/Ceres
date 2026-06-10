@@ -133,7 +133,7 @@ namespace Ceres.Chess.MoveGen
     /// </summary>
     public readonly Move50CategoryEnum Move50Category => Rule50Count switch
     {
-      < 75 => Move50CategoryEnum.LessThan75,
+      <= 75 => Move50CategoryEnum.LessThan75,
       >= 76 and <= 90 => Move50CategoryEnum.From76Thru90,
       >= 91 and <= 97 => Move50CategoryEnum.From91Thru97,
       _ => Move50CategoryEnum.Above97,
@@ -911,7 +911,7 @@ namespace Ceres.Chess.MoveGen
       // Fifth block: misc info
       MixBlock(ref h1, ref h2, misc);
 
-      // Finalization (fmix) – avalanche & collapse to 96 bits.
+      // Finalization (fmix) ï¿½ avalanche & collapse to 96 bits.
       static ulong Fmix(ulong k)
       {
         k ^= k >> 33;
@@ -974,10 +974,10 @@ public readonly record struct PosHash96MultisetFinalized(uint High, ulong Low)
 /// <summary>
 /// Immutable 96-bit value (High = upper 32 bits, Low = lower 64 bits).
 /// `record struct` already supplies
-///   • value-based equality / != / ==  
-///   • GetHashCode()  
-///   • Deconstruct(out uint High, out ulong Low)  
-///   • Printable ToString() – we override for hex formatting.
+///   ï¿½ value-based equality / != / ==  
+///   ï¿½ GetHashCode()  
+///   ï¿½ Deconstruct(out uint High, out ulong Low)  
+///   ï¿½ Printable ToString() ï¿½ we override for hex formatting.
 /// </summary>
 [Serializable]
 [StructLayout(LayoutKind.Sequential, Pack = 1, Size = 12)]
@@ -1031,6 +1031,21 @@ public record struct PosHash96MultisetRunning(uint High, ulong Low)
       return new PosHash96MultisetFinalized(high, low);
     }
   }
+
+
+  /// <summary>
+  /// Returns the finalized hash for a position which begins a fresh history epoch
+  /// (i.e. the position immediately after an irreversible move, when the running
+  /// multiset hash has just been reset).
+  ///
+  /// Defined as default(PosHash96MultisetRunning).Finalized(finalHash).
+  /// IMPORTANT: every site that keys such an epoch-start position
+  /// (select-phase node creation, graph root initialization, and the
+  /// GraphRewriter/GraphExtractor dictionary rebuilds) must use this same form;
+  /// any divergence silently splits transposition equivalence classes.
+  /// </summary>
+  public static PosHash96MultisetFinalized EpochStartFinalized(PosHash96 finalHash)
+    => default(PosHash96MultisetRunning).Finalized(finalHash);
 
 
   public readonly string ShortStr() => $"{High % 10_000}/{Low % 10_000}";

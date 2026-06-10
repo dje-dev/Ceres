@@ -68,15 +68,6 @@ public unsafe partial struct GNodeStruct
   }
 
   /// <summary>
-  /// The Move50CategoryEnum assoicated with the position.
-  /// </summary>
-  public Move50CategoryEnum Move50CategoryEnum
-  {
-    readonly get => miscFields.Move50Category;
-    set => miscFields.Move50Category = value;
-  }
-
-  /// <summary>
   /// Unused boolean field.
   /// </summary>
   public bool UnusedBool1

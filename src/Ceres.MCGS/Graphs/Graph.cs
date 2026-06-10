@@ -708,6 +708,13 @@ public unsafe partial class Graph : IDisposable
     nodeRef.IsGraphRoot = isRoot;
     nodeRef.IsWhite = mgPos.SideToMove == SideType.White;
 
+    // Record 50-move bucket and repetition context on the node. These drive the
+    // pseudo-transposition blending eligibility/lookup key (which must agree with the
+    // position-derived hash64WithMoveAndReps registration above) and the
+    // GraphRewriter standalone dictionary rebuild filters.
+    nodeRef.Move50Category = mgPos.Move50Category;
+    nodeRef.HasRepetitions = mgPos.RepetitionCount > 0;
+
     GameResult terminalStatus = mgPos.CalcTerminalStatus(moves); // TODO: potentially in most situations this is already known, do not recompute
     nodeRef.Terminal = terminalStatus;
     switch (terminalStatus)
