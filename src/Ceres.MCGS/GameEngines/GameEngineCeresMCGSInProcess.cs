@@ -35,6 +35,7 @@ using Ceres.Chess.Positions;
 using Ceres.Chess.SearchResultVerboseMoveInfo;
 using Ceres.Chess.UserSettings;
 
+using Ceres.MCGS.Analysis;
 using Ceres.MCGS.UCI;
 
 using Ceres.MCGS.Graphs;
@@ -433,6 +434,21 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     if (MCGSParamsFixed.ALWAYS_DUMP_SEARCH_INFO)
     {
       result.Search.Manager.DumpFullInfo(result, Console.Out, "AUTO");
+
+      // Also run and display a revaluation analysis, exactly as if a "revalue-root N" command
+      // had been issued with N scaled to the search size. Analysis only (the best move above is
+      // already final); note the rollout visits do grow the graph, like any deep-rollout command.
+      MCGSManager revalManager = result.Search.Manager;
+      int revalRoundsPerStage = Math.Max(1, revalManager.Engine.SearchRootNode.N / 20);
+      PrincipalRevaluationResult reval = PrincipalRevaluation.Run(revalManager, revalRoundsPerStage);
+      PrincipalRevaluationDumper.DumpToConsole(reval, bestMoveMG);
+
+      // Purely informational: report whether the rollout evidence would prefer a different move.
+      RevaluationSwitchDecision revalDecision = PrincipalRevaluation.CalcBlendedQSwitchDecision(
+          revalManager, revalManager.Engine.SearchRootNode, bestMoveInfo, reval);
+      Console.WriteLine(revalDecision.WouldSwitch
+        ? $"info string reval decision: rollout evidence would prefer {revalDecision.CandidateMove} over {revalDecision.BaselineMove} ({revalDecision.Description})"
+        : $"info string reval decision: rollout evidence keeps {revalDecision.BaselineMove} ({revalDecision.Description})");
     }
 
     // Append search result information to log file (if any).

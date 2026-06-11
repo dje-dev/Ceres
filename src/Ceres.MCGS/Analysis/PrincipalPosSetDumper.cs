@@ -213,9 +213,11 @@ public static class PrincipalPosSetDumper
   /// </summary>
   /// <param name="set">The PrincipalPositionSet to dump</param>
   /// <param name="chosenMove">The move that was chosen (for highlighting)</param>
-  /// <param name="customColumnFunc">Optional custom column (name, calculation function)</param>
-  public static void DumpToConsoleGraphical(PrincipalPosSet set, MGMove chosenMove, (string colName, Func<PrincipalPos, string> calcFunc) customColumnFunc = default)
+  /// <param name="customColumns">Optional custom columns (name, calculation function), shown to the left of Move Sequence</param>
+  public static void DumpToConsoleGraphical(PrincipalPosSet set, MGMove chosenMove, params (string colName, Func<PrincipalPos, string> calcFunc)[] customColumns)
   {
+    customColumns ??= [];
+
     if (set == null || set.Members.Count == 0)
     {
       AnsiConsole.MarkupLine("[red]No principal positions found.[/]");
@@ -374,10 +376,10 @@ public static class PrincipalPosSetDumper
       moveTable.AddColumn(new TableColumn("#PcD").RightAligned());
       moveTable.AddColumn(new TableColumn("#PwD").RightAligned());
 
-      // Add custom column if provided
-      if (customColumnFunc != default)
+      // Add any custom columns if provided
+      foreach ((string colName, _) in customColumns)
       {
-        moveTable.AddColumn(new TableColumn(customColumnFunc.colName).RightAligned());
+        moveTable.AddColumn(new TableColumn(colName).RightAligned());
       }
 
       moveTable.AddColumn(new TableColumn("Move Sequence").LeftAligned());
@@ -435,16 +437,15 @@ public static class PrincipalPosSetDumper
         string movesText = string.Join(" ", moveSequence);
         string fenText = fen;
 
-        // Add row with or without custom column
-        if (customColumnFunc != default)
+        // Add row, including any custom columns
+        List<string> rowCells = new() { visitsText, qDiffText, depthText, numTrText, pieceDiffText, pawnDiffsText };
+        foreach ((_, Func<PrincipalPos, string> calcFunc) in customColumns)
         {
-          string customValueText = customColumnFunc.calcFunc(principalPos);
-          moveTable.AddRow(visitsText, qDiffText, depthText, numTrText, pieceDiffText, pawnDiffsText, customValueText, movesText, fenText);
+          rowCells.Add(calcFunc(principalPos) ?? "");
         }
-        else
-        {
-          moveTable.AddRow(visitsText, qDiffText, depthText, numTrText, pieceDiffText, pawnDiffsText, movesText, fenText);
-        }
+        rowCells.Add(movesText);
+        rowCells.Add(fenText);
+        moveTable.AddRow(rowCells.ToArray());
       }
 
       AnsiConsole.Write(moveTable);

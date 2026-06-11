@@ -435,11 +435,24 @@ public class MCGSSelect
     int walkDepth = DepthFromSearchRootOrNegative(startNode);
     if (walkDepth < 0)
     {
-      throw new ArgumentException($"DoSearchInnerNodes start node #{startNode.Index.Index} is not a descendant of the search root.");
+      // The node's tree-parent chain does not pass through the search root. This legitimately
+      // occurs with transpositions when the search root sits below the graph root: the node is
+      // reachable from the search root via child edges, but its canonical tree parents trace a
+      // different line (or it lies deeper than the walk limit). Skip gracefully - the node
+      // simply receives no rollout this round.
+      return;
     }
     while (!walk.IsSearchRoot)
     {
-      Debug.Assert(depth < MAX_DEPTH, "ExtendPathFromInnerNode: depth exceeded maximum");
+      if (depth >= MAX_DEPTH)
+      {
+        // Start node lies too deep below the search root to build a rollout spine.
+        // This can happen after repeated deep-rollout passes push well-visited lines
+        // very deep. Skip the node gracefully (it receives no rollout this round);
+        // a Debug.Assert here would be compiled out in release and the write below
+        // would otherwise overflow the stack buffer.
+        return;
+      }
       nodeIndicesLeafToRoot[depth++] = walk.Index.Index;
 
       // Pick the highest-N parent edge whose parent is strictly closer to the search root.
@@ -470,8 +483,18 @@ public class MCGSSelect
       walkDepth = chosenParentDepth;
     }
 
-    // Allocate the path and seed it with the search root context.
-    MCGSPath path = iterator.AllocatedPath(NumInitialSlotsFromNumVisits(startNode.N, numAttemptedVisits));
+    // Skip gracefully if the shared path-visit pool is already nearly exhausted
+    // (a deep spine below would otherwise fail its allocations mid-construction).
+    if (iterator.IsApproachingMaxPathCapacity)
+    {
+      return;
+    }
+
+    // Allocate the path and seed it with the search root context, pre-sizing the slots for
+    // the full (known-length) spine plus headroom: growing a segment leaks its old storage
+    // (see ArraySegmentRef.EnsureSize), so building a deep spine in GROWTH_QUANTUM steps
+    // would consume pool capacity quadratic in the spine depth.
+    MCGSPath path = iterator.AllocatedPath(depth + 1 + ArraySegmentPool<MCGSPathVisit>.GROWTH_QUANTUM);
     path.InnerSearchStartNode = startNode;
     path.InnerSearchStartDepth = depth;
     path.RunningHash = Engine.SearchRootRunningHash;
@@ -569,7 +592,16 @@ public class MCGSSelect
 
   private static bool CapacityAbortNeeded(MCGSIterator iterator, MCGSPath path, MCGSPathsSet pathsSet)
   {
-    if (iterator.IsApproachingMaxPathCapacity) // for example, when a prefetch operation has reached the target
+    // Deep rollouts: cap the descent below the start node. Rollout lines have no
+    // informational value at extreme depth, and unbounded paths exhaust the shared
+    // path-visit pool (whose fragmentation grows quadratically with path length).
+    const int MAX_DEPTH_BELOW_START_DEEP_ROLLOUT = 384;
+    bool deepRolloutTooDeep = iterator.DisableTranspositionSufficiencyStop
+                           && !path.InnerSearchStartNode.IsNull
+                           && path.NumVisitsInPath - path.InnerSearchStartDepth >= MAX_DEPTH_BELOW_START_DEEP_ROLLOUT;
+
+    if (iterator.IsApproachingMaxPathCapacity // for example, when a prefetch operation has reached the target
+     || deepRolloutTooDeep)
     {
       path.TerminationReason = MCGSPathTerminationReason.Abort;
       if (path.NumVisitsInPath > 0)

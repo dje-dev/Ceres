@@ -532,6 +532,14 @@ public readonly unsafe partial struct GNode : IComparable<GNode>, IEquatable<GNo
   /// <returns></returns>
   public readonly GEdge EdgeWithMaxValue(Func<GEdge, double> valueFunc)
   {
+    if (IsPendingPolicyCopy)
+    {
+      // Edge headers are not yet materialized (deferred transposition policy copy,
+      // e.g. a node freshly created during deep rollouts): NumEdgesExpanded may be
+      // nonzero while the headers are not yet valid, so they must not be read.
+      return default;
+    }
+
     int numExpanded = NumEdgesExpanded;
     double maxValue = double.MinValue;
     int maxIndex = -1;

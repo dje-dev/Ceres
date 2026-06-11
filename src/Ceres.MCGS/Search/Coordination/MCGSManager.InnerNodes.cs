@@ -49,6 +49,12 @@ internal sealed class InnerNodeRolloutStats
   /// <summary>Sum of leaf Q (start-node perspective) over all rollouts (averaged to avgLeafQAllPaths).</summary>
   public double SumLeafQAllPaths;
 
+  /// <summary>If the node was dropped from remaining rounds after consecutive rounds yielded no new distinct line.</summary>
+  public bool DroppedDryUp;
+
+  /// <summary>If the node was dropped from remaining rounds after a rollout reached a terminal leaf.</summary>
+  public bool DroppedTerminal;
+
   /// <summary>
   /// All distinct rollout lines (full node-index sequences; fully-overlapping duplicates dropped).
   /// Each starts at this node (index 0) and descends to the leaf; the root prefix is excluded. The
@@ -92,11 +98,12 @@ public partial class MCGSManager
   /// Receives one tuple per rollable start node (in input order): the node; the number of visits
   /// actually applied; the maximum depth descended below it; the counts of rollouts reaching a
   /// terminal win / draw / loss; the average leaf Q over all rollouts and over the maximal lines;
-  /// and the maximal node-index sequences explored from this node - the distinct lines that are not
+  /// the maximal node-index sequences explored from this node - the distinct lines that are not
   /// a strict prefix of any other explored line (the "tips" of the exploration tree), each starting
-  /// at the node itself at index 0 and descending to its leaf (root prefix excluded). Win/draw/loss
-  /// and the leaf Q values are all from that node's side-to-move perspective; averages are NaN when
-  /// there are no contributing rollouts. Skipped nodes are omitted.
+  /// at the node itself at index 0 and descending to its leaf (root prefix excluded); and the leaf Q
+  /// of each maximal line (parallel list). Win/draw/loss and the leaf Q values are all from that
+  /// node's side-to-move perspective; averages are NaN when there are no contributing rollouts.
+  /// Skipped nodes are omitted.
   /// </param>
   /// <param name="explorationMultiplier">Multiplier applied to the selection exploration term.</param>
   /// <param name="stopNodeVisitsIfTerminalReached">If true, stop visiting a node once its rollout reaches a terminal leaf.</param>
@@ -109,23 +116,33 @@ public partial class MCGSManager
   /// transposition nodes) and a pessimistic FPU (FPUType.Absolute, FPUValue 1.0) is applied for the
   /// duration and then restored. Most useful together with explorationMultiplier = 0.
   /// </param>
+  /// <param name="deadline">Optional wall-clock deadline; remaining rounds are abandoned once passed.</param>
+  /// <param name="dryUpRounds">
+  /// If positive, a node is dropped once this many consecutive rounds produced no new distinct line below it.
+  /// </param>
   /// <returns>Timing statistics for the operation.</returns>
   internal TimingStats DoSearchInnerNodes(NodeIndex[] nodes, int numVisitsEachNode,
                                           out List<(NodeIndex node, int numVisits, int maxDepthBelowNode,
                                                     int numTerminalWin, int numTerminalDraw, int numTerminalLoss,
                                                     double avgLeafQAllPaths, double avgLeafQMaximalPaths,
-                                                    List<NodeIndex[]> maximalPathsNodes)> nodeStats,
+                                                    List<NodeIndex[]> maximalPathsNodes,
+                                                    List<double> maximalPathsLeafQ,
+                                                    bool droppedDryUp, bool droppedTerminal)> nodeStats,
                                           float explorationMultiplier = 1,
                                           bool stopNodeVisitsIfTerminalReached = false,
                                           MCGSProgressCallback progressCallback = null,
                                           Action<MCGSPathsSet> preBackupCallback = null,
                                           Action<MCGSPathsSet> postBackupCallback = null,
-                                          bool deepRollout = false)
+                                          bool deepRollout = false,
+                                          DateTime? deadline = null,
+                                          int dryUpRounds = 0)
   {
     nodeStats = new List<(NodeIndex node, int numVisits, int maxDepthBelowNode,
                           int numTerminalWin, int numTerminalDraw, int numTerminalLoss,
                           double avgLeafQAllPaths, double avgLeafQMaximalPaths,
-                          List<NodeIndex[]> maximalPathsNodes)>();
+                          List<NodeIndex[]> maximalPathsNodes,
+                          List<double> maximalPathsLeafQ,
+                          bool droppedDryUp, bool droppedTerminal)>();
 
     if (nodes == null)
     {
@@ -182,7 +199,8 @@ public partial class MCGSManager
         Dictionary<NodeIndex, InnerNodeRolloutStats> perNode =
           Engine.RunFromInnerNodes(startNodes.ToArray(), numVisitsEachNode,
                                    explorationMultiplier, stopNodeVisitsIfTerminalReached,
-                                   deepRollout, preBackupCallback, postBackupCallback);
+                                   deepRollout, preBackupCallback, postBackupCallback,
+                                   deadline, dryUpRounds);
 
         // Emit one tuple per rollable start node, preserving input order.
         foreach (GNode node in startNodes)
@@ -191,12 +209,14 @@ public partial class MCGSManager
           {
             // Maximal (tip) lines: distinct sequences that are not a strict prefix of any other.
             List<NodeIndex[]> maximalPathsNodes = new();
+            List<double> maximalPathsLeafQ = new();
             double sumLeafQMaximal = 0;
             for (int i = 0; i < s.DistinctSequences.Count; i++)
             {
               if (!IsStrictPrefixOfAny(s.DistinctSequences, i))
               {
                 maximalPathsNodes.Add(s.DistinctSequences[i]);
+                maximalPathsLeafQ.Add(s.DistinctLeafQ[i]);
                 sumLeafQMaximal += s.DistinctLeafQ[i];
               }
             }
@@ -205,11 +225,13 @@ public partial class MCGSManager
             double avgLeafQMaximalPaths = maximalPathsNodes.Count > 0 ? sumLeafQMaximal / maximalPathsNodes.Count : double.NaN;
             nodeStats.Add((node.Index, s.NumVisits, s.MaxDepthBelowNode,
                            s.NumTerminalWin, s.NumTerminalDraw, s.NumTerminalLoss,
-                           avgLeafQAllPaths, avgLeafQMaximalPaths, maximalPathsNodes));
+                           avgLeafQAllPaths, avgLeafQMaximalPaths, maximalPathsNodes, maximalPathsLeafQ,
+                           s.DroppedDryUp, s.DroppedTerminal));
           }
           else
           {
-            nodeStats.Add((node.Index, 0, 0, 0, 0, 0, double.NaN, double.NaN, new List<NodeIndex[]>()));
+            nodeStats.Add((node.Index, 0, 0, 0, 0, 0, double.NaN, double.NaN, new List<NodeIndex[]>(), new List<double>(),
+                           false, false));
           }
         }
       }

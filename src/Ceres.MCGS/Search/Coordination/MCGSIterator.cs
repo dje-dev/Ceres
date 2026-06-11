@@ -541,7 +541,21 @@ public class MCGSIterator : IDisposable
     // The PathsSet is fully constructed (and its leaves evaluated) but not yet backed up.
     preBackupCallback?.Invoke(PathsSet);
 
+    // Snapshot the completed paths: the multi-threaded reduction backup (used once the root N
+    // exceeds its threshold) consumes (dequeues) PathsSet.Paths, which would otherwise leave
+    // nothing for the post-backup callback or for building the per-rollout result records below.
+    MCGSPath[] completedPaths = PathsSet.Paths.ToArray();
+
     RunBackupPhase();
+
+    // Restore the queue if the backup drained it (multi-threaded reduction mode).
+    if (PathsSet.Paths.IsEmpty)
+    {
+      foreach (MCGSPath completedPath in completedPaths)
+      {
+        PathsSet.Paths.Enqueue(completedPath);
+      }
+    }
 
     postBackupCallback?.Invoke(PathsSet);
 
@@ -554,7 +568,7 @@ public class MCGSIterator : IDisposable
     // classification, leaf Q (from the start node's perspective), and the node-index sequence
     // from the start node (index 0) down to the leaf.
     List<(NodeIndex node, int depthBelow, int terminalKind, double leafQFromStart, NodeIndex[] sequence)> results = new();
-    foreach (MCGSPath path in PathsSet.Paths)
+    foreach (MCGSPath path in completedPaths)
     {
       if (path.InnerSearchStartNode.IsNull
        || path.TerminationReason == MCGSPathTerminationReason.Abort)

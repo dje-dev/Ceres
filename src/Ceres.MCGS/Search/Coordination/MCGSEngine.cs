@@ -509,12 +509,19 @@ public partial class MCGSEngine
   /// bypasses the transposition-sufficiency stop and applies a pessimistic FPU (Absolute, 1.0) for
   /// the duration (the shared ParamsSelect FPU is snapshotted and restored afterwards).
   /// </param>
+  /// <param name="deadline">Optional wall-clock deadline; remaining rounds are abandoned once passed.</param>
+  /// <param name="dryUpRounds">
+  /// If positive, a node is dropped from subsequent rounds once this many consecutive rounds
+  /// produced no new distinct line below it (its descents have dried up).
+  /// </param>
   /// <returns>Per-start-node accumulated rollout statistics, keyed by node index.</returns>
   internal Dictionary<NodeIndex, InnerNodeRolloutStats> RunFromInnerNodes(GNode[] startNodes, int numVisitsEachNode,
                                                                           float explorationMultiplier, bool stopNodeVisitsIfTerminalReached,
                                                                           bool deepRollout,
                                                                           Action<MCGSPathsSet> preBackupCallback = null,
-                                                                          Action<MCGSPathsSet> postBackupCallback = null)
+                                                                          Action<MCGSPathsSet> postBackupCallback = null,
+                                                                          DateTime? deadline = null,
+                                                                          int dryUpRounds = 0)
   {
     Dictionary<NodeIndex, InnerNodeRolloutStats> stats = new();
     if (startNodes.Length == 0 || numVisitsEachNode <= 0)
@@ -556,15 +563,20 @@ public partial class MCGSEngine
       activeNodes.AddRange(startNodes);
 
       List<GNode> chunk = new(Math.Min(maxBatchSize, startNodes.Length));
+      Dictionary<NodeIndex, int> dryRoundCounts = dryUpRounds > 0 ? new Dictionary<NodeIndex, int>() : null;
+      Dictionary<NodeIndex, int> noResultRoundCounts = new();
+      HashSet<NodeIndex> producedResultThisRound = new();
 
       for (int round = 0; round < numVisitsEachNode && activeNodes.Count > 0; round++)
       {
-        if (Manager.ExternalStopRequested)
+        if (Manager.ExternalStopRequested || (deadline.HasValue && DateTime.Now >= deadline.Value))
         {
           break;
         }
 
-        HashSet<NodeIndex> terminatedThisRound = stopNodeVisitsIfTerminalReached ? new HashSet<NodeIndex>() : null;
+        HashSet<NodeIndex> droppedThisRound = stopNodeVisitsIfTerminalReached || dryUpRounds > 0
+                                                ? new HashSet<NodeIndex>() : null;
+        producedResultThisRound.Clear();
 
         // Process the active nodes in chunks no larger than the NN max batch size, so each chunk's
         // leaves are aggregated into a single NN batch.
@@ -580,6 +592,8 @@ public partial class MCGSEngine
           foreach ((NodeIndex node, int depthBelow, int terminalKind, double leafQFromStart, NodeIndex[] sequence)
                      in iterator.RunOnceFromNodes(chunk, preBackupCallback, postBackupCallback))
           {
+            producedResultThisRound.Add(node);
+
             if (!stats.TryGetValue(node, out InnerNodeRolloutStats nodeStats))
             {
               nodeStats = new InnerNodeRolloutStats();
@@ -595,10 +609,31 @@ public partial class MCGSEngine
 
             // Accumulate the distinct rollout lines (drop fully-overlapping repeats). The maximal
             // (tip) subset is derived from these when the result tuple is built.
-            if (!ContainsSequence(nodeStats.DistinctSequences, sequence))
+            bool isNewDistinctLine = !ContainsSequence(nodeStats.DistinctSequences, sequence);
+            if (isNewDistinctLine)
             {
               nodeStats.DistinctSequences.Add(sequence);
               nodeStats.DistinctLeafQ.Add(leafQFromStart);
+            }
+
+            if (dryRoundCounts != null)
+            {
+              // Each node receives exactly one rollout per round, so this per-rollout update
+              // is the per-round dry-up accounting for the node.
+              if (isNewDistinctLine)
+              {
+                dryRoundCounts[node] = 0;
+              }
+              else
+              {
+                dryRoundCounts.TryGetValue(node, out int dryCount);
+                dryRoundCounts[node] = ++dryCount;
+                if (dryCount >= dryUpRounds)
+                {
+                  nodeStats.DroppedDryUp = true;
+                  droppedThisRound.Add(node);
+                }
+              }
             }
 
             switch (terminalKind)
@@ -614,16 +649,39 @@ public partial class MCGSEngine
                 break;
             }
 
-            if (terminalKind != 0 && terminatedThisRound != null)
+            if (terminalKind != 0 && stopNodeVisitsIfTerminalReached)
             {
-              terminatedThisRound.Add(node);
+              nodeStats.DroppedTerminal = true;
+              droppedThisRound.Add(node);
             }
           }
         }
 
-        if (terminatedThisRound != null && terminatedThisRound.Count > 0)
+        // Drop nodes whose rollouts repeatedly produce no result (e.g. systematically aborted
+        // by the path capacity / deep-rollout depth guards) - they would otherwise spin
+        // unproductively for all remaining rounds.
+        const int MAX_CONSECUTIVE_NO_RESULT_ROUNDS = 3;
+        foreach (GNode activeNode in activeNodes)
         {
-          activeNodes.RemoveAll(node => terminatedThisRound.Contains(node.Index));
+          if (producedResultThisRound.Contains(activeNode.Index))
+          {
+            noResultRoundCounts.Remove(activeNode.Index);
+          }
+          else
+          {
+            noResultRoundCounts.TryGetValue(activeNode.Index, out int noResultCount);
+            noResultRoundCounts[activeNode.Index] = ++noResultCount;
+            if (noResultCount >= MAX_CONSECUTIVE_NO_RESULT_ROUNDS)
+            {
+              droppedThisRound ??= new HashSet<NodeIndex>();
+              droppedThisRound.Add(activeNode.Index);
+            }
+          }
+        }
+
+        if (droppedThisRound != null && droppedThisRound.Count > 0)
+        {
+          activeNodes.RemoveAll(node => droppedThisRound.Contains(node.Index));
         }
       }
     }

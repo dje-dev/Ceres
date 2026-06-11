@@ -97,6 +97,28 @@ public partial class UCIManagerMCGS
 
   GameEngineSearchResultCeresMCGS lastSearchResult;
 
+  /// <summary>
+  /// Principal position set collected by the most recent dump-pp command
+  /// (used as the start nodes for the deep-rollout command).
+  /// </summary>
+  PrincipalPosSet lastDumpPPSet;
+
+  /// <summary>
+  /// Search manager from which lastDumpPPSet was collected
+  /// (deep-rollout requires that the set be from the current search).
+  /// </summary>
+  MCGSManager lastDumpPPManager;
+
+  /// <summary>
+  /// Results of the most recent deep-rollout command.
+  /// </summary>
+  public DeepRolloutSet LastDeepRolloutSet { get; private set; }
+
+  /// <summary>
+  /// Results of the most recent revalue-root command.
+  /// </summary>
+  public PrincipalRevaluationResult LastRevaluation { get; private set; }
+
   volatile Task<GameEngineSearchResultCeresMCGS> taskSearchCurrentlyExecuting;
 
   bool haveInitializedEngine;
@@ -345,12 +367,14 @@ public partial class UCIManagerMCGS
           UCIWriteLine("download <ID>   - attempt to download Ceres network from CeresNets repository");
           UCIWriteLine("backendbench    - benchmark of speed of network backend evaluator, optionally [from <int>] [to <int>] [by <int>]");
           UCIWriteLine("benchmark       - search benchmark with specified number of seconds per position, e.g. \"benchmark 10\"");
+          UCIWriteLine("deep-rollout    - runs deep rollouts from principal positions of last dump-pp and redisplays table with rollout statistics (optional rollouts per position and exploration multiplier, e.g. \"deep-rollout 100 0.05\")");
           UCIWriteLine("dump-fen        - shows FEN of most recently searched position");
           UCIWriteLine("dump-move-stats - dumps information top level candidate moves");
           UCIWriteLine("dump-pv         - dumps principal variation information from last search");
           UCIWriteLine("dump-pv-detail  - dumps principal variation information from last search (detailed)");
           UCIWriteLine("dump-pp         - dumps principal positions from last search (optional visit percentage and max Q deviation, e.g. \"1% 0.02\")");
           UCIWriteLine("dump-pp-html    - dumps principal positions from last search (like dump-pp but to HTML page)");
+          UCIWriteLine("revalue-root    - revalues root/move Q of last search via exploration-ladder deep rollouts from the visit frontier (optional rollouts/position/stage, ladder, dry-up rounds (0=off), e.g. \"revalue-root 50 0.15,0.04,0 12\")");
           UCIWriteLine("dump-info       - dump information about last search (top level candidate moves, principal variation, etc.)");
           UCIWriteLine("dump-time       - dump information about time manager's last decision");
           UCIWriteLine("dump-processor  - dump information about CPUs in this system");
@@ -488,6 +512,28 @@ public partial class UCIManagerMCGS
           {
             bool useHTML = c.StartsWith("dump-pp-html");
             ProcessDumpPPCommand(c, useHTML);
+          }
+          else
+          {
+            UCIWriteLine("info string No search manager created");
+          }
+          break;
+
+        case string c when c.StartsWith("deep-rollout"):
+          if (CeresEngine?.Search?.Manager != null)
+          {
+            ProcessDeepRolloutCommand(c);
+          }
+          else
+          {
+            UCIWriteLine("info string No search manager created");
+          }
+          break;
+
+        case string c when c.StartsWith("revalue-root"):
+          if (CeresEngine?.Search?.Manager != null)
+          {
+            ProcessRevalueRootCommand(c);
           }
           else
           {
@@ -810,6 +856,10 @@ public partial class UCIManagerMCGS
                                                                          (int)(CeresEngine.Search.SearchRootNode.N * minVisitsFraction),
                                                                          maxQDeviation);
 
+    // Retain for possible subsequent deep-rollout command.
+    lastDumpPPSet = pp;
+    lastDumpPPManager = CeresEngine.Search.Manager;
+
     if (useHTML)
     {
       PrincipalPosSetDumperHTML.DumpToGraphHTML(pp, CeresEngine.Search.BestMove);
@@ -818,6 +868,171 @@ public partial class UCIManagerMCGS
     {
       PrincipalPosSetDumper.DumpToConsoleGraphical(pp, CeresEngine.Search.BestMove);
     }
+  }
+
+
+  /// <summary>
+  /// Processes the deep-rollout command: runs deep rollouts from the principal positions
+  /// collected by the most recent dump-pp command, then redisplays the principal position
+  /// tables augmented with columns characterizing the rollout results.
+  ///
+  /// Arguments: deep-rollout [num rollouts per position] [exploration multiplier]
+  /// </summary>
+  /// <param name="c"></param>
+  private void ProcessDeepRolloutCommand(string c)
+  {
+    const int DEFAULT_NUM_ROLLOUTS = 100;
+    const float DEFAULT_EXPLORATION_MULTIPLIER = 0.05f;
+
+    // Make sure any search still executing has completed (the graph must be quiescent).
+    taskSearchCurrentlyExecuting?.Wait();
+
+    if (lastDumpPPSet == null || lastDumpPPManager != CeresEngine.Search.Manager)
+    {
+      UCIWriteLine("info string No principal positions available for current search, run dump-pp first");
+      return;
+    }
+
+    if (lastDumpPPSet.Members.Count == 0)
+    {
+      UCIWriteLine("info string Last dump-pp found no principal positions, nothing to roll out");
+      return;
+    }
+
+    string[] partsDR = c.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+    int numRollouts = DEFAULT_NUM_ROLLOUTS;
+    if (partsDR.Length > 1
+     && (!int.TryParse(partsDR[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out numRollouts) || numRollouts <= 0))
+    {
+      UCIWriteLine($"info string Invalid number of rollouts: {partsDR[1]}");
+      return;
+    }
+
+    float explorationMultiplier = DEFAULT_EXPLORATION_MULTIPLIER;
+    if (partsDR.Length > 2
+     && (!float.TryParse(partsDR[2], NumberStyles.Float, CultureInfo.InvariantCulture, out explorationMultiplier) || explorationMultiplier < 0))
+    {
+      UCIWriteLine($"info string Invalid exploration multiplier: {partsDR[2]}");
+      return;
+    }
+
+    UCIWriteLine($"info string Running deep rollouts: {lastDumpPPSet.Members.Count} principal positions x {numRollouts} rollouts,"
+               + $" exploration multiplier {explorationMultiplier}");
+
+    LastDeepRolloutSet = DeepRolloutSet.Run(lastDumpPPManager, lastDumpPPSet, numRollouts, explorationMultiplier);
+
+    UCIWriteLine($"info string Deep rollouts complete in {LastDeepRolloutSet.TimingStats.ElapsedTimeSecs:F2} sec");
+    UCIWriteLine();
+
+    // Redisplay the principal position tables, now augmented with deep rollout statistics columns.
+    DeepRolloutSet drSet = LastDeepRolloutSet;
+    string StatText(PrincipalPos pos, Func<DeepRolloutNodeStats, string> formatter)
+      => drSet.TryGetStats(pos.LeafNode.Index, out DeepRolloutNodeStats drStats) && drStats.NumDistinctPaths > 0
+           ? formatter(drStats)
+           : "";
+
+    (string colName, Func<PrincipalPos, string> calcFunc)[] drColumns =
+    [
+      ("DRCount", pos => StatText(pos, s => s.NumDistinctPaths.ToString())),
+      ("DRDepth", pos => StatText(pos, s => s.MedianDepthBelowNode.ToString("0.#"))),
+      ("DRAvg", pos => StatText(pos, s =>
+        {
+          // Convert from the principal position's side-to-move perspective to the root player's.
+          bool isRootPlayerPerspective = (pos.PathFromRoot.Count % 2) == 1;
+          return PrincipalPosSetDumper.FormatQValue(isRootPlayerPerspective ? s.AvgLeafQ : -s.AvgLeafQ);
+        })),
+      ("DRStd", pos => StatText(pos, s => s.StdDevLeafQ.ToString("F3"))),
+    ];
+
+    PrincipalPosSetDumper.DumpToConsoleGraphical(lastDumpPPSet, CeresEngine.Search.BestMove, drColumns);
+
+    Spectre.Console.AnsiConsole.MarkupLine("[yellow]DRCount[/]       - Number of distinct deep rollout lines explored below this principal position");
+    Spectre.Console.AnsiConsole.MarkupLine("[yellow]DRDepth[/]       - Median depth (plies below the principal position) of those lines");
+    Spectre.Console.AnsiConsole.MarkupLine("[yellow]DRAvg[/]         - Average leaf Q of those lines (root player's perspective)");
+    Spectre.Console.AnsiConsole.MarkupLine("[yellow]DRStd[/]         - Standard deviation of leaf Q across those lines");
+    Spectre.Console.AnsiConsole.WriteLine();
+  }
+
+
+  /// <summary>
+  /// Processes the revalue-root command: collects the frontier of the well-visited subtree of
+  /// the last search, runs an exploration ladder of deep rollouts from each frontier position,
+  /// and displays revalued root and per-move Q estimates under a family of backup operators
+  /// (visit-weighted average, negamax, soft-minimax) along with classifications of the
+  /// frontier evidence.
+  ///
+  /// Arguments: revalue-root [rollouts per position per stage] [epsilon ladder, comma-separated] [dry-up rounds, 0=off]
+  /// </summary>
+  /// <param name="c"></param>
+  private void ProcessRevalueRootCommand(string c)
+  {
+    const int DEFAULT_ROUNDS_PER_STAGE = 20;
+
+    // For interactive analysis use a much more generous dry-up threshold than in play:
+    // repeated rollouts of a known line still back up (sequential refinement) and may
+    // re-route it, so saturation deserves more patience here.
+    const int DEFAULT_DRY_UP_ROUNDS = PrincipalRevaluation.ANALYSIS_DRY_UP_ROUNDS;
+
+    // Make sure any search still executing has completed (the graph must be quiescent).
+    taskSearchCurrentlyExecuting?.Wait();
+
+    MCGSManager manager = CeresEngine.Search.Manager;
+
+    string[] parts = c.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+    int roundsPerStage = DEFAULT_ROUNDS_PER_STAGE;
+    if (parts.Length > 1
+     && (!int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out roundsPerStage) || roundsPerStage <= 0))
+    {
+      UCIWriteLine($"info string Invalid rollouts per position per stage: {parts[1]}");
+      return;
+    }
+
+    float[] epsilonLadder = null;
+    if (parts.Length > 2)
+    {
+      string[] epsParts = parts[2].Split(',', StringSplitOptions.RemoveEmptyEntries);
+      epsilonLadder = new float[epsParts.Length];
+      for (int i = 0; i < epsParts.Length; i++)
+      {
+        if (!float.TryParse(epsParts[i], NumberStyles.Float, CultureInfo.InvariantCulture, out epsilonLadder[i]) || epsilonLadder[i] < 0)
+        {
+          UCIWriteLine($"info string Invalid epsilon ladder entry: {epsParts[i]}");
+          return;
+        }
+      }
+    }
+
+    int dryUpRounds = DEFAULT_DRY_UP_ROUNDS;
+    if (parts.Length > 3
+     && (!int.TryParse(parts[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out dryUpRounds) || dryUpRounds < 0))
+    {
+      UCIWriteLine($"info string Invalid dry-up rounds: {parts[3]}");
+      return;
+    }
+
+    UCIWriteLine($"info string Running revaluation: ladder [{string.Join(", ", epsilonLadder ?? PrincipalRevaluation.DEFAULT_EPSILON_LADDER)}]"
+               + $" x {roundsPerStage} rollouts/position/stage"
+               + $" (dry-up after {(dryUpRounds == 0 ? "never" : dryUpRounds.ToString())} repeat rounds)");
+
+    LastRevaluation = PrincipalRevaluation.Run(manager, roundsPerStage, epsilonLadder, dryUpRounds: dryUpRounds);
+
+    UCIWriteLine($"info string Revaluation complete in {LastRevaluation.ElapsedSecs:F2} sec"
+               + $" ({LastRevaluation.NumRolloutVisits} rollout visits over {LastRevaluation.NumFrontier} frontier positions)");
+    UCIWriteLine();
+
+    PrincipalRevaluationDumper.DumpToConsole(LastRevaluation, CeresEngine.Search.BestMove);
+
+    // Purely informational: report whether the rollout evidence would prefer a different move
+    // (the blended-Q comparison; move choice during play is never affected).
+    GNode revalRootNode = manager.Engine.SearchRootNode;
+    BestMoveInfoMCGS provisional = new ManagerChooseBestMoveMCGS(manager, revalRootNode, false, default, false).BestMoveCalc;
+    RevaluationSwitchDecision decision = PrincipalRevaluation.CalcBlendedQSwitchDecision(
+                                           manager, revalRootNode, provisional, LastRevaluation);
+    UCIWriteLine(decision.WouldSwitch
+      ? $"info string reval decision: rollout evidence would prefer {decision.CandidateMove} over {decision.BaselineMove} ({decision.Description})"
+      : $"info string reval decision: rollout evidence keeps {decision.BaselineMove} ({decision.Description})");
   }
 
 

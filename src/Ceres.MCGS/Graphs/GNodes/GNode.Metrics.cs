@@ -121,6 +121,13 @@ public readonly partial struct GNode
 
     while (currentNode.NumEdgesExpanded > 0)
     {
+      // Nodes whose edge headers are not yet materialized (deferred transposition policy
+      // copy) cannot be descended; treat as a leaf of the principal variation.
+      if (currentNode.IsPendingPolicyCopy)
+      {
+        break;
+      }
+
       // In PositionEquivalence mode, paths can lead back to the same node.
       // When a repeated node is encountered, stop since this indicates a draw by repetition.
       if (!visitedNodeIndices.Add(currentNode.Index.Index))

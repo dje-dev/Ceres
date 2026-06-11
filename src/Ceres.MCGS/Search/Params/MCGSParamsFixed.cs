@@ -143,7 +143,8 @@ public static class MCGSParamsFixed
 
   /// <summary>
   /// If true, after every search completes the engine automatically emits the full search
-  /// information dump (identical to issuing the UCI "dump-info" command), without it being
+  /// information dump (identical to issuing the UCI "dump-info" command) followed by a
+  /// revaluation analysis (identical to "revalue-root N" with N = root N / 20), without being
   /// explicitly requested. Intended as a debugging/analysis convenience.
   /// </summary>
   public const bool ALWAYS_DUMP_SEARCH_INFO = false;
