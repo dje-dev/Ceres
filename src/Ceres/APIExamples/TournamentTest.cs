@@ -964,10 +964,10 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
       //baseName = "UHO_Lichess_4852_v1.epd"; // recommended by Kovax
       baseName = "UHO_Lichess_4852_v1_first.epd"; // approximately first 2500 positions for faster loading
       //baseName = "DFRC_4852_v1.epd";
-      baseName = "DFRC_80_120.epd"; // lepned filtered (probably from DFRC_4852_v1)
+//      baseName = "DFRC_80_120.epd"; // lepned filtered (probably from DFRC_4852_v1)
       //baseName = "tcec_big";
       //baseName = "test1.epd";
-      //baseName = "UHO_Lichess_4582_v1_last_10000.epd";
+//      baseName = "UHO_Lichess_4582_v1_last_10000.epd";
       if (false)
       {
         baseName = "eco_test";
