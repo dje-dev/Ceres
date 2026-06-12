@@ -15,6 +15,8 @@
 
 using System;
 using System.Diagnostics;
+using System.Linq;
+using System.Numerics.Tensors;
 using System.Threading;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
@@ -267,10 +269,12 @@ public class MCGSSelect
        || paramsSearch.MoveOrderingPhase == ParamsSearch.MoveOrderingPhaseEnum.NodeInitializationAndChildSelect)
        && !parentNode.IsSearchRoot)
       {
+        // TODO: possibly this check for reordering could be skipped in many situations (for improved speed).
+        //       If using standard FPU and no action head is in use, children are already policy sorted thus likely unnecessary.
         const int MAX_LOOK_RIGHT = 5;
-        int firstIndex = parentNode.NumEdgesExpanded; // only allow reordering if not yet expanded (guaranteening no side effects)
+        int firstIndex = parentNode.NumEdgesExpanded;
         int numLookRight = Math.Min(MAX_LOOK_RIGHT, numAttemptedVisits);
-        parentNode.CheckMoveOrderRearrangeAtIndex(in path.LeafVisitRef.ChildPosition, firstIndex, firstIndex + MAX_LOOK_RIGHT, MCGSParamsFixed.MOVE_ORDERING_MIN_RATIO_POLICY);
+        parentNode.CheckMoveOrderRearrangeAtIndex(in path.LeafVisitRef.ChildPosition, firstIndex, numLookRight, MCGSParamsFixed.MOVE_ORDERING_MIN_RATIO_POLICY);
       }
 
       // If EnableBackupPropagationToParentsOffDirectPath was true, back up phase may have marked some edges as stale.
@@ -762,12 +766,13 @@ public class MCGSSelect
     bool parallelEnabled = paramsSearch.Execution.SelectOperationParallelThresholdNumVisits < int.MaxValue;
     int THRESHOLD_PARALLEL = ParallelThresholdToUse;
 
-    bool multipass = numAttemptedVisits >= 3 * THRESHOLD_PARALLEL;
-
-    if (parallelEnabled)
-    {
-      multipass = true;
-    }
+    // Multipass (parallel-launch) scanning is only useful when enough visits flow
+    // through this node for at least one child to reach the parallel threshold
+    // (a parallel launch additionally requires ~0.5 * threshold visits left over,
+    // so this bound is conservative). Otherwise a single pass suffices, avoiding
+    // the second enumeration pass over visited children (whose iterations would
+    // all be skipped anyway since no child can reach the launch threshold).
+    bool multipass = parallelEnabled && numAttemptedVisits >= THRESHOLD_PARALLEL;
 
     // Loop over child visits and preform first-level processing (create associated MCGSPathVisit, etc.).
     // However do not initiate recursive descent yet, instead tarcking deferred subpaths to process later.
