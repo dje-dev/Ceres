@@ -1,4 +1,4 @@
-﻿#region License notice
+#region License notice
 
 /*
   This file is part of the Ceres project at https://github.com/dje-dev/ceres.
@@ -30,7 +30,20 @@ namespace Ceres.MCGS.Search.Phases.Backup;
 
 /// <summary>
 /// Applies updates to graph (Q, N, etc. for both edges and nodes) arising from selected visits.
-/// A "reduction" algorithm is used to coalesce values from multiple paths in a graph.
+/// A "reduction" algorithm is used to coalesce values from multiple paths in a graph:
+///
+/// During select each path visit is armed with the number of visits attempted through it
+/// (MCGSPathVisit.NumVisitsAttemptedPendingBackup, incremented again if later paths split off
+/// through the same visit). Backup walks each path leaf to root and at every level
+/// (under the parent node's lock) subtracts its attempted visits from that counter:
+///   - if the counter remains positive, other paths have yet to pass through this visit;
+///     the current path deposits its contribution (visit counts plus leaf-value moments)
+///     into the visit's Accumulator and stops, leaving the ancestor updates to them;
+///   - the path which brings the counter to zero merges (and clears) the accumulator into
+///     its own contribution and continues upward carrying the combined update.
+/// The per-parent NodeLockBlock serializes the counter decrement and the accumulator access,
+/// so the final arrival always observes all earlier deposits. Edge in-flight counters are
+/// likewise decremented exactly once per attempted visit (deferred ones by the final carrier).
 /// </summary>
 public partial class MCGSBackup
 {
@@ -41,7 +54,7 @@ public partial class MCGSBackup
     int numVisitsAttempted = leafVisitRef.NumVisitsAttempted;
     int numVisitsAccepted = leafVisitRef.NumVisitsAccepted.Value;
 
-    BackupValue initialBackupValue = (numVisitsAccepted > 0) ? initialBackupValue = InitialBackupValueForPath(path)
+    BackupValue initialBackupValue = (numVisitsAccepted > 0) ? InitialBackupValueForPath(path)
                                                              : default;
 
     // Per-visit repetition-draw fraction at the leaf, propagated into each path node's
@@ -78,7 +91,7 @@ public partial class MCGSBackup
     // visit counts, so each node can maintain an exact windowed dispersion estimate of the leaf
     // values it sees (rather than only ever seeing the aggregate Q-movement delta, which dilutes
     // and cancels that dispersion). Gated by the (default off) ParamsSearch flag.
-    bool trackVol = Engine.Manager.ParamsSearch.TrackLeafValueVolatility
+    bool trackVol = trackLeafValueVolatility
                  && numVisitsAccepted > 0
                  && !double.IsNaN(initialBackupValue.V);
     // sV: running sum of leaf values in the CURRENT edge's child perspective (negated once per
@@ -99,152 +112,91 @@ public partial class MCGSBackup
 
       using (new NodeLockBlock(parentNode))
       {
-        //          using (new NodeLockBlock(visitPathRef.ChildNode, true)) // Child might be null (if terminal) hence allow null lock
+        // Check if this is a synchronization edge where multiple paths converge.
+        // If other paths have yet to arrive here, our contribution has been deposited
+        // into the accumulator and the last of them will finish the work.
+        if (!TryContinueThroughMergePoint(ref visitPathRef, haveProcessedLeaf,
+                                          ref numVisitsAttempted, ref numVisitsAccepted,
+                                          ref sV, ref sV2))
         {
-          // Check if this is a synchronization edge where multiple paths converge.
-          // If we are not last to be processed, update accumulator and exit to leave for others to finish.
-          // Otherwise, bring the values previously stored in the accumulator into this update.
-          if (!haveProcessedLeaf)
-          {
-            Interlocked.Add(ref visitPathRef.NumVisitsAttemptedPendingBackup, -numVisitsAttempted);
-          }
-          else
-          {
-            int newNumPendingBackup = Interlocked.Add(ref visitPathRef.NumVisitsAttemptedPendingBackup, -numVisitsAttempted);
-            Debug.Assert(numVisitsAccepted >= 0);
-            if (newNumPendingBackup > 0)
-            {
-              // There are more paths yet to be processed that will pass thru this visit.
-              // We'll exit and let them eventually finish the work.
-              // But first we have to update the accumulator for the child
-              visitPathRef.Accumulator.DoAdd(numVisitsAttempted, numVisitsAccepted, sV, sV2);
-              return;
-            }
-            else
-            {
-              if (visitPathRef.Accumulator.NumVisitsAttempted > 0)
-              {
-                // Other paths already visited this child and accumulated updates.
-                // We first apply our own update and then reload from accumulator
-                // so we see all accumulated values.
-                ref MCGSBackupAccumulator inFlightAccumulator = ref visitPathRef.Accumulator;
-                inFlightAccumulator.DoAdd(numVisitsAttempted, numVisitsAccepted, sV, sV2);
-                Debug.Assert(inFlightAccumulator.NumVisitsAttempted > 0);
+          return;
+        }
 
-                numVisitsAttempted = inFlightAccumulator.NumVisitsAttempted;
-                numVisitsAccepted = inFlightAccumulator.NumVisitsAccepted;
-                sV = inFlightAccumulator.SumV;
-                sV2 = inFlightAccumulator.SumV2;
-              }
-            }
+        // Possibly initiate prefetch of our parent (for speed)
+        if (!parentNode.IsSearchRoot)
+        {
+          PrefetchChild(parentNode, visitPathRef.IndexOfChildInParent);
+        }
 
-          }
+        // STEP 1: capture the W previously contributed upward by this edge before this update.
+        int visitEdgeN = visitEdge.N;
+        double priorEdgeW = visitEdgeN == 0 ? 0 : visitEdgeN * visitEdge.Q;
+        Debug.Assert(numVisitsAccepted <= short.MaxValue);
+        visitPathRef.NumVisitsAccepted = (short)numVisitsAccepted;
 
-          // Possibly initiate prefetch of our parent (for speed)
-          if (!parentNode.IsSearchRoot)
-          {
-            PrefetchChild(parentNode, visitPathRef.IndexOfChildInParent);
-          }
+        // STEP 2: update the edge: (a) increase N by numVisitsAccepted, and (b) reset Q to be same as child.
+        if (numVisitsAccepted > 0)
+        {
+          BackupVisitToEdge(strategy, path, visitEdge, haveProcessedLeaf, numVisitsAccepted, in initialBackupValue);
+        }
 
-          // STEP 1: capture the W previously contributed upward by this edge before this update.
-          int visitEdgeN = visitEdge.N;
-          double priorEdgeW = visitEdgeN == 0 ? 0 : visitEdgeN * visitEdge.Q;
-          visitPathRef.NumVisitsAccepted = (short)numVisitsAccepted;
-          if (numVisitsAccepted > 0)
-          {
-            // If the child was selected "off-policy" then we disconnect
-            // disconnect the path starting at this level (and above)
-            // so that the backed up value is not used and we only backout the in flight values.
-            if (visitPathRef.DisconnectFromEdgeNStartingThisVisit)
-            {
-              numVisitsAccepted = 0;
-              sV = 0;
-              sV2 = 0;
-            }
+        // STEP 3: decrement NInFlight.
+        Debug.Assert(numVisitsAttempted <= short.MaxValue);
+        GNodeStruct.UpdateEdgeNInFlightForIterator(visitEdge, iteratorID, (short)-numVisitsAttempted);
 
-            // STEP 2: update the edge: (a) increase N by numVisitsAccepted, and (b) reset Q to be same as child.
-            if (haveProcessedLeaf)
-            {
-              strategy.BackupToEdge(visitEdge, numVisitsAccepted, visitEdge.ChildNode.Q, visitEdge.ChildNode.D, visitEdge.ChildNodeHasDrawKnownToExist);
-            }
-            else
-            {
-              // Leaf edge. On a draw-by-repetition, pass ChildNode.Q (NOT initialBackupValue.V == 0)
-              // as the cached QChild so the edge faithfully mirrors the child node's Q; edge.Q still
-              // dilutes to the draw value via NDrawByRepetition. Writing 0 here clobbers QChild and
-              // forces edge.Q = 0 until the next non-rep visit -- and for an edge whose child is the
-              // search root (whose position is in every path's history) there is NEVER a non-rep
-              // visit, so QChild would stay stuck at 0 forever while the child's true Q is nonzero.
-              // (Matches the internal-edge branch above, which already passes ChildNode.Q.)
-              bool isRepDraw = path.TerminationReason == MCGSPathTerminationReason.DrawByRepetitionInCoalesceMode;
-              double newQChildForLeaf = isRepDraw ? visitEdge.ChildNode.Q : initialBackupValue.V;
-              if (isRepDraw && double.IsNaN(newQChildForLeaf))
-              {
-                // Unevaluated draw-by-repetition placeholder child (Q is the NaN "unevaluated" sentinel):
-                // its value is a draw (0), never NaN. Passing NaN here would store edge.QChild = NaN and
-                // make deltaQ = NaN (silently disabling off-path propagation) and feed NaN*0 into the
-                // edge.Q dilution. A search-root child has a real Q (not NaN) and is therefore unaffected.
-                newQChildForLeaf = 0;
-              }
-
-              strategy.BackupToEdge(visitEdge, numVisitsAccepted, newQChildForLeaf, initialBackupValue.D, false);
-              if (isRepDraw)
-              {
-                // The NDrawByRepetition for the edge immediately leading to the draw is incremented
-                // in tandem with the primary update (but is not itself backed up to ancestors).
-                visitEdge.IncrementNDrawRepetition(numVisitsAccepted);
-              }
-            }
-          }
-
-          // Decrement NInFlight
-          GNodeStruct.UpdateEdgeNInFlightForIterator(visitEdge, iteratorID, (short)-numVisitsAttempted);
-
+        // STEP 4: update parent node fields.
+        if (numVisitsAccepted > 0)
+        {
           // Capture the W contributed by this edge after the update.
           // Use the difference from prior W contribution to determine update magnitude,
           // thereby capturing the impact of all changes to child Q since this path last visited
           // (it may have happened that other transposition paths had caused interim updates to child Q).
+          // N.B. edge W is in the child's perspective, so the parent's W moves by the
+          //      negated change (prior minus new).
           double newEdgeW = visitEdge.N == 0 ? 0 : visitEdge.N * visitEdge.Q;
+          double parentPerspectiveDeltaW = priorEdgeW - newEdgeW;
 
-          double newEdgeDeltaW = priorEdgeW - newEdgeW;
-
-          // STEP 5: update parent node fields
-          if (numVisitsAccepted > 0)
+          if (!haveProcessedLeaf && visitEdge.N > 0 && visitEdge.Q <= -1)
           {
-            if (!haveProcessedLeaf && visitEdge.N > 0 && visitEdge.Q <= -1)
+            if (!parentNode.CheckmateKnownToExistAmongChildren) // only do first time
             {
-              if (!parentNode.CheckmateKnownToExistAmongChildren) // only do first time
-              {
-                parentNode.UpdateNodeForProvenChildLoss((FP16)(float)-visitEdge.Q, 0);
-              }
-              parentNode.NodeRef.N += numVisitsAccepted;
-
-              //                UpdateParentNodeForProvenChildLoss(numVisitsAccepted, visitEdge);
+              parentNode.UpdateNodeForProvenChildLoss((FP16)(float)-visitEdge.Q, 0);
+            }
+            parentNode.NodeRef.N += numVisitsAccepted;
+          }
+          else
+          {
+            // Compute deltaD (and the analogous repetition-draw fraction deltaR)
+            // for the parent node backup. For the leaf edge these come from the
+            // initial backup value; for internal edges they are re-read from the
+            // child node's current values.
+            double childD;
+            double childR;
+            if (haveProcessedLeaf)
+            {
+              GNode childNode = visitEdge.ChildNode;
+              childD = childNode.D;
+              childR = childNode.RepDrawFraction;
             }
             else
             {
-              // Compute deltaD for the parent node backup.
-              // childD is already available from the child node (already read for BackupToEdge).
-              // For leaf edge: use initialBackupValue.D
-              // For internal edges: use visitEdge.ChildNode.D
-              double childD = haveProcessedLeaf ? visitEdge.ChildNode.D : initialBackupValue.D;
-              double newParentDeltaD = childD * numVisitsAccepted;
-
-              // Repetition-draw fraction delta (same plumbing shape as D).
-              double childR = haveProcessedLeaf ? visitEdge.ChildNode.RepDrawFraction : leafR;
-              double newParentDeltaR = childR * numVisitsAccepted;
-
-              // Fold the batch of leaf values backed up through this node into its volatility
-              // estimate, measured about the node's pre-update pure Q. The node-perspective leaf
-              // sum is -sV. Skipped when checkmate is known (Q is pinned, dispersion meaningless).
-              if (trackVol && !parentNode.CheckmateKnownToExistAmongChildren)
-              {
-                double qRef = parentNode.N > 0 ? parentNode.ComputeQPure() : (-sV / numVisitsAccepted);
-                parentNode.NodeRef.LeafValueVolatility.AddBatch(qRef, -sV, sV2, numVisitsAccepted);
-              }
-
-              strategy.BackupToNode(parentNode, numVisitsAccepted, newEdgeDeltaW, newParentDeltaD, newParentDeltaR);
+              childD = initialBackupValue.D;
+              childR = leafR;
             }
+
+            double newParentDeltaD = childD * numVisitsAccepted;
+            double newParentDeltaR = childR * numVisitsAccepted;
+
+            // Fold the batch of leaf values backed up through this node into its volatility
+            // estimate, measured about the node's pre-update pure Q. The node-perspective leaf
+            // sum is -sV. Skipped when checkmate is known (Q is pinned, dispersion meaningless).
+            if (trackVol && !parentNode.CheckmateKnownToExistAmongChildren)
+            {
+              double qRef = parentNode.N > 0 ? parentNode.ComputeQPure() : (-sV / numVisitsAccepted);
+              parentNode.NodeRef.LeafValueVolatility.AddBatch(qRef, -sV, sV2, numVisitsAccepted);
+            }
+
+            strategy.BackupToNode(parentNode, numVisitsAccepted, parentPerspectiveDeltaW, newParentDeltaD, newParentDeltaR);
           }
         }
 
@@ -253,6 +205,105 @@ public partial class MCGSBackup
 
         haveProcessedLeaf = true;
       }
+    }
+  }
+
+
+  /// <summary>
+  /// Handles merge-point coordination at a visit potentially shared by multiple paths
+  /// (must be called while holding the parent node lock, which serializes the
+  /// pending counter decrement and the accumulator access).
+  ///
+  /// Decrements the pending-backup counter armed during select. If other paths have yet
+  /// to pass through this visit, deposits this path's contribution into the visit's
+  /// accumulator and returns false (the final arrival completes the work). Otherwise
+  /// merges (and clears) any contributions deposited by earlier arrivals into the
+  /// ref arguments and returns true.
+  /// </summary>
+  private static bool TryContinueThroughMergePoint(ref MCGSPathVisit visitPathRef, bool haveProcessedLeaf,
+                                                   ref int numVisitsAttempted, ref int numVisitsAccepted,
+                                                   ref double sV, ref double sV2)
+  {
+    if (!haveProcessedLeaf)
+    {
+      // Leaf visits are never shared between paths, just decrement.
+      Interlocked.Add(ref visitPathRef.NumVisitsAttemptedPendingBackup, -numVisitsAttempted);
+      return true;
+    }
+
+    int newNumPendingBackup = Interlocked.Add(ref visitPathRef.NumVisitsAttemptedPendingBackup, -numVisitsAttempted);
+    Debug.Assert(numVisitsAccepted >= 0);
+
+    if (newNumPendingBackup > 0)
+    {
+      // There are more paths yet to be processed that will pass thru this visit.
+      // We'll exit and let them eventually finish the work.
+      // But first we have to update the accumulator for the child.
+      visitPathRef.Accumulator.DoAdd(numVisitsAttempted, numVisitsAccepted, sV, sV2);
+      return false;
+    }
+
+    if (visitPathRef.Accumulator.NumVisitsAttempted > 0)
+    {
+      // Other paths already visited this child and accumulated updates.
+      // We first apply our own update and then reload from accumulator
+      // so we see all accumulated values.
+      ref MCGSBackupAccumulator inFlightAccumulator = ref visitPathRef.Accumulator;
+      inFlightAccumulator.DoAdd(numVisitsAttempted, numVisitsAccepted, sV, sV2);
+
+      numVisitsAttempted = inFlightAccumulator.NumVisitsAttempted;
+      numVisitsAccepted = inFlightAccumulator.NumVisitsAccepted;
+      sV = inFlightAccumulator.SumV;
+      sV2 = inFlightAccumulator.SumV2;
+
+      // Clear after consumption so that a protocol violation (the counter reaching zero
+      // twice due to a select-side arming bug) cannot silently re-merge stale contributions.
+      inFlightAccumulator = default;
+    }
+
+    return true;
+  }
+
+
+  /// <summary>
+  /// Applies the edge update for one visit: increments edge N by the accepted visits
+  /// and refreshes the edge's cached child Q (for the leaf edge using the initial backup
+  /// value, with special handling for draw-by-repetition terminations).
+  /// </summary>
+  private static void BackupVisitToEdge(MCGSSelectBackupStrategyBase strategy, MCGSPath path, GEdge visitEdge,
+                                        bool haveProcessedLeaf, int numVisitsAccepted, in BackupValue initialBackupValue)
+  {
+    if (haveProcessedLeaf)
+    {
+      GNode childNode = visitEdge.ChildNode;
+      strategy.BackupToEdge(visitEdge, numVisitsAccepted, childNode.Q, childNode.D, visitEdge.ChildNodeHasDrawKnownToExist);
+      return;
+    }
+
+    // Leaf edge. On a draw-by-repetition, pass ChildNode.Q (NOT initialBackupValue.V == 0)
+    // as the cached QChild so the edge faithfully mirrors the child node's Q; edge.Q still
+    // dilutes to the draw value via NDrawByRepetition. Writing 0 here clobbers QChild and
+    // forces edge.Q = 0 until the next non-rep visit -- and for an edge whose child is the
+    // search root (whose position is in every path's history) there is NEVER a non-rep
+    // visit, so QChild would stay stuck at 0 forever while the child's true Q is nonzero.
+    // (Matches the internal-edge case above, which already passes ChildNode.Q.)
+    bool isRepDraw = path.TerminationReason == MCGSPathTerminationReason.DrawByRepetitionInCoalesceMode;
+    double newQChildForLeaf = isRepDraw ? visitEdge.ChildNode.Q : initialBackupValue.V;
+    if (isRepDraw && double.IsNaN(newQChildForLeaf))
+    {
+      // Unevaluated draw-by-repetition placeholder child (Q is the NaN "unevaluated" sentinel):
+      // its value is a draw (0), never NaN. Passing NaN here would store edge.QChild = NaN and
+      // make deltaQ = NaN (silently disabling off-path propagation) and feed NaN*0 into the
+      // edge.Q dilution. A search-root child has a real Q (not NaN) and is therefore unaffected.
+      newQChildForLeaf = 0;
+    }
+
+    strategy.BackupToEdge(visitEdge, numVisitsAccepted, newQChildForLeaf, initialBackupValue.D, false);
+    if (isRepDraw)
+    {
+      // The NDrawByRepetition for the edge immediately leading to the draw is incremented
+      // in tandem with the primary update (but is not itself backed up to ancestors).
+      visitEdge.IncrementNDrawRepetition(numVisitsAccepted);
     }
   }
 }

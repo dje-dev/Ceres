@@ -61,17 +61,6 @@ public struct MCGSPathVisit
 
   #endregion
 
-  /// <summary>
-  /// If backups should "disconnect" starting at this visit,
-  /// meaning that beginning with the edge & parent node of this visit
-  /// there are no further to any stats (e.g. Q or N) for any node
-  /// higher in the graph (instead only the InFlight statistics backed out).
-  /// 
-  /// NOTE: not currently set in any code path, consider converting to another or unused field.
-  /// </summary>
-  public bool DisconnectFromEdgeNStartingThisVisit;
-
-
   #region Path visit definition
 
   /// <summary>
@@ -140,7 +129,7 @@ public struct MCGSPathVisit
 
   /// <summary>
   /// Counter number of paths which pass thru this node and
-  /// are have yet to be backed up (inclusive of all parents).
+  /// have yet to be backed up (inclusive of all parents).
   /// Note that for efficiency reasons, the backup phases decrements
   /// this counter only if the node turned out to be a merge node (NumPathsVisitedBy > 1).
   /// </summary>
@@ -242,17 +231,15 @@ public struct MCGSPathVisit
     ChildNodeHashStandalone64 = currentVisitNodeHashStandalone64;
     MoveIrreverisible = moveIrreversible;
     NumVisitsAccepted = 0;
-    NumVisitsAttempted = (short)numVisitsAttemptedThisVisit;
+    NumVisitsAttempted = numVisitsAttemptedThisVisit;
     NumVisitsAttemptedPendingBackup = NumVisitsAttempted;
 
     ChildPosition = currentVisitNodePosition;
 
-    DisconnectFromEdgeNStartingThisVisit = false;
     MovesList = null;
     Accumulator = default;
     ParentChildEdge = default;
 
-    ChildPosition = currentVisitNodePosition;
     NumPolicyMoves = parentOfThisVisitNode.NumPolicyMoves;
 
     // Possibly update MaxQSuboptimality

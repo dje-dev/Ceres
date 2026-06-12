@@ -98,7 +98,7 @@ public partial struct GNodeStruct
   /// <summary>
   /// Helper method to atomically add a signed short to a ushort using a 16-bit CAS retry loop.
   /// 
-  /// A 16-big CAS retry-loop is used because Interlocked primitives do not work on 16 bit types.
+  /// A 16-bit CAS retry-loop is used because Interlocked primitives do not work on 16 bit types.
   /// </summary>
   /// <param name="target"></param>
   /// <param name="delta"></param>
@@ -109,7 +109,7 @@ public partial struct GNodeStruct
 
     while (true)
     {
-      // ake the current snapshot (atomic because ushort is naturally aligned).
+      // Take the current snapshot (atomic because ushort is naturally aligned).
       ushort oldVal = Volatile.Read(ref target);
 
       // Calculate the proposed new value in a wider type.
@@ -133,7 +133,6 @@ public partial struct GNodeStruct
   /// <summary>
   /// Atomically adds delta to either NumInFlight0 or NumInFlight1.
   /// </summary>
-  /// </remarks>
   public unsafe static void UpdateEdgeNInFlightForIterator(GEdge edge, int iteratorID, int adjust)
   {
     Debug.Assert(iteratorID is 0 or 1);

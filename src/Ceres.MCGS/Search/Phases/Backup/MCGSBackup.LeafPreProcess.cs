@@ -1,4 +1,4 @@
-﻿#region License notice
+#region License notice
 
 /*
   This file is part of the Ceres project at https://github.com/dje-dev/ceres.
@@ -16,8 +16,8 @@
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Threading;
 using System.Threading.Tasks;
+
 using Ceres.Base.DataTypes;
 using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GNodes;
@@ -30,24 +30,45 @@ namespace Ceres.MCGS.Search.Phases.Backup;
 /// <summary>
 /// Container for the values to be backed up during the backup phase.
 /// </summary>
-/// <param name="V"></param>
-/// <param name="D"></param>
-/// <param name="NumVisitsAccepted"></param>
+/// <param name="V">Value (win minus loss probability) from the leaf's perspective.</param>
+/// <param name="D">Draw probability.</param>
 public record struct BackupValue(double V, double D);
 
 
 public partial class MCGSBackup
 {
   /// <summary>
+  /// Cached options for the leaf preprocessing parallel loop (avoids per-batch allocations).
+  /// </summary>
+  private readonly ParallelOptions cachedLeafPrepParallelOptions = new();
+
+  /// <summary>
+  /// Cached delegate for ApplyLeafNodeUpdates (avoids per-batch allocations).
+  /// </summary>
+  private readonly Action<MCGSPath> applyLeafNodeUpdatesAction;
+
+
+  /// <summary>
   /// Prepares collection of MCGSPath paths to begin backup from their leaves.
   /// </summary>
   internal void PreparePathsForBackup(ConcurrentQueue<MCGSPath> paths)
   {
     const int PATHS_PER_THREAD = 32;
-    Parallel.ForEach(paths, new ParallelOptions { MaxDegreeOfParallelism = 1 + paths.Count / PATHS_PER_THREAD }, path =>
+
+    int numPaths = paths.Count;
+    if (numPaths <= 2 * PATHS_PER_THREAD)
     {
-      ApplyLeafNodeUpdates(path);
-    });
+      // Below this size the Parallel.ForEach machinery costs more than it saves.
+      foreach (MCGSPath path in paths)
+      {
+        ApplyLeafNodeUpdates(path);
+      }
+      return;
+    }
+
+    cachedLeafPrepParallelOptions.MaxDegreeOfParallelism = Math.Min(1 + numPaths / PATHS_PER_THREAD,
+                                                                    Math.Min(System.Environment.ProcessorCount, MAX_BACKUP_THREADS));
+    Parallel.ForEach(paths, cachedLeafPrepParallelOptions, applyLeafNodeUpdatesAction);
   }
 
 
@@ -55,28 +76,27 @@ public partial class MCGSBackup
   /// Applies any updates to leaf node which are appropriate based on the termination reason.
   /// </summary>
   /// <param name="path"></param>
-  /// <param name="useSiblingBlending"></param>
   internal void ApplyLeafNodeUpdates(MCGSPath path)
   {
     int numToApply = (int)path.LeafVisitRef.NumVisitsAccepted;
     GNode leafNode = path.LeafNode;
-
-    float? overrideV = null;
-    float? overrideDrawP = null;
 
     switch (path.TerminationReason)
     {
       case MCGSPathTerminationReason.PendingNeuralNetEval:
         Debug.Assert(numToApply == 1);
         // deltaD = DrawP * numToApply for running average accumulation
-        Engine.Strategy.BackupToNode(leafNode, numToApply, path.TerminationInfo.V, 
-          numToApply * (overrideDrawP ?? path.TerminationInfo.DrawP));
+        Engine.Strategy.BackupToNode(leafNode, numToApply, path.TerminationInfo.V,
+          numToApply * path.TerminationInfo.DrawP);
         break;
 
       case MCGSPathTerminationReason.TranspositionCopyValues:
+        // Select accepts exactly one visit for a non-terminal newly created node
+        // (see MCGSSelect.DoNewlyCreatedNode); the unmultiplied V below relies on this.
+        Debug.Assert(numToApply == 1);
         // deltaD = DrawP * numToApply for running average accumulation
         Engine.Strategy.BackupToNode(leafNode, numToApply, leafNode.V,
-          numToApply * (overrideDrawP ?? leafNode.DrawP));
+          numToApply * leafNode.DrawP);
         break;
 
       case MCGSPathTerminationReason.TranspositionCopyValuesAutoExtended:
@@ -90,8 +110,8 @@ public partial class MCGSBackup
       case MCGSPathTerminationReason.Terminal:
         // Update search statistics (all visits are absorbed).
         // deltaD = DrawP * numToApply for running average accumulation
-        Engine.Strategy.BackupToNode(leafNode, numToApply, numToApply * leafNode.V, 
-          numToApply * (overrideDrawP ?? leafNode.DrawP));
+        Engine.Strategy.BackupToNode(leafNode, numToApply, numToApply * leafNode.V,
+          numToApply * leafNode.DrawP);
         break;
 
       case MCGSPathTerminationReason.PiggybackPendingNNEval:
@@ -148,9 +168,10 @@ public partial class MCGSBackup
     ref readonly MCGSPathVisit leafPathVisit = ref path.LeafVisitRef;
     GEdge leafEdge = leafPathVisit.ParentChildEdge;
 
-    // TODO: eventually remove EnablePVAutoExtend feature.
-    //       was not effective, adds complexity code, below needs review.
+    // The EnablePVAutoExtend feature was found ineffective and its backup-side
+    // support has been removed; the assert guards against it being re-enabled.
     Debug.Assert(!path.Engine.Manager.ParamsSearch.EnablePVAutoExtend);
+
 #if NOT
     // EnablePVAutoExtend support:
     //   check if this was a first explicit visit to a node 
@@ -200,7 +221,7 @@ public partial class MCGSBackup
 
     if (leafEdge.Type == GEdgeStruct.EdgeType.ChildEdge)
     {
-      leafEdge.SetUncertaintyValues(leafEdge.ChildNode.UncertaintyValue, 
+      leafEdge.SetUncertaintyValues(leafEdge.ChildNode.UncertaintyValue,
                                     leafEdge.ChildNode.UncertaintyPolicy);
     }
 

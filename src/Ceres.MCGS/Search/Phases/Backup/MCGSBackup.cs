@@ -1,4 +1,4 @@
-﻿#region License notice
+#region License notice
 
 /*
   This file is part of the Ceres project at https://github.com/dje-dev/ceres.
@@ -17,6 +17,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Ceres.Base.Math;
@@ -45,6 +46,23 @@ public partial class MCGSBackup
   /// </summary>
   private Task[] cachedBackupTasks;
 
+  /// <summary>
+  /// Cached buffer into which the paths queue is snapshotted for parallel backup
+  /// (so PathsSet.Paths is left intact, identical to single-threaded mode).
+  /// </summary>
+  private MCGSPath[] cachedPathsBuffer;
+
+  /// <summary>
+  /// Index of next path in cachedPathsBuffer to be claimed by a backup worker.
+  /// </summary>
+  private int nextPathIndex;
+
+  /// <summary>
+  /// Cached value of ParamsSearch.TrackLeafValueVolatility
+  /// (avoids re-traversing the property chain for every backed up path).
+  /// </summary>
+  private readonly bool trackLeafValueVolatility;
+
 
   const int MAX_BACKUP_THREADS = 24;
 
@@ -55,12 +73,15 @@ public partial class MCGSBackup
   public MCGSBackup(MCGSEngine mcgsCoordinator)
   {
     Engine = mcgsCoordinator;
+    trackLeafValueVolatility = mcgsCoordinator.Manager.ParamsSearch.TrackLeafValueVolatility;
+    applyLeafNodeUpdatesAction = ApplyLeafNodeUpdates;
 
     if (mcgsCoordinator.Manager.ParamsSearch.Execution.BackupMode == BackupMethodEnum.ReductionMultiThread)
     {
-      // Allocate cached task array for multi-threaded backup.
+      // Allocate cached arrays for multi-threaded backup.
       cachedBackupTasks = new Task[MAX_BACKUP_THREADS];
-    } 
+      cachedPathsBuffer = new MCGSPath[mcgsCoordinator.Manager.ParamsSearch.Execution.MaxBatchSize + 5];
+    }
   }
 
 
@@ -74,10 +95,10 @@ public partial class MCGSBackup
                                          MCGSSelectBackupStrategyBase strategy,
                                          MCGSIterator iterator)
   {
-    // TODO: is it possible that the processing in PreparePathsForReduction
-    //       could be move into the loop in this, saving one loop over all paths?
+    // TODO: is it possible that the processing in PreparePathsForBackup
+    //       could be moved into the loop in this, saving one loop over all paths?
     //       However, this may not be possible, the backup of some paths may depend
-    //       on others having had ther leaves initialized.
+    //       on others having had their leaves initialized.
     PreparePathsForBackup(paths);
 
     foreach (MCGSPath path in paths)
@@ -89,6 +110,10 @@ public partial class MCGSBackup
 
   /// <summary>
   /// Runs backup of all paths in paths using multi-threaded reduction strategy.
+  ///
+  /// The queue is snapshotted (not drained) so that post-backup readers see the
+  /// same state regardless of which backup mode was used; workers claim paths
+  /// from the snapshot via an interlocked index.
   /// </summary>
   /// <param name="paths"></param>
   /// <param name="strategy"></param>
@@ -99,39 +124,38 @@ public partial class MCGSBackup
   {
     PreparePathsForBackup(paths);
 
-#if DEBUG
-    MCGSPath[] copyPaths = paths.ToArray();
-#endif
+    int numPaths = 0;
+    foreach (MCGSPath path in paths)
+    {
+      if (numPaths == cachedPathsBuffer.Length)
+      {
+        Array.Resize(ref cachedPathsBuffer, cachedPathsBuffer.Length * 2);
+      }
+      cachedPathsBuffer[numPaths++] = path;
+    }
+    nextPathIndex = 0;
 
     int numBackupThreads = MaxConcurrentThreadsForPaths(iterator.numAllocatedPaths);
 
     for (int i = 0; i < numBackupThreads; i++)
     {
-      cachedBackupTasks[i] = Task.Run(() => BackupWorkerLoop(paths, strategy, iterator));
+      cachedBackupTasks[i] = Task.Run(() => BackupWorkerLoop(numPaths, strategy, iterator));
     }
 
     Task.WaitAll(cachedBackupTasks.AsSpan(0, numBackupThreads));
 
 #if DEBUG
-    foreach (MCGSPath path in copyPaths)
+    for (int i = 0; i < numPaths; i++)
     {
-      foreach (MCGSPathVisitMember visit in path.PathVisitsLeafToRoot)
+      foreach (MCGSPathVisitMember visit in cachedPathsBuffer[i].PathVisitsLeafToRoot)
       {
         if (!visit.PathVisitRef.ParentChildEdge.ParentNode.IsSearchRoot) // accumulation not done at root
         {
           Debug.Assert(visit.PathVisitRef.NumVisitsAttemptedPendingBackup == 0);
           Debug.Assert(visit.PathVisitRef.NumVisitsAttempted > 0);
-
         }
       }
     }
-#endif
-
-#if NOT
-      foreach (MCGSPath path in paths)
-      {
-        path.ValidateAllPendingReleased();
-      }
 #endif
   }
 
@@ -144,19 +168,25 @@ public partial class MCGSBackup
 
 
   /// <summary>
-  /// Worker loop for multi-threaded reduction backup.
+  /// Worker loop for multi-threaded reduction backup; claims successive paths
+  /// from cachedPathsBuffer until all numPaths have been claimed.
   /// </summary>
-  /// <param name="workerID"></param>
-  /// <param name="pendingBackupPaths"></param>
+  /// <param name="numPaths"></param>
   /// <param name="strategy"></param>
   /// <param name="iterator"></param>
-  private void BackupWorkerLoop(ConcurrentQueue<MCGSPath> pendingBackupPaths,
+  private void BackupWorkerLoop(int numPaths,
                                 MCGSSelectBackupStrategyBase strategy,
                                 MCGSIterator iterator)
   {
-    while (pendingBackupPaths.TryDequeue(out MCGSPath path))
+    while (true)
     {
-      BackupReduced(strategy, path, iterator.IteratorID);
+      int pathIndex = Interlocked.Increment(ref nextPathIndex) - 1;
+      if (pathIndex >= numPaths)
+      {
+        return;
+      }
+
+      BackupReduced(strategy, cachedPathsBuffer[pathIndex], iterator.IteratorID);
     }
   }
 
@@ -182,8 +212,6 @@ public partial class MCGSBackup
     }
   }
 
-  static bool haveWarnedBackup = false;
-
 
   /// <summary>
   /// Determines the best/most appropriate backup mode to use
@@ -201,15 +229,15 @@ public partial class MCGSBackup
         // Determine actual backup mode to use.
         // Possibly downgrade for small trees, where the overhead makes it not worthwhile.
         // TODO: TUNE THIS! should perhaps be higher
-        const int THRESHOLD_NO_PARALLEL = 20_000; 
+        const int THRESHOLD_NO_PARALLEL = 20_000;
         bool parallelOK = Engine.SearchRootNode.N > THRESHOLD_NO_PARALLEL;
-        return parallelOK ? BackupMethodEnum.ReductionMultiThread 
-                          : BackupMethodEnum.ReductionSingleThread; 
+        return parallelOK ? BackupMethodEnum.ReductionMultiThread
+                          : BackupMethodEnum.ReductionSingleThread;
 
       default:
         throw new ArgumentOutOfRangeException("Unknown backup mode");
-         
-    } 
+
+    }
   }
 
 }

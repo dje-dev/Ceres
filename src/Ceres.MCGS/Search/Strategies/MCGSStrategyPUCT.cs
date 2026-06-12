@@ -849,8 +849,8 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
           }
           else
           {
-            // Update the parent node with the delta
-            double deltaW = edgeDeltaQ * edge.N;
+            // Update the parent node with the delta.
+            double deltaW = -edgeDeltaQ * edge.N;
             double deltaD = 0; // TODO: implement this.
             BackupToNode(edge.ParentNode, 0, deltaW, deltaD);
 

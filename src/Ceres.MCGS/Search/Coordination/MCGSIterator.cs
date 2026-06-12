@@ -412,7 +412,7 @@ public class MCGSIterator : IDisposable
       {
         foreach (MCGSPathVisitMember visit in path.PathVisitsLeafToRoot)
         {
-          if (visit.PathVisitRef.NumVisitsAttemptedPendingBackup > 0)
+          if (visit.PathVisitRef.NumVisitsAttemptedPendingBackup != 0) // negative would indicate over-decrement
           {
             ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"Found pending backup visits = {visit.PathVisitRef.NumVisitsAttemptedPendingBackup} after backup phase on iterator {IteratorID} for path {path.PathID} visit {visit.PathVisitRef} (root N: {Engine.SearchRootNode.N})");
             foundError = true;
