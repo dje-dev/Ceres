@@ -236,6 +236,18 @@ public record ParamsSearch
   /// </summary>
   public bool EnablePseudoTranspositionBlendingAtCreation = true;
 
+  /// <summary>
+  /// Repetition-draw discounting of pseudotransposition blending donors: a donor whose
+  /// RepDrawFraction (fraction of its visit mass that terminated at repetition/50-move
+  /// terminal draws, valid only for the donor's own histories) is R has its blending
+  /// weight scaled by max(0, 1 - R / thisValue). Donors with R near 0 are unaffected,
+  /// partially contaminated donors contribute proportionally less, and donors at or above
+  /// this fraction are excluded entirely ("blend in less or not at all" as one knob).
+  /// Values less than or equal to 0 disable the discounting.
+  /// Tests of 0.5 vs 0.0 showed consistent +8 Elo improvements.
+  /// </summary>
+  public float PseudoTranspositionBlendingMaxRepDrawFraction = 0.5f;
+
   // Optionally stop descent at a transposition node only if it has a
   // sufficiently large number of visits. 
   // This parameter is the cutoff value of a transposed child�s visit count

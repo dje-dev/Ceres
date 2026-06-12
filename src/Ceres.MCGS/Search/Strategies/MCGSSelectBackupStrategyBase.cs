@@ -92,7 +92,9 @@ public abstract class MCGSSelectBackupStrategyBase
   /// <param name="deltaN"></param>
   /// <param name="deltaW"></param>
   /// <param name="deltaD"></param>
-  public abstract void BackupToNode(GNode node, int deltaN, double deltaW, double deltaD);
+  /// <param name="deltaR">Sum over the visits of the per-visit fraction (in [0, deltaN]) which
+  /// terminated at a history-sensitive (repetition/50-move) terminal draw edge.</param>
+  public abstract void BackupToNode(GNode node, int deltaN, double deltaW, double deltaD, double deltaR = 0);
 
 
   /// <summary>

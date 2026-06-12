@@ -36,6 +36,13 @@ public readonly partial struct GNode
   {
     get
     {
+      // Edge headers are not yet materialized for a node whose policy is still
+      // a deferred transposition copy; they must not be read.
+      if (IsPendingPolicyCopy)
+      {
+        return 0;
+      }
+
       double entropy = 0;
       int numMoves = NumPolicyMoves;
       
@@ -68,8 +75,10 @@ public readonly partial struct GNode
     {
       double entropy = 0;
       int totalVisits = N - 1; // Exclude the root visit itself
-      
-      if (totalVisits <= 0)
+
+      // Edge headers are not yet materialized for a node whose policy is still
+      // a deferred transposition copy; they must not be read.
+      if (totalVisits <= 0 || IsPendingPolicyCopy)
       {
         return 0;
       }
@@ -113,6 +122,11 @@ public readonly partial struct GNode
   /// <returns>A tuple containing the number of plies until an irreversible move (or null if none found) and the irreversible move edge (or null if none found).</returns>
   public readonly (int? ply, GEdge? irreversibleEdge) PlyUntilPVIsIrreversibleMoveWithMove()
   {
+    if (IsNull)
+    {
+      return (null, null);
+    }
+
     int plyCount = 0;
     GNode currentNode = this;
 
@@ -149,6 +163,14 @@ public readonly partial struct GNode
       if (bestEdge.MoveMG.ResetsMove50Count)
       {
         return (plyCount, bestEdge);
+      }
+
+      // A terminal edge (checkmate/tablebase/drawn) has no child node; the PV ends here.
+      // Descending would land on the null node, whose debug-mode sentinel field values
+      // (e.g. NumEdgesExpanded = 255) would cause reads of invalid edge headers.
+      if (bestEdge.Type != GEdgeStruct.EdgeType.ChildEdge)
+      {
+        break;
       }
 
       // Descend to the child node.

@@ -1153,8 +1153,13 @@ public class MCGSSelect
     // Create terminal edge (no associated child node).
 
     bool propagateAsDraw = resultInfo.v == 0;
+    // Repetition and 50-move-rule draws are history-sensitive (valid only for histories like
+    // the current one); record the kind on the edge. The result tuple alone cannot distinguish
+    // the rule50 case from stalemate, so classify here where the child position is in hand.
+    bool historySensitiveDraw = resultInfo.wasDrawByRepetition
+                             || (resultInfo.result == GameResult.Draw && childPosInfo.childPos.Rule50Count >= 100);
     GEdge newEdge = path.Graph.AddNewTerminalEdge(parentNode, childIndex, resultInfo.v, resultInfo.d,
-                                                   numVisitsThisChild, propagateAsDraw);
+                                                   numVisitsThisChild, propagateAsDraw, historySensitiveDraw);
     newVisit.ParentChildEdge = newEdge;
     GNodeStruct.UpdateEdgeNInFlightForIterator(newEdge, path.IteratorID, numVisitsThisChild);
 

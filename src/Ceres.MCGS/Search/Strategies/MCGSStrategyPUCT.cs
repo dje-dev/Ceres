@@ -605,19 +605,55 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
 
 
   /// <summary>
+  /// Per-thread xorshift64* state for the stochastic rounding of the single-byte
+  /// RepDrawFraction running average (see GNodeStruct.UpdateRepDrawFractionStochastic).
+  /// </summary>
+  [ThreadStatic]
+  static ulong repDrawRandState;
+
+  /// <summary>
+  /// Returns a uniform random double in [0, 1) from a cheap per-thread xorshift64* generator.
+  /// </summary>
+  static double NextRandUniform()
+  {
+    ulong x = repDrawRandState;
+    if (x == 0)
+    {
+      // Seed lazily from the thread id (must be nonzero for xorshift).
+      x = (ulong)System.Environment.CurrentManagedThreadId * 0x9E3779B97F4A7C15UL + 0x2545F4914F6CDD1DUL;
+    }
+    x ^= x >> 12;
+    x ^= x << 25;
+    x ^= x >> 27;
+    repDrawRandState = x;
+    return ((x * 0x2545F4914F6CDD1DUL) >> 11) * (1.0 / (1UL << 53));
+  }
+
+
+  /// <summary>
   /// Backs up the value of a newly evaluated leaf node to a specified node.
   /// </summary>
   /// <param name="node"></param>
   /// <param name="deltaN"></param>
   /// <param name="deltaW"></param>
   /// <param name="deltaD"></param>
-  /// <param name="refreshSiblingContribution"></param>
-  public override void BackupToNode(GNode node, int deltaN, double deltaW, double deltaD)
+  /// <param name="deltaR">Sum over the visits of the per-visit fraction (in [0, deltaN]) which
+  /// terminated at a history-sensitive (repetition/50-move) terminal draw edge; accumulated
+  /// into the node's RepDrawFraction running average (mirroring D's plumbing).</param>
+  public override void BackupToNode(GNode node, int deltaN, double deltaW, double deltaD, double deltaR = 0)
   {
     int startN = node.N;
 
     // Increment N.
     node.NodeRef.N += deltaN;
+
+    // Update the repetition-draw mass fraction (stochastically rounded single byte).
+    // Note this must run even when deltaR == 0 so that R correctly DECAYS as clean
+    // visits accumulate.
+    if (deltaN > 0)
+    {
+      node.NodeRef.UpdateRepDrawFractionStochastic(startN, deltaN, deltaR, NextRandUniform());
+    }
 
     if (node.CheckmateKnownToExistAmongChildren)
     {
@@ -745,6 +781,16 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     // no longer overwrite edge.N with child.N in graph-aware mode.
     edge.N += deltaN;
     edge.QChild = newQChild;
+
+    // Maintain the history-sensitive-draw kind sentinel in tandem with N on terminal
+    // drawn edges (NDrawByRepetition was set nonzero at creation for repetition/50-move
+    // draws). Keeps NDrawByRepetition == N so the field doubles as the draw-visit mass.
+    // No-op for history-free drawn terminals (stalemate/material/tablebase, NDR == 0)
+    // and unrelated to the Position-mode coalesce NDR maintenance (ChildEdge type).
+    if (edge.Type == GEdgeStruct.EdgeType.TerminalEdgeDrawn && edge.NDrawByRepetition > 0)
+    {
+      edge.NDrawByRepetition = edge.N;
+    }
 
     // Note that the assertion on edge N and child N
     // does not apply in coalesce mode because in that case one node appears twice in the path

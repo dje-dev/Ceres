@@ -260,7 +260,48 @@ public unsafe partial struct GNodeStruct
   //public readonly short Unused1;
   //public readonly short Unused2;
   //public int NDrawByRepetition;
-  public short UnusedShort;
+
+  /// <summary>
+  /// Quantized fraction of this node's visits which terminated at a history-sensitive
+  /// (repetition or 50-move rule) terminal draw edge anywhere beneath it.
+  /// Maintained during backup as a running average mirroring D's plumbing, but stored
+  /// in a single byte using STOCHASTIC ROUNDING: the stored grid value is an unbiased
+  /// estimator of the true fraction (a deterministic round-to-nearest would freeze
+  /// permanently once N exceeds ~255, since per-visit updates fall below half a grid
+  /// step). Noise is ~ sqrt(movement/255): about +-0.01 while the true value is moving,
+  /// far less once settled.
+  /// Used to discount pseudotransposition blending donors whose value derives
+  /// significantly from draws valid only for their own histories.
+  /// </summary>
+  private byte repDrawFractionByte;
+
+  public byte UnusedByte;
+
+  /// <summary>
+  /// Fraction of this node's visits which terminated at a history-sensitive
+  /// (repetition/50-move) terminal draw edge beneath it (see backing field).
+  /// </summary>
+  public readonly double RepDrawFraction => repDrawFractionByte * (1.0 / 255.0);
+
+  /// <summary>
+  /// Applies a running-average update to RepDrawFraction with stochastic rounding.
+  /// </summary>
+  /// <param name="startN">Node N before this backup.</param>
+  /// <param name="deltaN">Visits being applied.</param>
+  /// <param name="deltaR">Sum over the visits of the per-visit indicator/fraction (in [0, deltaN]).</param>
+  /// <param name="randUniform">A uniform random value in [0,1) used for the rounding decision.</param>
+  internal void UpdateRepDrawFractionStochastic(int startN, int deltaN, double deltaR, double randUniform)
+  {
+    if (deltaN <= 0)
+    {
+      return;
+    }
+
+    double newFraction = (RepDrawFraction * startN + deltaR) / (startN + deltaN);
+    double scaled = Math.Clamp(newFraction, 0, 1) * 255.0;
+    int floor = (int)scaled;
+    repDrawFractionByte = (byte)Math.Min(255, floor + ((scaled - floor) > randUniform ? 1 : 0));
+  }
 
   /// <summary>
   /// Lock for multithreaded synchronization.

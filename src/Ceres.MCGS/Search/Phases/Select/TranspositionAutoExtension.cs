@@ -296,11 +296,16 @@ internal static class TranspositionAutoExtension
         // two-visit statistics. ORDER MATTERS: n1's first BackupToNode must precede the
         // edge backup so the node.N == sum(edge.N) + 1 invariant holds at each step.
         bool propagateAsDraw = resultInfo.v == 0;
-        GEdge terminalEdge = engine.Graph.AddNewTerminalEdge(n1, 0, resultInfo.v, resultInfo.d, 1, propagateAsDraw);
+        bool historySensitiveDraw = resultInfo.wasDrawByRepetition
+                                 || (resultInfo.result == GameResult.Draw && n2Pos.Rule50Count >= 100);
+        GEdge terminalEdge = engine.Graph.AddNewTerminalEdge(n1, 0, resultInfo.v, resultInfo.d, 1, propagateAsDraw,
+                                                             historySensitiveDraw);
 
-        strategy.BackupToNode(n1, 1, v1, d1);
+        strategy.BackupToNode(n1, 1, v1, d1, 0);
         strategy.BackupToEdge(terminalEdge, 1, resultInfo.v, resultInfo.d, false);
-        strategy.BackupToNode(n1, 1, -resultInfo.v, resultInfo.d);
+        // The second visit terminated at the terminal edge: deltaR = 1 when the draw is
+        // history-sensitive (n1's RepDrawFraction then correctly reads 0.5).
+        strategy.BackupToNode(n1, 1, -resultInfo.v, resultInfo.d, historySensitiveDraw ? 1 : 0);
 
         StatsCellThisThread.NumExtendedTerminal++;
         return true;
@@ -364,10 +369,10 @@ internal static class TranspositionAutoExtension
         // visit statistics through the standard primitives.
         engine.Graph.CopyNodeValues(0, twin2, n2, copyPolicy: false);
 
-        strategy.BackupToNode(n1, 1, v1, d1);
-        strategy.BackupToNode(n2, 1, n2.V, n2.DrawP);
+        strategy.BackupToNode(n1, 1, v1, d1, 0);
+        strategy.BackupToNode(n2, 1, n2.V, n2.DrawP, 0);
         strategy.BackupToEdge(edge, 1, n2.Q, n2.D, false);
-        strategy.BackupToNode(n1, 1, -n2.Q, n2.D);
+        strategy.BackupToNode(n1, 1, -n2.Q, n2.D, n2.RepDrawFraction);
 
         StatsCellThisThread.NumExtendedNewNode++;
         return true;
@@ -377,9 +382,9 @@ internal static class TranspositionAutoExtension
       {
         // Linked to an existing evaluated node (possibly the winner of a creation race):
         // use its full statistics directly - the richest extension outcome.
-        strategy.BackupToNode(n1, 1, v1, d1);
+        strategy.BackupToNode(n1, 1, v1, d1, 0);
         strategy.BackupToEdge(edge, 1, n2.Q, n2.D, false);
-        strategy.BackupToNode(n1, 1, -n2.Q, n2.D);
+        strategy.BackupToNode(n1, 1, -n2.Q, n2.D, n2.RepDrawFraction);
 
         StatsCellThisThread.NumExtendedLinked++;
         return true;
@@ -389,7 +394,7 @@ internal static class TranspositionAutoExtension
       // elsewhere. Install only n1's own evaluation visit (N=1, satisfying
       // N == sum(edge.N) + 1 with edge.N = 0); its creator will complete the node, and
       // ordinary selection will visit the edge later.
-      strategy.BackupToNode(n1, 1, v1, d1);
+      strategy.BackupToNode(n1, 1, v1, d1, 0);
       StatsCellThisThread.NumExtendedDegenerate++;
       return true;
     }

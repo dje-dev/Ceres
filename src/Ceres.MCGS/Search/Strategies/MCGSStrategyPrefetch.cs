@@ -222,7 +222,7 @@ public sealed class MCGSStrategyPrefetch : MCGSSelectBackupStrategyBase
   /// <param name="node"></param>
   /// <param name="deltaN"></param>
   /// <param name="deltaW"></param>
-  public override void BackupToNode(GNode node, int deltaN, double deltaW, double deltaD)
+  public override void BackupToNode(GNode node, int deltaN, double deltaW, double deltaD, double deltaR = 0)
   {
   }
 

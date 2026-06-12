@@ -145,6 +145,16 @@ public unsafe partial class Graph : IDisposable
 
   public int NumLinksToExistingNodes;
 
+  /// <summary>
+  /// Threshold for repetition-draw discounting of pseudotransposition blending donors:
+  /// donor weight is scaled by max(0, 1 - donor.RepDrawFraction / thisValue);
+  /// values less than or equal to 0 disable the discounting.
+  /// Mirror of ParamsSearch.PseudoTranspositionBlendingMaxRepDrawFraction, copied here
+  /// (per engine construction) because the donor contribution computation is a static
+  /// method with access only to the node/graph.
+  /// </summary>
+  internal float PTBMaxRepDrawFraction;
+
   public bool HasState => Store.HasState;
 
   public bool HasAction => Store.HasAction;
@@ -802,11 +812,19 @@ public unsafe partial class Graph : IDisposable
   }
 
 
-  public GEdge AddNewTerminalEdge(GNode parentNode, int indexOfChildInParent, double edgeV, double edgeD, int numVisits, bool propagateAsDraw)
+  /// <param name="historySensitiveDraw">If the terminal draw arises from repetition or the 50-move rule
+  /// (valid only for histories like the current one), as opposed to history-free draws
+  /// (stalemate/insufficient material/tablebase). Recorded via a sentinel in the edge's
+  /// NDrawByRepetition field (maintained in tandem with N by BackupToEdge thereafter),
+  /// enabling downstream features (e.g. the per-node RepDrawFraction statistic) to
+  /// distinguish draw kinds on revisits.</param>
+  public GEdge AddNewTerminalEdge(GNode parentNode, int indexOfChildInParent, double edgeV, double edgeD, int numVisits, bool propagateAsDraw,
+                                  bool historySensitiveDraw = false)
   {
     Debug.Assert(numVisits > 0);
     Debug.Assert(Math.Abs(edgeV) <= EvaluatorSyzygy.BLESSED_WIN_LOSS_MAGNITUDE + 0.01 || Math.Abs(edgeV) >= 1.0);
     Debug.Assert(!propagateAsDraw || (edgeD == 1 && edgeV == 0));
+    Debug.Assert(!historySensitiveDraw || propagateAsDraw);
 
     if (propagateAsDraw)
     {
@@ -833,6 +851,15 @@ public unsafe partial class Graph : IDisposable
     //      thisEdgeRef.W = numVisits * edgeV;
     //      thisEdgeRef.DSum = edgeV == 0 ? numVisits : 0;
     thisEdgeRef.QChild = edgeV;
+
+    if (historySensitiveDraw)
+    {
+      // Kind sentinel: NDrawByRepetition > 0 on a terminal drawn edge marks it as a
+      // repetition/50-move draw. Q-neutral (the edge Q property's N == 0 and
+      // N == NDrawByRepetition branches both yield the drawn value); BackupToEdge
+      // maintains NDrawByRepetition == N on such edges thereafter.
+      thisEdgeRef.NDrawByRepetition = 1;
+    }
 
     //      thisEdgeRef.N = numVisits;
     //      thisEdgeRef.W = numVisits * edgeV;
@@ -1758,6 +1785,26 @@ public unsafe partial class Graph : IDisposable
 
     // Make the contribution an increasing function of excess visits
     float excessN = siblingN - targetNodeNAfterPendingVisits;
+
+    // Discount donors whose value derives significantly from history-sensitive
+    // (repetition/50-move) draws, which are valid only for the donor's own histories:
+    // scale the donated WEIGHT by a linear ramp hitting zero at PTBMaxRepDrawFraction
+    // (scaling excessN rather than Q correctly reduces both the donor's share of the
+    // blended average and the overall blend fraction).
+    float maxRepDrawFraction = transpositionNode.Graph.PTBMaxRepDrawFraction;
+    if (maxRepDrawFraction > 0)
+    {
+      double repDrawFraction = transpositionNode.RepDrawFraction;
+      if (repDrawFraction > 0)
+      {
+        float discount = (float)Math.Max(0, 1 - repDrawFraction / maxRepDrawFraction);
+        if (discount == 0)
+        {
+          return (0, 0);
+        }
+        excessN *= discount;
+      }
+    }
 
     if (MCGSParamsFixed.SIBLING_POWER_SHRINK_SIBLING_N == 1)
     {

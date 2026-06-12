@@ -190,6 +190,13 @@ public readonly partial struct GNode : IComparable<GNode>, IEquatable<GNode>
   public readonly bool HasRepetitions => NodeRef.miscFields.HasRepetitions;
 
   /// <summary>
+  /// Fraction of this node's visits which terminated at a history-sensitive
+  /// (repetition/50-move) terminal draw edge anywhere beneath it
+  /// (stochastically-rounded single-byte running average; see GNodeStruct).
+  /// </summary>
+  public readonly double RepDrawFraction => NodeRef.RepDrawFraction;
+
+  /// <summary>
   /// Number of pieces on board.
   /// </summary>
   public readonly byte NumPieces => NodeRef.miscFields.NumPieces;

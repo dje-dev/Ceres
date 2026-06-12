@@ -321,10 +321,15 @@ public struct GEdgeStruct
 
   /// <summary>
   /// Aggregate Q which combines visits to child and any possible draw by repetition visits).
-  /// (the NDrawByRepetition count is used to dilute child Q 
+  /// (the NDrawByRepetition count is used to dilute child Q
   /// proportionally to the draw visits treating draws as 0).
+  /// N.B. the leading N == 0 branch guards against division by zero for a freshly created
+  ///      terminal drawn edge carrying the NDrawByRepetition kind sentinel (set at creation,
+  ///      before the first backup increments N); it is semantics-preserving elsewhere since
+  ///      in Position mode N == 0 implies NDrawByRepetition == 0 (the first branch applied).
   /// </summary>
-  public readonly double Q => NDrawByRepetition == 0 ? QChild
+  public readonly double Q => N == 0 ? QChild
+                            : NDrawByRepetition == 0 ? QChild
                             : N == NDrawByRepetition? 0.0   // all visits are draws-by-repetition: clean draw value; avoids NaN*0 when QChild is an unevaluated placeholder
                             : QChild* ((double)(N - NDrawByRepetition) / N);
  

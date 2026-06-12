@@ -44,6 +44,33 @@ public partial class MCGSBackup
     BackupValue initialBackupValue = (numVisitsAccepted > 0) ? initialBackupValue = InitialBackupValueForPath(path)
                                                              : default;
 
+    // Per-visit repetition-draw fraction at the leaf, propagated into each path node's
+    // RepDrawFraction running average (mirroring D's plumbing: internal levels re-read the
+    // child node's CURRENT fraction rather than threading the leaf value).
+    //   - coalesce-mode draw by repetition: 1 (the visit itself is a repetition draw);
+    //   - terminal drawn edge carrying the NDrawByRepetition kind sentinel
+    //     (repetition/50-move draw): 1; history-free drawn terminals: 0;
+    //   - node-terminated paths (NN eval, transposition links/copies, auto-extended):
+    //     the leaf node's own current fraction (0 for fresh nodes; meaningful when
+    //     linking into an existing rep-heavy subgraph).
+    double leafR = 0;
+    if (numVisitsAccepted > 0)
+    {
+      GEdge leafEdge = leafVisitRef.ParentChildEdge;
+      if (path.TerminationReason == MCGSPathTerminationReason.DrawByRepetitionInCoalesceMode)
+      {
+        leafR = 1;
+      }
+      else if (leafEdge.Type == GEdgeStruct.EdgeType.ChildEdge)
+      {
+        leafR = leafEdge.ChildNode.RepDrawFraction;
+      }
+      else if (leafEdge.Type == GEdgeStruct.EdgeType.TerminalEdgeDrawn && leafEdge.NDrawByRepetition > 0)
+      {
+        leafR = 1;
+      }
+    }
+
     bool haveProcessedLeaf = false;
 
     // Leaf-value volatility tracking: thread the first two moments (sum and sum-of-squares) of the
@@ -203,6 +230,10 @@ public partial class MCGSBackup
               double childD = haveProcessedLeaf ? visitEdge.ChildNode.D : initialBackupValue.D;
               double newParentDeltaD = childD * numVisitsAccepted;
 
+              // Repetition-draw fraction delta (same plumbing shape as D).
+              double childR = haveProcessedLeaf ? visitEdge.ChildNode.RepDrawFraction : leafR;
+              double newParentDeltaR = childR * numVisitsAccepted;
+
               // Fold the batch of leaf values backed up through this node into its volatility
               // estimate, measured about the node's pre-update pure Q. The node-perspective leaf
               // sum is -sV. Skipped when checkmate is known (Q is pinned, dispersion meaningless).
@@ -212,7 +243,7 @@ public partial class MCGSBackup
                 parentNode.NodeRef.LeafValueVolatility.AddBatch(qRef, -sV, sV2, numVisitsAccepted);
               }
 
-              strategy.BackupToNode(parentNode, numVisitsAccepted, newEdgeDeltaW, newParentDeltaD);
+              strategy.BackupToNode(parentNode, numVisitsAccepted, newEdgeDeltaW, newParentDeltaD, newParentDeltaR);
             }
           }
         }

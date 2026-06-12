@@ -141,6 +141,7 @@ public partial class MCGSEngine
   {
     Manager = manager;
     Graph = graph;
+    Graph.PTBMaxRepDrawFraction = manager.ParamsSearch.PseudoTranspositionBlendingMaxRepDrawFraction;
     Strategy = new MCGSStrategyPUCT(this);
     SelectWorkerPools = selectWorkerPools;
     QRecalculator = new BottomUpQRecalculator(this);

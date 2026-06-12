@@ -191,6 +191,13 @@ public partial class MCGSManager
     MCGSPosGraphNodeDumper.DumpNodeStr(this, depth, Engine.SearchRootNode, default, node, default, 0, true, writer);
     foreach (GEdge edge in node.EdgesSorted(e=>-e.N))
     {
+      if (edge.ChildNode.IsNull)
+      {
+        // Terminal edge (checkmate/tablebase/drawn): no child node to dump.
+        writer.WriteLine("  TERMINAL " + edge);
+        continue;
+      }
+
       MCGSPosGraphNodeDumper.DumpNodeStr(this,depth,  Engine.SearchRootNode, node, edge.ChildNode, edge, 0, true, writer);
     }
   }
