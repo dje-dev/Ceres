@@ -86,11 +86,20 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     FPURunningStats.EnsureEvaluatorDef(engine.Manager.EvaluatorDef);
   }
 
+  /// <summary>
+  /// Maximum supported path depth (NumVisitsInPath) for a SelectChildren call.
+  /// Must exceed the deepest reachable path: deep rollouts allow a spine of up to 512
+  /// (MCGSSelect.ExtendPathFromInnerNode) plus 384 below the start node; the limit is
+  /// enforced centrally by the depth guard in MCGSSelect.CapacityAbortNeeded.
+  /// Only the (cheap) outer pointer arrays are sized to this; the per-depth rows
+  /// remain lazily allocated, so depths never reached cost nothing.
+  /// </summary>
+  internal const int MAX_PATH_DEPTH = 1024;
+
   private static void CheckThreadStaticsInitialized()
   {
     if (childVisitCountsArray == null)
     {
-      const int MAX_PATH_DEPTH = 255;
       childVisitCountsArray = new short[MAX_PATH_DEPTH][];
       childScoresArray = new double[MAX_PATH_DEPTH][];
     }

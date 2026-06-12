@@ -217,9 +217,9 @@ internal static class TranspositionAutoExtension
       }
 
       // Materialize n1's (possibly deferred) policy so edge header 0 is available.
-      // Mirrors GNode.DoPolicyCopyFromDeferredNodeSource but acquires the source twin's
-      // lock NON-blockingly (a blocking acquire here would invert the standard
-      // source->destination order used elsewhere and create a deadlock surface).
+      // Mirrors GNode.TryDoDeferredPolicyCopyIfNeeded: acquires the source twin's
+      // lock NON-blockingly (a blocking acquire here while holding other node locks
+      // would create a deadlock surface).
       if (n1.IsPendingPolicyCopy)
       {
         GNode policySource = engine.Graph[n1.NodeRef.edgeHeaderBlockIndexOrDeferredNode.NodeIndex];

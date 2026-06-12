@@ -158,6 +158,10 @@ namespace Ceres.Base.DataTypes
     /// <param name="t"></param>
     public void Add(T t)
     {
+      // Pool-rented backing arrays may exceed MaxLength, so an overrun
+      // would otherwise be silent rather than throwing.
+      Debug.Assert(length < MaxLength);
+
       version++;
       array[length++] = t;
     }

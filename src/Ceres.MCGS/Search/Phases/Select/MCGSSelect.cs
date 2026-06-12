@@ -15,9 +15,6 @@
 
 using System;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Numerics.Tensors;
 using System.Threading;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
@@ -35,7 +32,6 @@ using Ceres.MCGS.Search.Coordination;
 using Ceres.MCGS.Search.Params;
 using Ceres.MCGS.Search.Paths;
 using Ceres.MCGS.Search.Strategies;
-using Ceres.MCGS.Search.RPO;
 using Ceres.MCGS.Utils;
 using Microsoft.Extensions.ObjectPool;
 
@@ -210,7 +206,7 @@ public class MCGSSelect
     Span<double> scores;
     NodeSelectAccumulator childStats;
     if (numAttemptedVisits == 1
-     //     && parentNode.N == 1
+     && parentNode.N == 1
      && parentNode.NumEdgesExpanded == 0
      && !ALSO_COMPUTE_CHILD_SCORES)
     {
@@ -224,12 +220,11 @@ public class MCGSSelect
     }
     else
     {
-      float temperatureMultiplierBase = false && Engine.Manager.ParamsSearch.TestFlag2 ? (0.95f + 1 * 0.25f * parentNode.UncertaintyPolicy) : 1.0f;
+      float temperatureMultiplierBase = false && paramsSearch.TestFlag2 ? (0.95f + 1 * 0.25f * parentNode.UncertaintyPolicy) : 1.0f;
 
       // Possible adjustement for path-dependent CPUCT scaling
       const float THRESHOLD_SUBOPTIMALITY_POSSIBLY_SCALE_CPUCT = 0.15f;
-      if (Engine.Manager.ParamsSearch.EnablePathDependentCPUCTScaling
-       && path.MaxQSubOptimality > THRESHOLD_SUBOPTIMALITY_POSSIBLY_SCALE_CPUCT)
+      if (paramsSearch.EnablePathDependentCPUCTScaling && path.MaxQSubOptimality > THRESHOLD_SUBOPTIMALITY_POSSIBLY_SCALE_CPUCT)
       {
         // Experimental idea is to reduce exportation if we have
         // already seen highly explortory visits above since
@@ -242,7 +237,7 @@ public class MCGSSelect
         cpuctMultiplier *= MathF.Max(MIN_CPUCT, 1.0f - CPUCT_SCALE_MULTIPLIER * path.MaxQSubOptimality);
       }
 
-      if (false && parentNode.N > 10 && Engine.Manager.ParamsSearch.SelectExplorationForUncertaintyAtNode > 0)
+      if (false && parentNode.N > 10 && paramsSearch.SelectExplorationForUncertaintyAtNode > 0)
       {
         cpuctMultiplier *= 1f + 0.2f * (float)(parentNode.NodeRef.LeafValueVolatility.RunningStdDev - 0.1);
       }
@@ -250,7 +245,7 @@ public class MCGSSelect
       //#if FEATURE_UNCERTAINTY_POLICY
       if (
         //-7 Elo
-        false && Engine.Manager.ParamsSearch.TestFlag2)
+        false && paramsSearch.TestFlag2)
       {
         Debug.Assert(!float.IsNaN(parentNode.UncertaintyPolicy));
         //Console.WriteLine("UCCP: " + parentNode.UncertaintyPolicy + "  " + parentNode.UncertaintyValue);
@@ -268,8 +263,8 @@ public class MCGSSelect
       }
       //#endif
 
-      if ((Engine.Manager.ParamsSearch.MoveOrderingPhase == ParamsSearch.MoveOrderingPhaseEnum.ChildSelection
-       || Engine.Manager.ParamsSearch.MoveOrderingPhase == ParamsSearch.MoveOrderingPhaseEnum.NodeInitializationAndChildSelect)
+      if ((paramsSearch.MoveOrderingPhase == ParamsSearch.MoveOrderingPhaseEnum.ChildSelection
+       || paramsSearch.MoveOrderingPhase == ParamsSearch.MoveOrderingPhaseEnum.NodeInitializationAndChildSelect)
        && !parentNode.IsSearchRoot)
       {
         const int MAX_LOOK_RIGHT = 5;
@@ -383,7 +378,7 @@ public class MCGSSelect
     // Loop thru child slots and process any with nonzero visits.
     // Note that we must process visits to any not yet expanded children first,
     // before any possible subtasks are launched on already expanded children.
-    // This insures  updates to this node's edges/edge headers are complete before any concurrency.
+    // This ensures updates to this node's edges/edge headers are complete before any concurrency.
     int numVisitsRemaining = numAttemptedVisits;
 #if DEBUG // Temporarily using conditional compilation due to TensorPrimives versioning issue
     Debug.Assert(TensorPrimitives.Sum(childVisitCounts) == numVisitsRemaining);
@@ -983,8 +978,8 @@ public class MCGSSelect
 
 
   /// <summary>
-  /// Processes an already-expanded child edge.
-  /// Returns true if handled (caller should continue to next child).
+  /// Processes an already-expanded child edge: terminates the path (terminal edge/node,
+  /// coalesce-mode repetition draw, sufficient-N transposition) or defers recursive descent.
   /// </summary>
   private void ProcessExpandedChild(MCGSIterator iterator, MCGSPath path, MCGSPathsSet pathsSet,
                                     GNode parentNode, GEdge childEdge, GNode childNode,
