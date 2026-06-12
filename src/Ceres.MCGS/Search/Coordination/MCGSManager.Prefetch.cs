@@ -197,7 +197,6 @@ public partial class MCGSManager
       Engine.Graph.Validate(true);
 
       //        int numWasted = numNodes - numVisited;
-      //        Console.WriteLine($"Batches {SelectTerminatorNeuralNet.CountTotalBatches}, positions {SelectTerminatorNeuralNet.CountTotalPositions}");
       //        Console.WriteLine($"Num nodes {numNodes}, num visited {numVisited}, prefetched {totalPrefetched}, wasted {numWasted}");
     }
   }

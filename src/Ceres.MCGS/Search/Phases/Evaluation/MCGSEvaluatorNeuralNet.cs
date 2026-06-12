@@ -46,7 +46,22 @@ using Ceres.MCGS.Search.Paths;
 namespace Ceres.MCGS.Search.Phases.Evaluation;
 
 /// <summary>
-/// Base class for an selection terminator which performs inference using a neural network.
+/// Performs batched neural network evaluation of leaf positions reached by the select phase.
+///
+/// Lifecycle per batch (BatchGenerate):
+///   1. SetBatch         - encodes each path's leaf position (with history drawn from the path,
+///                         the graph-root-to-search-root segment, and prehistory) into Batch (parallel).
+///   2. RunLocal         - populates any supplemental inputs required by the evaluator and runs inference.
+///   3. RetrieveResults  - extracts value/policy/auxiliary head outputs and installs them into the
+///                         leaf nodes (parallel, per-node locking), recording TerminationInfo on each path.
+///
+/// Threading contract: BatchGenerate is called by a single iterator thread (under Engine.EvaluatorLock
+/// when one evaluator instance is shared by two overlapped iterators). Internal parallelism is confined
+/// to the Parallel.For loops in SetBatch and RetrieveResults. With dual evaluators, result write-back
+/// may be deferred (deferRetrieveResults) so it can occur outside the evaluate-phase critical section;
+/// RetrieveDeferredResults must then be called (on the same iterator thread) before the next
+/// BatchGenerate on this instance. The evaluator's reusable result buffers remain owned until
+/// Evaluator.BuffersLock is released after the backup phase.
 /// </summary>
 public sealed class MCGSEvaluatorNeuralNet : IDisposable
 {
@@ -90,7 +105,12 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
   public readonly bool EngineIsWhite;
 
   /// <summary>
-  /// Optional Func that dynamically determines the index of possibly 
+  /// Cumulative low-overhead statistics (updated once per batch by the owning iterator thread).
+  /// </summary>
+  public NNEvaluatorStats Stats;
+
+  /// <summary>
+  /// Optional Func that dynamically determines the index of possibly
   /// multiple valuators which should be used for the current batch.
   /// TODO: possibly remove this functionality, possibly subsumed.
   /// </summary>
@@ -241,10 +261,6 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
     Dispose();
   }
 
-  public static long CountTotalBatches = 0;
-  public static long CountTotalPositions = 0;
-
-
   /// <summary>
   /// Sets the Batch field with set of positions coming from a list of MCGSPath.
   /// </summary>
@@ -261,10 +277,23 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
 
     if (paths.Count > 0)
     {
-      CountTotalBatches++;
-      CountTotalPositions += paths.Count;
+      // Count positions whose available history (path + segment above search root + prehistory)
+      // is shorter than the number of history planes (mirrors the arithmetic in
+      // SetEncodedBoardPositionFromPath; kept serial to avoid atomics in the parallel loop below).
+      int numAboveSearchRoot = (engine.SearchRootPathFromGraphRoot?.Length ?? 0)
+                             + engine.Graph.Store.PositionHistory.Count;
+      int numShortHistory = 0;
+      for (int i = 0; i < paths.Count; i++)
+      {
+        int pathLen = paths[i].IsRootInitializationPath ? 0 : paths[i].NumVisitsInPath;
+        if (pathLen + numAboveSearchRoot < EncodedPositionBatchFlat.NUM_HISTORY_POSITIONS)
+        {
+          numShortHistory++;
+        }
+      }
+      Stats.RegisterBatch(paths.Count, numShortHistory);
 
-      VerifyBatchAllocated(paths.Count);      
+      VerifyBatchAllocated(paths.Count);
 
       if (engine.NeedsPlySinceLastMove && (Batch.LastMovePlies == null || Batch.LastMovePlies.Length < paths.Count * 64))
       {
@@ -289,7 +318,7 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
           if (MCGSEvaluatorNeuralNet.DEBUGGING_PLY_SINCE_LAST_MOVE)
           {
             Console.WriteLine("<PLY_SINCE_DEBUG> Dumping ply since last move for path " + i);
-//            paths[i].DumpLocalVisits();
+            //            paths[i].DumpLocalVisits();
             foreach (Position pos in paths[i].LeafPositionWithHistory.Positions)
             {
               Console.WriteLine(pos);
@@ -321,7 +350,8 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
       if (EvaluatorDef.Location == NNEvaluatorDef.LocationType.Local)
       {
         const bool FILL_EMPTY_PLANES = false; // planes assumed already filled out
-        Debug.Assert(!rawPosArray[0].HistoryPositionIsEmpty(EncodedPositionBatchFlat.NUM_HISTORY_POSITIONS - 1));
+        // (an empty last history plane is legitimate when FillInHistory is disabled and history is short)
+        Debug.Assert(!FillInHistory || !rawPosArray[0].HistoryPositionIsEmpty(EncodedPositionBatchFlat.NUM_HISTORY_POSITIONS - 1));
 
         const bool SET_POSITIONS = false; // we assume this is already done (if needed)
         Batch.Set(rawPosArray, paths.Count, SET_POSITIONS, fillInHistoryPlanes: FILL_EMPTY_PLANES);
@@ -350,15 +380,18 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
                        IPositionEvaluationBatch results,
                        (NNEvaluatorResult[][] evalResults, MGMoveList[] moveLists) actualEvalsAllPositionsAllMoves = default)
   {
+    long startTimestamp = Stopwatch.GetTimestamp();
+
     Parallel.For(0,
       paths.Count,
-      new ParallelOptions() { MaxDegreeOfParallelism = ParallelUtils.CalcMaxParallelism(paths.Count, 24) },
+      ParallelUtils.ParallelOptions(paths.Count, 24),
       i =>
       {
-        // TODO: make this cleaner/faster
         MCGSPath path = paths[i];
-        GNode node = path.IsRootInitializationPath ? path.Engine.SearchRootNode
-                                                   : path.LeafVisitRef.ParentChildEdge.ChildNode;
+
+        // N.B. MCGSPathVisit.ChildNode is root-initialization aware
+        //      (returns the search root node in that case).
+        GNode node = path.LeafVisitRef.ChildNode;
 
         FP16 winP;
         FP16 lossP;
@@ -388,10 +421,10 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
           lossP = rawLossP;
         }
 
-        if (ValueTemperature != 1)
+        // N.B. winP/lossP must be nonnegative here (else MathF.Log below yields NaN);
+        //      negative values can only arise from non-WDL heads not handled by the rewrite above.
+        if (ValueTemperature != 1 && winP >= 0 && lossP >= 0)
         {
-          // TODO: Consider removing this.
-          //       It is inefficient, and seems to overlap with functionality now in NNEvaluator.
           float temperature = ValueTemperature;
           (float winPRaw, float drawPRaw, float lossPRaw) = (winP, Math.Max(0, 1 - winP - lossP), lossP);
           (float winPRawLogit, float drawPRawLogit, float lossPRawLogit) = (MathF.Log(winPRaw) / temperature, MathF.Log(drawPRaw) / temperature, MathF.Log(lossPRaw) / temperature);
@@ -443,7 +476,7 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
               // Therefore need to lookup the index of the move in the target policy array.
               MGMove thisMGMove = actualEvalsAllPositionsAllMoves.moveLists[i].MovesArray[m];
               EncodedMove thisEncodedMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(thisMGMove);
-              int indexThisMoveInPolicyVector = policyInfo.policies.Span[i].IndexOfMove(thisEncodedMove);
+              int indexThisMoveInPolicyVector = policyInfo.policies.Span[policyInfo.index].IndexOfMove(thisEncodedMove);
               Debug.Assert(indexThisMoveInPolicyVector >= 0, "Move not found in policy vector.");
 
               // Note that W and L are reversed to invert this to be
@@ -451,7 +484,8 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
               av[indexThisMoveInPolicyVector] = ((Half)actualEvalsAllPositionsAllMoves.evalResults[i][m].L,
                                                  (Half)actualEvalsAllPositionsAllMoves.evalResults[i][m].W);
             }
-            actionArray.Span[i] = av;
+            // Action vectors are indexed by the same position index as policy vectors.
+            actionArray.Span[policyInfo.index] = av;
           }
         }
 
@@ -473,13 +507,11 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
           }
         }
 
-        // TODO: make side determination faster
-        // (short)policyInfo.index policyInfo.policies, actionArray, 
         SelectTerminationInfo evalResult = new(node.IsWhite ? SideType.White : SideType.Black,
                                                MCGSPathTerminationReason.PendingNeuralNetEval, GameResult.Unknown,
                                                winP, lossP, rawM, rawUncertaintyV, rawUncertaintyP, state, fortressP);
 
-        GNode leafNode = path.IsRootInitializationPath ? engine.SearchRootNode : path.LeafNode;
+        GNode leafNode = node;
         Debug.Assert(!leafNode.IsEvaluated);
         ref MCGSPathVisit refLeafVisit = ref path.LeafVisitRef;
 
@@ -528,6 +560,8 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
 
         paths[i].TerminationInfo = evalResult;
       });
+
+    Stats.WriteBackTicks += Stopwatch.GetTimestamp() - startTimestamp;
   }
 
 
@@ -630,9 +664,6 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
         Batch.Moves = new MGMoveList[Batch.MaxBatchSize];
       }
 
-      // Get the iterator handy (will be same for all paths).
-      MCGSIterator loop = paths[0].Iterator;
-
       for (int i = 0; i < paths.Count; i++)
       {
         GNode node = paths[i].LeafVisitRef.ChildNode;
@@ -731,7 +762,9 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
     // Note that we call EvaluateBatchIntoBuffers instead of EvaluateBatch for performance reasons
     // (we immediately extract from buffers in RetrieveResults below)
     Batch.EngineIsWhite = EngineIsWhite;
+    long startTimestamp = Stopwatch.GetTimestamp();
     result = evaluator.EvaluateIntoBuffers(Batch, RETRIEVE_SUPPLEMENTAL);
+    Stats.InferenceTicks += Stopwatch.GetTimestamp() - startTimestamp;
     Debug.Assert(!FP16.IsNaN(result.GetWinP(0)) && !FP16.IsNaN(result.GetLossP(0)));
 
     const bool LOOKAHEAD_COMPUTE_TRUE_ACTION_VALUES = false; // Only for research/testing purposes. Very slow!
@@ -765,8 +798,10 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
   }
 
   /// <summary>
-  /// Retrieves results from a previously deferred evaluation.
-  /// Must be called after RunLocal with deferRetrieveResults=true.
+  /// Retrieves results from a previously deferred evaluation
+  /// (BatchGenerate with deferRetrieveResults=true), installing them into the leaf nodes.
+  /// Must be called (on the owning iterator thread) before the next BatchGenerate on this
+  /// instance, since the deferred result references the evaluator's reusable output buffers.
   /// </summary>
   public void RetrieveDeferredResults()
   {
@@ -785,10 +820,25 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
     deferredActualEvalsAllPositionsAllMoves = default;
   }
 
+  /// <summary>
+  /// Process-wide cumulative count of positions submitted for NN evaluation
+  /// (across all evaluator instances, managers and searches; never reset).
+  /// See also the per-instance Stats for richer (but per-manager) statistics.
+  /// </summary>
   public static long TOTAL_NUM_NN_EVALS = 0;
 
+  /// <summary>
+  /// Evaluates the leaf positions of the specified paths in a single NN batch,
+  /// installing results into the leaf nodes (unless deferRetrieveResults is true,
+  /// in which case RetrieveDeferredResults must be called before the next BatchGenerate).
+  /// </summary>
   public void BatchGenerate(MCGSEngine engine, ListBounded<MCGSPath> paths, bool deferRetrieveResults = false)
   {
+    if (paths.Count == 0)
+    {
+      return;
+    }
+
     Interlocked.Add(ref TOTAL_NUM_NN_EVALS, paths.Count);
 
 #if DEBUG
@@ -797,7 +847,10 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
 
     Debug.Assert(EvaluatorDef.Location != NNEvaluatorDef.LocationType.Remote);
 
+    long startTimestamp = Stopwatch.GetTimestamp();
     SetBatch(engine, paths);
+    Stats.EncodeTicks += Stopwatch.GetTimestamp() - startTimestamp;
+
     RunLocal(engine, paths, deferRetrieveResults);
   }
 
@@ -820,24 +873,27 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
   }
 
 
-  public void WaitDone()
-  {
-    throw new NotImplementedException();
-  }
-
-
-
-  [ThreadStatic]
-  static Position[] positionsBuffer;
-
   [ThreadStatic]
   static MGPosition[] positionsBufferMG;
 
   /// <summary>
-  /// Initializes a specified EncodedPosition to reflect the a specified node's position.
+  /// Encodes the leaf position of the specified path (with history planes) into boardsHistory.
+  ///
+  /// The history positions are drawn from three contiguous sources, oldest to newest:
+  ///   1. prehistory         - game positions up to and including the graph root
+  ///                           (Graph.Store.HistoryHashes.PriorPositionsMG, repetition flags precomputed);
+  ///   2. graph root segment - positions strictly below the graph root down to and including the
+  ///                           search root (Engine.SearchRootPathFromGraphRoot, nonempty only when a
+  ///                           reused graph's search root sits below its root);
+  ///   3. path visits        - positions strictly below the search root along the path actually
+  ///                           traversed (ChildPosition of each visit, repetition flags set during select).
+  ///
+  /// N.B. In a graph search the history is path-dependent: a transposition-linked node is encoded
+  ///      using the history of whichever path first reached it (a deliberate design compromise).
   /// </summary>
   /// <param name="path"></param>
   /// <param name="boardsHistory"></param>
+  /// <param name="historyFillIn">if missing history planes should be filled in with the oldest position</param>
   public unsafe void SetEncodedBoardPositionFromPath(MCGSPath path, ref EncodedPositionWithHistory boardsHistory, bool historyFillIn)
   {
     PositionWithHistory RootPreHistory = path.Graph.Store.PositionHistory;
@@ -852,9 +908,6 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
     // into the Position[] to avoid copies, so this alternate design would 
     // ultimately be a wash because the copy of Position would merely be moved 
     // from one place to another.
-
-    // Last position in prehistory should be same as root position in path (also tree).
-    // TODO: Someday remove the ".FEN" so we compare full positions, including make sure repetition count same).
 
     Debug.Assert(RootPreHistory.Count >= 1);
 
@@ -937,13 +990,9 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
     }
 #endif
 
-    // Set repetition count
-    // TODO: The span collected above is only of length 8 (max)
-    //       instead we should look back over path to starting position.
-    //      PositionRepetitionCalc.SetRepetitionsCount(positionsPopulated);
-    //  fix   Span<MGPosition> rootPreHistoryNotAlreadyUsed = new Span<Position>(RootPreHistory.Positions, firstHistoryPosToUse, numHistoryPositionsToUse);
-    //  fix      Span<MGPosition> positionsPopulatedNotFromPreHistory = positionsPopulated.Slice(numHistoryPositionsToUse);
-    //  fix     SetRepetitionsCount(rootPreHistoryNotAlreadyUsed, positionsPopulatedNotFromPreHistory);
+    // N.B. Repetition flags are not computed here; they are already present on the source positions
+    //      (prehistory: PositionWithHistoryHashes constructor; path visits: select phase via
+    //      HashFoundInHistoryOrPrehistory, a full-path lookback with irreversibility cutoff).
 
     // Fill in boards history with the gathered positions
     boardsHistory.SetFromSequentialPositions(positionsPopulatedMG, historyFillIn);
@@ -1023,33 +1072,6 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
     if (DEBUGGING_PLY_SINCE_LAST_MOVE)
     {
       Console.WriteLine("<PLY_SINCE_DEBUG> MCGSEvaluatorNeuralNet.ValidatePlySinceLastMoveIncremental passes!");
-    }
-  }
-
-
-  /// <summary>
-  /// Updates the repetition count for each position in the specified span based on prior positions.
-  /// </summary>
-  static void SetRepetitionsCount(ReadOnlySpan<Position> priorPositions, Span<Position> positionsToUpdate)
-  {
-    // TODO: For efficiency, this hash set could be computed once and stored in the Graph node store.
-    HashSet<PosHash64> hashesOfPositionsSeen = [];
-    foreach (Position pos in priorPositions)
-    {
-      PosHash64 hash = MGPositionHashing.Hash64(pos.ToMGPosition);
-      hashesOfPositionsSeen.Add(hash);
-    }
-
-    for (int i = 0; i < positionsToUpdate.Length; i++)
-    {
-      // TODO: Should we also be calling EqualAsRepetition to confirm the hash hit?
-      //if (thisPos.EqualAsRepetition(in positionsToUpdate[k]))
-
-      PosHash64 thisHash = MGPositionHashing.Hash64(positionsToUpdate[i].ToMGPosition);
-      bool positionAlreadyExisted = hashesOfPositionsSeen.Contains(thisHash);
-      positionsToUpdate[i].MiscInfo.SetRepetitionCount(positionAlreadyExisted ? 1 : 0);
-
-      hashesOfPositionsSeen.Add(thisHash);
     }
   }
 

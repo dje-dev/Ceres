@@ -1693,10 +1693,62 @@ public unsafe partial class Graph : IDisposable
 
       bool isIrreversible = posParent.IsIrreversibleMove(thisMove, posChild);
 
-      retInfo.Add(new GraphRootToSearchRootNodeInfo(curNode, in posChild, childHash64, childHash96, thisMove, isIrreversible));
+      // Set the repetition flag explicitly on the stored copy (not on the loop-carried posChild,
+      // since MakeMove does not reset RepetitionCount and the flag would leak into later entries).
+      // These positions appear in NN history planes, so the flag must be populated here just as it
+      // is for prehistory (PositionWithHistoryHashes) and path visits (select phase).
+      MGPosition posChildToStore = posChild;
+      posChildToStore.RepetitionCount = (byte)((!isIrreversible && HashAppearsInSegmentOrPrehistory(retInfo, childHash64)) ? 1 : 0);
+      retInfo.Add(new GraphRootToSearchRootNodeInfo(curNode, in posChildToStore, childHash64, childHash96, thisMove, isIrreversible));
     }
 
     return retInfo;
+  }
+
+
+  /// <summary>
+  /// Returns if the specified hash appears among earlier positions
+  /// (graph-root-to-search-root segment entries accumulated so far, then prehistory),
+  /// stopping the lookback at irreversible moves.
+  /// Mirrors MCGSPath.HashFoundInGraphRootPathOrPrehistory but with plain seen-once
+  /// semantics, consistent with the prehistory flags set by the PositionWithHistoryHashes
+  /// constructor (segment and prehistory positions coexist in the same NN history input).
+  /// </summary>
+  bool HashAppearsInSegmentOrPrehistory(List<GraphRootToSearchRootNodeInfo> segmentSoFar, PosHash64 hash)
+  {
+    // Earlier segment positions, newest first.
+    for (int i = segmentSoFar.Count - 1; i >= 0; i--)
+    {
+      if (segmentSoFar[i].ChildHashStandalone64 == hash)
+      {
+        return true;
+      }
+
+      if (segmentSoFar[i].MoveToChildIrreversible)
+      {
+        // The move into entry i was irreversible; nothing earlier can repeat.
+        return false;
+      }
+    }
+
+    // Prehistory, newest first (entry [^1] is the graph root).
+    // MoveAfterPositionWasIrreversible[i - 1] is the move from position i-1 into position i.
+    PosHash64[] prehistoryHashes = Store.HistoryHashes.PriorPositionsHashes64;
+    bool[] moveAfterIrreversible = Store.HistoryHashes.MoveAfterPositionWasIrreversible;
+    for (int i = prehistoryHashes.Length - 1; i >= 0; i--)
+    {
+      if (prehistoryHashes[i] == hash)
+      {
+        return true;
+      }
+
+      if (i == 0 || moveAfterIrreversible[i - 1])
+      {
+        break;
+      }
+    }
+
+    return false;
   }
 
 

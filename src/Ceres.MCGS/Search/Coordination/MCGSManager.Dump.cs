@@ -235,6 +235,14 @@ public partial class MCGSManager
     writer.WriteLine($"NN evaluations              {searchRootNode.Graph.NNPositionEvaluationsCount,14:N0}");
     writer.WriteLine($"NN batches                  {searchRootNode.Graph.NNBatchesCount,14:N0}");
     writer.WriteLine($"NN batch size max           {searchRootNode.Graph.NNBatchSizeMax,14:N0}");
+    if (EvaluatorNN0 != null && EvaluatorNN0.Stats.NumBatches > 0)
+    {
+      writer.WriteLine($"NN evaluator 0              {EvaluatorNN0.Stats}");
+    }
+    if (EvaluatorNN1 != null && EvaluatorNN1.Stats.NumBatches > 0)
+    {
+      writer.WriteLine($"NN evaluator 1              {EvaluatorNN1.Stats}");
+    }
     writer.WriteLine();
 
     writer.WriteLine($"SearchLimitInitial.Type     {SearchLimitInitial.Type}");
