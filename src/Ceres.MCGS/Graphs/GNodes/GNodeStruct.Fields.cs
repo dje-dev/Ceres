@@ -260,59 +260,7 @@ public unsafe partial struct GNodeStruct
   //public readonly short Unused1;
   //public readonly short Unused2;
   //public int NDrawByRepetition;
-
-  /// <summary>
-  /// Nonzero if this node's subgraph is known to contain a history-sensitive result
-  /// (a terminal draw edge caused by repetition or the 50-move rule anywhere beneath it).
-  /// Monotone (only ever set, never cleared) and flooded to all ancestors when set.
-  ///
-  /// Deliberately a dedicated byte (NOT a miscFields bit): it is written lock-free from
-  /// the ancestor flood, and a bit within the shared miscFields uint would race the plain
-  /// read-modify-write updates of neighboring bits performed under node locks.
-  /// </summary>
-  private byte historySensitiveSubgraph;
-
-  /// <summary>
-  /// Quantized record of the verified-clean fraction of pseudo-twin mass determined by the
-  /// pseudo-transposition Q-borrowing verification walk at node creation:
-  ///   0        = never verified (no constraint on blending),
-  ///   1..255   = clean fraction (stored - 1) / 254 in [0, 1]
-  ///              (1 = fully blocked, 255 = verified fully clean).
-  /// Read by the PTB sibling refresh to scale this node's sibling blending for its lifetime.
-  /// Single-byte writes/reads are atomic; written once at creation.
-  /// </summary>
-  private byte ptbVerifiedCleanFracEncoded;
-
-  /// <summary>
-  /// The verified-clean fraction recorded at creation, or 1.0 if never verified.
-  /// Used as a multiplicative cap on pseudo-transposition blending weight.
-  /// </summary>
-  internal readonly double PTBVerifiedCleanFracOrOne
-    => ptbVerifiedCleanFracEncoded == 0 ? 1.0 : (ptbVerifiedCleanFracEncoded - 1) * (1.0 / 254.0);
-
-  /// <summary>
-  /// Records the verified-clean fraction (see PTBVerifiedCleanFracOrOne).
-  /// </summary>
-  internal void SetPTBVerifiedCleanFrac(double cleanFrac)
-    => ptbVerifiedCleanFracEncoded = (byte)(1 + (int)Math.Round(Math.Clamp(cleanFrac, 0, 1) * 254.0));
-
-  /// <summary>
-  /// If this node's subgraph is known to contain a history-sensitive result
-  /// (repetition or 50-move-rule terminal draw edge beneath it).
-  /// Lock-free monotone flag: byte reads/writes are atomic, and because the flag
-  /// only transitions false->true a stale read merely delays taint visibility.
-  /// </summary>
-  public bool HistorySensitiveSubgraph
-  {
-    readonly get => historySensitiveSubgraph != 0;
-    set
-    {
-      if (value)
-      {
-        System.Threading.Volatile.Write(ref historySensitiveSubgraph, 1);
-      }
-    }
-  }
+  public short UnusedShort;
 
   /// <summary>
   /// Lock for multithreaded synchronization.

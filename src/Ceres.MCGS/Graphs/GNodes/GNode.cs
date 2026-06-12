@@ -662,7 +662,6 @@ public readonly unsafe partial struct GNode : IComparable<GNode>, IEquatable<GNo
            + (float.IsNaN(NodeRef.UncertaintyValue)  ? "" : $"UV={NodeRef.UncertaintyValue,4:F3} ") 
            + (float.IsNaN(NodeRef.UncertaintyPolicy) ? "" : $"UP={NodeRef.UncertaintyPolicy,4:F3} ")
            + $"H={NodeRef.HashStandalone.Hash % 10000} Sib={100*NodeRef.SiblingsQFrac}%/{NodeRef.SiblingsQ,4:F2} "
-           + (NodeRef.HistorySensitiveSubgraph ? "HSENS " : "")
            + $"E={NumEdgesExpanded} "
            + $"{CalcPosition().ToPosition.FEN}>";
     }

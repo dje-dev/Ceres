@@ -639,20 +639,77 @@ public class MCGSSelect
     (extraNFromTranspositionAlias, siblingAvgQ)
       = parentNode.Graph.GetTranspositionStats(parentNode, parentNode.N + numPendingVisitsParentNode, hash64WithMove50AndReps);
 
-    // Scale by the verified-clean fraction recorded at node creation (if any) by the
-    // pseudo-transposition Q-borrow verification walk. In history mode the verification
-    // verdict is path-invariant for this node (all paths share the same multiset since
-    // the last irreversible move), so it remains a valid lifetime cap on how much
-    // pseudo-twin information may be blended here (1.0 when never verified).
-    double verifiedCleanFrac = parentNode.NodeRef.PTBVerifiedCleanFracOrOne;
-    if (verifiedCleanFrac < 1.0)
-    {
-      extraNFromTranspositionAlias = (float)(extraNFromTranspositionAlias * verifiedCleanFrac);
-    }
-
     // Limit sibling contribution to maintain MAX_FRACTION_SIBLING of total effective N
     const float SCALING_TERM = (MCGSParamsFixed.SIBLING_WT_MAX_FRACTION / (1 - MCGSParamsFixed.SIBLING_WT_MAX_FRACTION));
     extraNFromTranspositionAlias = Math.Min(extraNFromTranspositionAlias, SCALING_TERM * (parentNode.N + numPendingVisitsParentNode));
+  }
+
+
+  /// <summary>
+  /// Installs the pseudotransposition (sibling) blend on a JUST-CREATED node
+  /// (N=0, values copied from a pseudo-twin, not yet backed up), so that the node's
+  /// first backup composes its copied V with the sibling-set Q exactly as the ordinary
+  /// PTB select-phase refresh would do one visit later. Uses the same donor statistics
+  /// (GetTranspositionStats: eligible donors with N strictly above the target's
+  /// effective N of 1) and the same maximum weight cap; this merely removes the
+  /// one-visit lag in the existing blending feature.
+  ///
+  /// The standard target-side eligibility checks are applied using the position
+  /// in hand (the node's own Move50Category/HasRepetitions context), and the install
+  /// is skipped on (rare) lock contention.
+  /// </summary>
+  private static void PossiblyInstallSiblingBlendAtCreation(GNode newNode, in MGPosition childPos, PosHash64 childHash64)
+  {
+    Debug.Assert(newNode.NodeRef.N == 0);
+
+    // Mirror IsEligibleForPseudoTranspositionContribution's target-side conditions
+    // (except N > 0, inapplicable at creation) using the position directly.
+    if (childPos.Move50Category != Move50CategoryEnum.LessThan75
+     || childPos.RepetitionCount != 0)
+    {
+      return;
+    }
+
+    // Same key convention as the standalone registration in InitializeNodeForPos.
+    PosHash64WithMove50AndReps key = MGPositionHashing.Hash64WithMove50AndRepsAdded(
+      childHash64, childPos.RepetitionCount, childPos.Move50Category);
+
+    // Effective target N is 1 (the pending first visit); donors therefore need N >= 2,
+    // and the standard cap arithmetic bounds the weight at SIBLING_WT_MAX_FRACTION.
+    (float extraN, double siblingAvgQ) = newNode.Graph.GetTranspositionStats(newNode, 1, key);
+
+    const float SCALING_TERM = (MCGSParamsFixed.SIBLING_WT_MAX_FRACTION / (1 - MCGSParamsFixed.SIBLING_WT_MAX_FRACTION));
+    extraN = Math.Min(extraN, SCALING_TERM * 1);
+
+    if (extraN <= 0)
+    {
+      return;
+    }
+
+    double weight = extraN / (1.0 + extraN);
+    if (weight < (1.0 / 255.0))
+    {
+      return; // would quantize to zero
+    }
+
+    // Install via the sibling-blend fields; the first backup (ResetNodeQUsingNewQPure
+    // with the copied V) reads these stored fields and produces the blended Q with
+    // exact-inversion bookkeeping, which then propagates up the path.
+    // Non-blocking lock (the caller holds the expansion parent's lock); on contention
+    // simply skip - the ordinary PTB refresh will install the blend a visit later anyway.
+    if (!newNode.TryAcquireLock())
+    {
+      return;
+    }
+    try
+    {
+      newNode.NodeRef.SiblingsQ = siblingAvgQ;
+      newNode.NodeRef.SiblingsQFrac = weight;
+    }
+    finally
+    {
+      newNode.ReleaseLock();
+    }
   }
 
 
@@ -1101,19 +1158,6 @@ public class MCGSSelect
     newVisit.ParentChildEdge = newEdge;
     GNodeStruct.UpdateEdgeNInFlightForIterator(newEdge, path.IteratorID, numVisitsThisChild);
 
-    // Repetition and 50-move-rule draws are history-sensitive results: they hold only for
-    // histories like the current one, unlike stalemate/material/tablebase terminals.
-    // Mark the parent (and transitively all ancestors) so that features which borrow value
-    // information across pseudo-transpositions know this subgraph is not history-neutral.
-    // (The result tuple alone cannot distinguish the rule50 case from stalemate, so classify
-    // here where the child position is in hand. Maintained unconditionally so the flag is
-    // valid whenever a consumer feature is later enabled.)
-    if (resultInfo.wasDrawByRepetition
-     || (resultInfo.result == GameResult.Draw && childPosInfo.childPos.Rule50Count >= 100))
-    {
-      path.Graph.FloodHistorySensitiveToAncestors(parentNode.Index);
-    }
-
     path.TerminationReason = MCGSPathTerminationReason.TerminalEdge;
 
     MCGSPath newPath = path.PossiblyBranched(numVisitsRemaining, numVisitsThisChild,
@@ -1272,16 +1316,18 @@ public class MCGSSelect
       bool copyPolicyImmediate = standaloneTranspositionNode.Graph != Engine.Graph;
       Engine.Graph.CopyNodeValues(0, standaloneTranspositionNode, childEdge.ChildNode, copyPolicyImmediate);
 
-      // Optionally also borrow the search-refined Q of the best pseudo-twin (verified
-      // history-safe) into the new node's initial value via the sibling-blend fields.
+      // Optionally install the pseudotransposition (sibling) blend immediately at creation
+      // rather than only from the node's later select-phase refreshes (removes the
+      // one-visit lag in the existing PTB feature: the first backed-up value is already
+      // the blend of the copied V with the sibling-set Q).
       // N.B. must run BEFORE the auto-extension below: the extension performs the node's
       //      first backups, whose ResetNodeQUsingNewQPure composes the stored sibling
       //      blend with the (extension-improved) pure Q.
-      if (Engine.Manager.ParamsSearch.EnablePseudoTranspositionQBorrow)
+      if (Engine.Manager.ParamsSearch.EnablePseudoTranspositionBlendingAtCreation
+       && Engine.Manager.ParamsSearch.EnablePseudoTranspositionBlending)
       {
-        PseudoTranspositionQBorrow.TryApply(Engine, path, childEdge.ChildNode,
-                                            in childPosInfo.childPos, childPosInfo.childPositionHash64,
-                                            childPosInfo.wasIrreversibleMove);
+        PossiblyInstallSiblingBlendAtCreation(childEdge.ChildNode,
+                                              in childPosInfo.childPos, childPosInfo.childPositionHash64);
       }
 
       // Optionally auto-extend: synchronously perform the deterministic next visit from the

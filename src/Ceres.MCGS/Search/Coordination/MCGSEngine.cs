@@ -141,7 +141,6 @@ public partial class MCGSEngine
   {
     Manager = manager;
     Graph = graph;
-    Graph.PTBRequiresCleanSubgraph = manager.ParamsSearch.PseudoTranspositionBlendingRequiresCleanSubgraph;
     Strategy = new MCGSStrategyPUCT(this);
     SelectWorkerPools = selectWorkerPools;
     QRecalculator = new BottomUpQRecalculator(this);

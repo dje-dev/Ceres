@@ -196,8 +196,7 @@ public record struct NodeIndexSet
         node.N > 0
      && !node.DrawKnownToExistAmongChildren
      && node.NodeRef.Move50Category == Move50CategoryEnum.LessThan75
-     && !node.HasRepetitions
-     && (!node.Graph.PTBRequiresCleanSubgraph || !node.HistorySensitiveSubgraph);
+     && !node.HasRepetitions;
 
 
   public static GNode MaxNSiblingNode(Graph graph, PosHash64WithMove50AndReps hash)
