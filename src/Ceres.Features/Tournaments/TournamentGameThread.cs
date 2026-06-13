@@ -547,8 +547,7 @@ namespace Ceres.Features.Tournaments
       string wdlStr = $"{player.PlayerWins,3} {player.Draws,3} {player.PlayerLosses,3}";
 
       // Show either = or ! (same game or differing moves) after the opening index
-      // if this was the second of the pair of games played. This is later promoted to "*"
-      // (under outputLockObj) when every thread is simultaneously at a pair boundary.
+      // if this was the second of the pair of games played.
       string openingPlayedBothWaysStr = " ";
       bool wasSecondOfPair = gameSequenceNum % 2 == 1
                           && GameInfoFirstFinishedForByOpening.ContainsKey(openingIndex);
@@ -609,9 +608,11 @@ namespace Ceres.Features.Tournaments
         // Update this thread's pair-completion state, then (if this game completed a pair) check
         // whether every participating thread's most recently output game also completed a pair.
         // If so, all threads are simultaneously at a pair boundary -- a point at which the running
-        // Elo reflects only fully completed pairs -- so promote the "="/"!" marker to "*".
+        // Elo reflects only fully completed pairs -- so flag it with "*" in the dedicated column
+        // immediately to the right of the ELO column (the "="/"!" OP# marker is left untouched).
         // All reads/writes of lastOutputCompletedPair are serialized by outputLockObj (held here).
         lastOutputCompletedPair = wasSecondOfPair;
+        string allThreadsPairBoundaryStr = " ";
         if (wasSecondOfPair)
         {
           bool allThreadsAtPairBoundary;
@@ -621,7 +622,7 @@ namespace Ceres.Features.Tournaments
           }
           if (allThreadsAtPairBoundary)
           {
-            openingPlayedBothWaysStr = "*";
+            allThreadsPairBoundaryStr = "*";
           }
         }
 
@@ -635,7 +636,7 @@ namespace Ceres.Features.Tournaments
         {
           Def.Logger.Write($" {TrimmedIfNeeded(engine1ID, 10),-10} {TrimmedIfNeeded(engine2ID, 10),-10}");
         }
-        Def.Logger.Write($"{eloAvg,4:0} {pentaErrStr,4} {pentaLOSStr,5}  ");
+        Def.Logger.Write($"{eloAvg,4:0} {allThreadsPairBoundaryStr,1} {pentaErrStr,4} {pentaLOSStr,5}  ");
         Def.Logger.Write($"{gNumber,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,7:F0}  {openingIndex,7:F0} {openingPlayedBothWaysStr} ");
 
         // TODO: these averages are inexact, one player may have 1 ply more than thisResult.PlyCount/2
@@ -734,7 +735,8 @@ namespace Ceres.Features.Tournaments
       Def.Logger.WriteLine($"Games will be incrementally written to file: {pgnFileName}");
       Def.Logger.WriteLine("Result codes: C=checkmate S=stalemate T=tablebase M=insufficient material E=excessive moves R=draw by repetition A=adjudicate eval agreement F=time forfeit");
       Def.Logger.WriteLine("Note: the +/- and LOS columns use pentanomial (paired-game) analysis (shown once each game pair completes).");
-      Def.Logger.WriteLine("Pair marker (after OP#): = pair completed with identical moves, ! pair completed with differing moves, * additionally every thread is at a completed-pair boundary (fair Elo evaluation point).");
+      Def.Logger.WriteLine("Pair marker (after OP#): = pair completed with identical moves, ! pair completed with differing moves.");
+      Def.Logger.WriteLine("The * column (immediately right of ELO) marks games output at the instant every thread is simultaneously at a completed-pair boundary (a fair Elo evaluation point).");
       Def.Logger.WriteLine();
 
       // Build the header (and dashed underline) so each label sits over its data column
@@ -745,7 +747,7 @@ namespace Ceres.Features.Tournaments
 
       string headerPrefix =
           $" {"Player1",-10} {"Player2",-10}" +
-          $"{"ELO",4} {"+/-",4} {"LOS",5}  " +
+          $"{"ELO",4} {"*",1} {"+/-",4} {"LOS",5}  " +
           $"{"GAME#",5} {"TIME",10}  {"TH#",7}  {"OP#",7} {"",1} " +
           $"{"TIME1",8} {"REM1",7} " +
           $"{"TIME2",8} {"REM2",7}  " +
@@ -756,7 +758,7 @@ namespace Ceres.Features.Tournaments
 
       string dashPrefix =
           $" {Dsh(10),-10} {Dsh(10),-10}" +
-          $"{Dsh(4),4} {Dsh(4),4} {Dsh(5),5}  " +
+          $"{Dsh(4),4} {Dsh(1),1} {Dsh(4),4} {Dsh(5),5}  " +
           $"{Dsh(5),5} {Dsh(10),10}  {Dsh(7),7}  {Dsh(7),7} {Dsh(1),1} " +
           $"{Dsh(8),8} {Dsh(7),7} " +
           $"{Dsh(8),8} {Dsh(7),7}  " +
