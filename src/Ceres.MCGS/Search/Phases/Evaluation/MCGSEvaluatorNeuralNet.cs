@@ -282,15 +282,36 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
       // SetEncodedBoardPositionFromPath; kept serial to avoid atomics in the parallel loop below).
       int numAboveSearchRoot = (engine.SearchRootPathFromGraphRoot?.Length ?? 0)
                              + engine.Graph.Store.PositionHistory.Count;
+
+      // pathLen + numAboveSearchRoot < N  <=>  pathLen < (N - numAboveSearchRoot) = threshold.
+      //   threshold <= 0 : impossible (pathLen >= 0) -> count is 0, no loop.
+      //   threshold >= 2 : a root-init path has NumVisitsInPath==1 < threshold, so it is counted
+      //                    just as pathLen==0 would be -> the IsRootInitializationPath check is
+      //                    unnecessary; read the field only (avoids the slots[0] cache miss).
+      //   threshold == 1 : "short" <=> pathLen==0 <=> root-init path (non-root paths have N>=1 visits).
+      int threshold = EncodedPositionBatchFlat.NUM_HISTORY_POSITIONS - numAboveSearchRoot;
       int numShortHistory = 0;
-      for (int i = 0; i < paths.Count; i++)
+      if (threshold >= 2)
       {
-        int pathLen = paths[i].IsRootInitializationPath ? 0 : paths[i].NumVisitsInPath;
-        if (pathLen + numAboveSearchRoot < EncodedPositionBatchFlat.NUM_HISTORY_POSITIONS)
+        for (int i = 0; i < paths.Count; i++)
         {
-          numShortHistory++;
+          if (paths[i].NumVisitsInPath < threshold)
+          {
+            numShortHistory++;
+          }
         }
       }
+      else if (threshold == 1)
+      {
+        for (int i = 0; i < paths.Count; i++)
+        {
+          if (paths[i].IsRootInitializationPath)
+          {
+            numShortHistory++;
+          }
+        }
+      }
+
       Stats.RegisterBatch(paths.Count, numShortHistory);
 
       VerifyBatchAllocated(paths.Count);
