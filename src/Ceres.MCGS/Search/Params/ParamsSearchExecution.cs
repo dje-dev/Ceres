@@ -104,6 +104,19 @@ public record ParamsSearchExecution
   /// </summary>
   public int NNBatchSizeAlignmentTarget = 0;
 
+  /// <summary>
+  /// If the gathered batch should be topped up (via a second selection pass) so the number
+  /// of positions sent to the NN evaluator fills the evaluator's padded batch capacity
+  /// (see NNEvaluator.PaddedBatchCapacity, e.g. the fixed engine batch sizes used by
+  /// TensorRT backends in exact-batch mode). The padding slots are computed by the
+  /// device regardless, so filling them with real positions increases evaluation
+  /// throughput at no additional inference cost.
+  /// Takes precedence over NNBatchSizeAlignmentTarget when the evaluator reports padding.
+  /// NOTE: although believed fully functional (for TensorRTNative backend)
+  ///       is not on by default because of modest eps improvement and potential lower batch quality.
+  /// </summary>
+  public bool NNBatchSizeFillToEvaluatorCapacity = false;
+
 
   /// <summary>
   /// If we are running dual iterators it is possible that some nodes

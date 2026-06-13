@@ -15,6 +15,7 @@
 
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -867,6 +868,63 @@ public sealed class EnginePool : IDisposable
                 streamBuffers[s].PinnedOutput, groupOutputElements[s]);
       }
     }
+  }
+
+
+  /// <summary>
+  /// Cache for PaddedBatchCapacity results (thread-safe; plan is invariant per position count).
+  /// </summary>
+  private readonly ConcurrentDictionary<int, int> paddedCapacityCache = new();
+
+  /// <summary>
+  /// Returns the total number of position slots (including padding up to the fixed engine
+  /// batch sizes) that would actually be executed to process the specified number of positions.
+  /// Padding slots could instead be filled with additional real positions at no
+  /// additional inference cost.
+  /// Thread-safe (does not touch the mutable cachedBatchPlan state used by Process methods).
+  /// </summary>
+  public int PaddedBatchCapacity(int totalPositions)
+  {
+    // Only the optimized exact-batch path is supported; otherwise report no padding.
+    // (Range mode runs dynamic batch sizes with no padding anyway.)
+    if (totalPositions <= 0
+     || mode != EnginePoolMode.Exact
+     || !OPTIMIZED_SCHEDULING
+     || ExecutionTimes == null)
+    {
+      return totalPositions;
+    }
+
+    return paddedCapacityCache.GetOrAdd(totalPositions, n =>
+    {
+      // Mirror ComputeBatchPlanOptimized: build sizes/timings in ranges (descending) order.
+      int numEngines = ranges.Count;
+      Span<int> engineSizes = stackalloc int[numEngines];
+      Span<float> orderedExecutionTimes = stackalloc float[numEngines];
+      for (int i = 0; i < numEngines; i++)
+      {
+        int size = ranges[i].min;
+        engineSizes[i] = size;
+        int originalIndex = 0;
+        for (int j = 0; j < numEngines; j++)
+        {
+          if (ranges[j].min < size)
+          {
+            originalIndex++;
+          }
+        }
+        orderedExecutionTimes[i] = ExecutionTimes[originalIndex];
+      }
+
+      int[] batchSizes = BatchScheduler.ScheduleSingleGPU(engineSizes, orderedExecutionTimes, n,
+                                                          deviceId, concurrent: NUM_COMPUTE_STREAMS > 1);
+      int capacity = 0;
+      foreach (int batchSize in batchSizes)
+      {
+        capacity += batchSize;
+      }
+      return Math.Max(capacity, n);
+    });
   }
 
 

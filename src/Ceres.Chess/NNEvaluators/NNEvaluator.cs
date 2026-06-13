@@ -252,6 +252,16 @@ namespace Ceres.Chess.NNEvaluators
     public abstract int MaxBatchSize { get; }
 
     /// <summary>
+    /// Returns the total number of position slots that would actually be computed
+    /// (including any internal padding up to fixed engine batch sizes) when evaluating
+    /// a batch with the specified number of positions.
+    /// Since padding slots are computed regardless, callers can fill them with
+    /// additional real positions at no additional evaluation cost.
+    /// Default implementation returns numPositions (no padding).
+    /// </summary>
+    public virtual int PaddedBatchCapacity(int numPositions) => numPositions;
+
+    /// <summary>
     /// When true and playing using SearchLimit of BestValueMove, engine using this evaluator 
     /// will slightly adjust evaluation when repetitions are nonzero to prefer repetitions/draws
     /// when seemingly losing and disfavor when seemingly winning.

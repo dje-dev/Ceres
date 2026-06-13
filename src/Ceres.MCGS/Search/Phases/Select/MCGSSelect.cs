@@ -600,7 +600,8 @@ public class MCGSSelect
                            && path.NumVisitsInPath - path.InnerSearchStartDepth >= MAX_DEPTH_BELOW_START_DEEP_ROLLOUT;
 
     if (iterator.IsApproachingMaxPathCapacity // for example, when a prefetch operation has reached the target
-     || deepRolloutTooDeep)
+     || deepRolloutTooDeep
+     || pathsSet.NNEvalBudgetExhausted) // fill-to-capacity pass has reached its NN slot budget
     {
       path.TerminationReason = MCGSPathTerminationReason.Abort;
       if (path.NumVisitsInPath > 0)

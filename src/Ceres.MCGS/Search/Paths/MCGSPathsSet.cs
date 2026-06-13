@@ -68,6 +68,20 @@ public partial class MCGSPathsSet : IDisposable
   /// </summary>
   public readonly ListBounded<MCGSPath> NNPaths;
 
+  /// <summary>
+  /// Maximum number of NN evaluation paths allowed in this batch (int.MaxValue when unarmed).
+  /// Armed only during the second "fill to evaluator capacity" selection pass so that the
+  /// fill cannot (materially) overshoot the evaluator's padded batch capacity, which would
+  /// spill into an additional engine launch. Checked via NNEvalBudgetExhausted in
+  /// MCGSSelect.CapacityAbortNeeded (further descents are aborted once the budget is reached).
+  /// </summary>
+  internal int NNEvalSlotLimit = int.MaxValue;
+
+  /// <summary>
+  /// If the number of NN evaluation paths has reached the armed limit (see NNEvalSlotLimit).
+  /// </summary>
+  internal bool NNEvalBudgetExhausted => NNPaths.Count >= NNEvalSlotLimit;
+
 
   private bool disposedValue;
 
@@ -135,6 +149,7 @@ public partial class MCGSPathsSet : IDisposable
   {
     Paths.Clear();
     NNPaths.Clear();
+    NNEvalSlotLimit = int.MaxValue;
     Array.Clear(PathLengthDistribution, 0, PathLengthDistribution.Length);
   }
 

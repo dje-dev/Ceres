@@ -217,6 +217,17 @@ public class NNEvaluatorTensorRT : NNEvaluator
   /// <inheritdoc/>
   public override int MaxBatchSize => maxBatchSize;
 
+  /// <inheritdoc/>
+  public override int PaddedBatchCapacity(int numPositions)
+  {
+    if (pool == null || numPositions <= 0 || numPositions >= MaxBatchSize)
+    {
+      return numPositions;
+    }
+
+    return Math.Min(MaxBatchSize, pool.PaddedBatchCapacity(numPositions));
+  }
+
   public override InputTypes InputsRequired => InputTypes.Positions | InputTypes.Boards | InputTypes.Moves | (HasState ? InputTypes.State : 0);
 
 

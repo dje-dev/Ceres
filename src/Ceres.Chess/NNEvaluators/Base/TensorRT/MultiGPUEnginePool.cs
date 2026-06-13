@@ -792,6 +792,55 @@ public sealed class MultiGPUEnginePool : IDisposable
 
 
   /// <summary>
+  /// Returns the total number of position slots (including padding up to fixed engine
+  /// batch sizes) that would actually be executed to process the specified number of positions.
+  /// Padding slots could instead be filled with additional real positions at no
+  /// additional inference cost.
+  /// For multi-GPU execution this is the sum of the padded capacities of each GPU's
+  /// share under the same distribution the Process methods would use (for example a
+  /// request of 100 positions split 50/50 across two GPUs each padding to 60 yields 120).
+  /// Thread-safe.
+  /// </summary>
+  public int PaddedBatchCapacity(int totalPositions)
+  {
+    if (totalPositions <= 0)
+    {
+      return totalPositions;
+    }
+
+    if (ShouldUseSingleGPU(totalPositions))
+    {
+      return pools[0].PaddedBatchCapacity(totalPositions);
+    }
+
+    // Mirror the distribution logic of the Process methods.
+    int numGPUs = Math.Max(1, Math.Min(pools.Count, totalPositions / minBatchSizePerGPU));
+    Span<int> distribution = stackalloc int[pools.Count];
+    if (!TryComputeOptimalDistribution(totalPositions, numGPUs, distribution))
+    {
+      // Mirror the even-split fallback used by the Process methods.
+      int baseSize = totalPositions / numGPUs;
+      int remainder = totalPositions % numGPUs;
+      for (int g = 0; g < numGPUs; g++)
+      {
+        distribution[g] = baseSize + (g < remainder ? 1 : 0);
+      }
+    }
+
+    int capacity = 0;
+    for (int g = 0; g < numGPUs; g++)
+    {
+      if (distribution[g] > 0)
+      {
+        capacity += pools[g].PaddedBatchCapacity(distribution[g]);
+      }
+    }
+
+    return Math.Max(capacity, totalPositions);
+  }
+
+
+  /// <summary>
   /// Process batch with Half inputs.
   /// </summary>
   public void Process(Half[] input, Half[] output, int totalPositions)
@@ -1078,29 +1127,62 @@ public sealed class MultiGPUEnginePool : IDisposable
       return TryFractionBasedDistribution(totalPositions, numGPUs, distribution);
     }
 
-    // Check session cache (engine sizes, timings, and penalties are constant)
-    if (distCacheValid[totalPositions])
+    if (TryReadDistCache(totalPositions, numGPUs, distribution))
     {
-      int cBase = totalPositions * pools.Count;
-      for (int g = 0; g < numGPUs; g++)
-      {
-        distribution[g] = distCache[cBase + g];
-      }
-
-      if (BatchScheduler.VERBOSE_DETAILS)
-      {
-        int usedGPUs = 0;
-        for (int g = 0; g < numGPUs; g++)
-        {
-          if (distribution[g] > 0) usedGPUs++;
-        }
-        Console.WriteLine($"  MULTI_GPU_DIST (cached): {totalPositions} positions -> GPUs used={usedGPUs} " +
-                          $"distribution=[{string.Join(", ", distribution.Slice(0, numGPUs).ToArray())}]");
-      }
-
       return true;
     }
 
+    // Serialize the DP computation: it mutates shared scratch buffers (dpBufA/dpBufB/dpChoices)
+    // and may be invoked concurrently with Process (e.g. PaddedBatchCapacity queried from
+    // search threads while another thread is evaluating).
+    lock (distComputeLock)
+    {
+      if (TryReadDistCache(totalPositions, numGPUs, distribution))
+      {
+        return true;
+      }
+
+      return ComputeOptimalDistributionUnderLock(totalPositions, numGPUs, distribution);
+    }
+  }
+
+
+  private readonly object distComputeLock = new();
+
+  /// <summary>
+  /// Attempts to read a previously computed distribution from the session cache
+  /// (engine sizes, timings, and penalties are constant). Thread-safe.
+  /// </summary>
+  private bool TryReadDistCache(int totalPositions, int numGPUs, Span<int> distribution)
+  {
+    if (!Volatile.Read(ref distCacheValid[totalPositions]))
+    {
+      return false;
+    }
+
+    int cBase = totalPositions * pools.Count;
+    for (int g = 0; g < numGPUs; g++)
+    {
+      distribution[g] = distCache[cBase + g];
+    }
+
+    if (BatchScheduler.VERBOSE_DETAILS)
+    {
+      int usedGPUs = 0;
+      for (int g = 0; g < numGPUs; g++)
+      {
+        if (distribution[g] > 0) usedGPUs++;
+      }
+      Console.WriteLine($"  MULTI_GPU_DIST (cached): {totalPositions} positions -> GPUs used={usedGPUs} " +
+                        $"distribution=[{string.Join(", ", distribution.Slice(0, numGPUs).ToArray())}]");
+    }
+
+    return true;
+  }
+
+
+  private bool ComputeOptimalDistributionUnderLock(int totalPositions, int numGPUs, Span<int> distribution)
+  {
     // Select optimal GPU count by running lightweight DP for each k.
     // Unlike an even-split heuristic, this accounts for uneven distributions
     // across heterogeneous GPUs (e.g., NVL vs PCIe).
@@ -1377,7 +1459,9 @@ public sealed class MultiGPUEnginePool : IDisposable
     {
       distCache[cBase + g] = distribution[g];
     }
-    distCacheValid[totalPositions] = true;
+    // Release write: readers (TryReadDistCache, possibly on other threads)
+    // must observe the distCache values above before the valid flag.
+    Volatile.Write(ref distCacheValid[totalPositions], true);
   }
 
 

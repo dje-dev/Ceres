@@ -346,6 +346,8 @@ public class MCGSIterator : IDisposable
 
     RunSelectionPhase(batchSize);
 
+    UpdateNNYieldEstimate(batchSize);
+
     PossiblyRunSecondSelectionForNNBatchSizePadding(batchSize, hardMaxRootN);
 
     LogWrite(() => $"End select batch {batchSequenceNum} with {PathsSet.Paths.Count} paths");
@@ -690,6 +692,12 @@ public class MCGSIterator : IDisposable
   /// <param name="hardMaxRootN"></param>
   private void PossiblyRunSecondSelectionForNNBatchSizePadding(int batchSize, int hardMaxRootN)
   {
+    if (Manager.ParamsSearch.Execution.NNBatchSizeFillToEvaluatorCapacity
+     && PossiblyRunSecondSelectionToFillEvaluatorCapacity(batchSize, hardMaxRootN))
+    {
+      return;
+    }
+
     int nnBatchSizeAlignmentTarget = Manager.ParamsSearch.Execution.NNBatchSizeAlignmentTarget;
 
     if (nnBatchSizeAlignmentTarget > 0)
@@ -732,6 +740,117 @@ public class MCGSIterator : IDisposable
         }
       }
     }
+  }
+
+
+  /// <summary>
+  /// Exponential moving average of the fraction of requested visits which result in a
+  /// path requiring NN evaluation (the remainder end in transpositions, terminals,
+  /// collisions etc.). Used to oversize the fill-to-capacity selection pass.
+  /// </summary>
+  float emaNNYieldPerVisit = 1.0f;
+
+  /// <summary>
+  /// Updates the running estimate of NN evaluations yielded per requested visit
+  /// (based on the outcome of the just-completed primary selection pass).
+  /// </summary>
+  /// <param name="numVisitsRequested"></param>
+  private void UpdateNNYieldEstimate(int numVisitsRequested)
+  {
+    const int MIN_BATCH_SIZE_FOR_ESTIMATE = 8; // tiny batches are too noisy
+    if (numVisitsRequested >= MIN_BATCH_SIZE_FOR_ESTIMATE)
+    {
+      const float EMA_ALPHA = 0.25f; // average over roughly the last few batches
+      float yield = Math.Clamp((float)PathsSet.NNPaths.Count / numVisitsRequested, 0.05f, 1.0f);
+      emaNNYieldPerVisit = (1.0f - EMA_ALPHA) * emaNNYieldPerVisit + EMA_ALPHA * yield;
+    }
+  }
+
+
+  /// <summary>
+  /// Possibly runs another selection pass thru the graph to top up the batch so the
+  /// number of positions sent to the NN evaluator fills the evaluator's padded batch
+  /// capacity (see NNEvaluator.PaddedBatchCapacity). The padding slots are computed by
+  /// the device regardless, so filling them with real positions is (nearly) free.
+  ///
+  /// Because some of the requested visits will not yield an NN evaluation (transpositions,
+  /// terminals, collisions), the request is oversized by the tracked NN yield ratio
+  /// (slightly conservatively). Overshoot beyond the evaluator capacity is prevented by
+  /// arming PathsSet.NNEvalSlotLimit: once the budget is reached, further descents
+  /// are aborted (in MCGSSelect.CapacityAbortNeeded) before any new node is expanded.
+  ///
+  /// Returns true if this method handled the batch (fill performed or not needed),
+  /// or false if the evaluator reported no padding (so the caller may fall back to
+  /// the divisor-based alignment logic).
+  /// </summary>
+  /// <param name="batchSize"></param>
+  /// <param name="hardMaxRootN"></param>
+  private bool PossiblyRunSecondSelectionToFillEvaluatorCapacity(int batchSize, int hardMaxRootN)
+  {
+    int numNNPaths = PathsSet.NNPaths.Count;
+    if (numNNPaths == 0 || IsApproachingMaxPathCapacity)
+    {
+      return true;
+    }
+
+    int capacity = EvaluatorNN.Evaluator.PaddedBatchCapacity(numNNPaths);
+    int numFiller = capacity - numNNPaths;
+    if (numFiller <= 0)
+    {
+      // Either already exactly at capacity or evaluator does not report padding.
+      return false;
+    }
+
+    int rootN = Engine.SearchRootNode.N;
+
+    // Quality guard: only fill when the tree is large relative to the filled batch
+    // (otherwise the extra visits would degrade selection quality via collisions).
+    if (rootN < 100 * capacity)
+    {
+      return true;
+    }
+
+    // Don't bother if the absolute number of filler positions is small
+    const int MIN_FILLER_FOR_EXTRA_SELECTION_PASS = 8;
+    if (numFiller < MIN_FILLER_FOR_EXTRA_SELECTION_PASS)
+    {
+      return true;
+    } 
+
+    // Oversize the request to compensate for visits which will not yield an NN evaluation,
+    // slightly conservatively (favor a small undershoot over overshoot).
+    const float OVERSIZE_CONSERVATISM = 0.75f;
+    const float MAX_OVERSIZE_MULTIPLIER = 2.5f;
+    float multiplier = Math.Clamp(OVERSIZE_CONSERVATISM / emaNNYieldPerVisit, 1.0f, MAX_OVERSIZE_MULTIPLIER);
+    int numVisitsToRequest = (int)(numFiller * multiplier);
+
+    // Respect the remaining node budget of the search.
+    int positionsBeforeHardBatchLimit = hardMaxRootN - (rootN + batchSize + Engine.numVisitsInFlight);
+    numVisitsToRequest = Math.Min(numVisitsToRequest, positionsBeforeHardBatchLimit);
+
+    // Respect maximum batch size (in terms of allocated paths).
+    numVisitsToRequest = Math.Min(numVisitsToRequest, Engine.Manager.ParamsSearch.Execution.MaxBatchSize - numAllocatedPaths);
+
+    if (numVisitsToRequest <= 0)
+    {
+      return true;
+    }
+
+    //Console.WriteLine(rootN + " " + batchSize + " " + numVisitsToRequest + " " + emaNNYieldPerVisit);
+
+    // Arm the NN slot budget so the oversized request cannot overshoot the capacity
+    // (descents are aborted once NNPaths reaches the limit), then run the fill pass.
+    PathsSet.NNEvalSlotLimit = capacity;
+    try
+    {
+      RunSelectionPhase(numAllocatedPaths + numVisitsToRequest);
+    }
+    finally
+    {
+      PathsSet.NNEvalSlotLimit = int.MaxValue;
+    }
+
+    return true;
   }
 
 
