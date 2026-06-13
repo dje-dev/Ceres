@@ -56,6 +56,13 @@ namespace Ceres.Features.Tournaments
     private readonly Dictionary<int, (string engA, string engB, int aHalfGame1)> pendingPentanomialPairs = new();
 
     /// <summary>
+    /// All game threads participating in this tournament, registered as they are constructed.
+    /// Used to detect the moments when every thread has just output a pair-completing game
+    /// (a fair point at which to evaluate Elo). See TournamentGameThread.OutputGameResultInfo.
+    /// </summary>
+    internal readonly List<TournamentGameThread> GameThreads = new();
+
+    /// <summary>
     /// Dump full tournament summary to console.
     /// </summary>
     public void DumpTournamentSummary(TournamentDef def)

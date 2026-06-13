@@ -74,7 +74,20 @@ namespace Ceres.Features.Tournaments
       }
 
       Run = new TournamentGameRunner(Def);
+
+      // Register with the (per-tournament) shared stats object so that all sibling threads
+      // can be polled for their pair-completion state when deciding whether to emit "*".
+      lock (parentTestResults.GameThreads) parentTestResults.GameThreads.Add(this);
     }
+
+
+    /// <summary>
+    /// True if this thread's most recently output game was the second (completing) game of a
+    /// pair. Written and read only while holding outputLockObj, which serializes all game-result
+    /// output across threads. Used to flag the moments when every thread is simultaneously at a
+    /// pair boundary (see OutputGameResultInfo).
+    /// </summary>
+    bool lastOutputCompletedPair = false;
 
 
     static PositionsWithHistory openings = new PositionsWithHistory();
@@ -533,8 +546,9 @@ namespace Ceres.Features.Tournaments
 
       string wdlStr = $"{player.PlayerWins,3} {player.Draws,3} {player.PlayerLosses,3}";
 
-      // Show a either = or ! (same game or differing moves) after the opening index
-      // if this was the second of the pair of games played.
+      // Show either = or ! (same game or differing moves) after the opening index
+      // if this was the second of the pair of games played. This is later promoted to "*"
+      // (under outputLockObj) when every thread is simultaneously at a pair boundary.
       string openingPlayedBothWaysStr = " ";
       bool wasSecondOfPair = gameSequenceNum % 2 == 1
                           && GameInfoFirstFinishedForByOpening.ContainsKey(openingIndex);
@@ -592,6 +606,25 @@ namespace Ceres.Features.Tournaments
 
       lock (outputLockObj)
       {
+        // Update this thread's pair-completion state, then (if this game completed a pair) check
+        // whether every participating thread's most recently output game also completed a pair.
+        // If so, all threads are simultaneously at a pair boundary -- a point at which the running
+        // Elo reflects only fully completed pairs -- so promote the "="/"!" marker to "*".
+        // All reads/writes of lastOutputCompletedPair are serialized by outputLockObj (held here).
+        lastOutputCompletedPair = wasSecondOfPair;
+        if (wasSecondOfPair)
+        {
+          bool allThreadsAtPairBoundary;
+          lock (ParentStats.GameThreads)
+          {
+            allThreadsAtPairBoundary = ParentStats.GameThreads.TrueForAll(t => t.lastOutputCompletedPair);
+          }
+          if (allThreadsAtPairBoundary)
+          {
+            openingPlayedBothWaysStr = "*";
+          }
+        }
+
         string checkEnginePlyDifferent = thisResult.NumEngine2MovesDifferentFromCheckEngine == 0 ? "   " : $"{thisResult.NumEngine2MovesDifferentFromCheckEngine,3:N0}";
         if (Def.ShowGameMoves) Def.Logger.WriteLine();
         if (engine2White)
@@ -701,6 +734,7 @@ namespace Ceres.Features.Tournaments
       Def.Logger.WriteLine($"Games will be incrementally written to file: {pgnFileName}");
       Def.Logger.WriteLine("Result codes: C=checkmate S=stalemate T=tablebase M=insufficient material E=excessive moves R=draw by repetition A=adjudicate eval agreement F=time forfeit");
       Def.Logger.WriteLine("Note: the +/- and LOS columns use pentanomial (paired-game) analysis (shown once each game pair completes).");
+      Def.Logger.WriteLine("Pair marker (after OP#): = pair completed with identical moves, ! pair completed with differing moves, * additionally every thread is at a completed-pair boundary (fair Elo evaluation point).");
       Def.Logger.WriteLine();
 
       // Build the header (and dashed underline) so each label sits over its data column
