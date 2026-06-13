@@ -209,7 +209,7 @@ public record ParamsSearch
   /// no approximation (all bookkeeping is exact). If the child has no available evaluation
   /// source (and is not terminal), the extension is simply skipped.
   /// </summary>
-  public bool EnableTranspositionAutoExtension = false;
+  public bool EnableTranspositionAutoExtension = true;
 
   /// <summary>
   /// Minimum visit count of the pseudo-twin (the value-copy source) required for
