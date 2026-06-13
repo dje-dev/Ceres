@@ -90,14 +90,15 @@ public record ParamsSearch
     TopN,
 
     /// <summary>
-    /// The move having the best Q value is chosen, subject to
-    /// also having certain (less permissive) minimum number of visits
+    /// The move having the best Q value is chosen, subject to having sufficient visits
+    /// (a minimum fraction of the most visited move's N, see
+    /// ManagerChooseBestMoveMCGS.MinFractionNToUseQ). This is the default.
     /// </summary>
     TopQIfSufficientN,
 
     /// <summary>
-    /// The move having the best Q value is chosen, subject to 
-    /// also having certain minimum number of visits (strictly close to that of topN node).
+    /// Same as TopQIfSufficientN but stricter: a higher minimum visit fraction
+    /// (closer to that of the most visited move) is required.
     /// </summary>
     TopQIfSufficientNStrict,
 

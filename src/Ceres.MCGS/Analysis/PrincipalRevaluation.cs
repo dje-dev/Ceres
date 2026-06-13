@@ -1115,8 +1115,8 @@ public static class PrincipalRevaluation
     }
 
     float qDiffFromBestN = MathF.Abs((float)(winner.QOrig - bestN0Move.QOrig));
-    bool permissive = manager.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientN;
-    float minFracN = ManagerChooseBestMoveMCGS.MinFractionNToUseQ(node, qDiffFromBestN, permissive);
+    float minFracN = ManagerChooseBestMoveMCGS.MinFractionNToUseQ(
+      ManagerChooseBestMoveMCGS.EffectiveBestMoveMode(manager.ParamsSearch, node.N), qDiffFromBestN);
     if (winner.EdgeNOriginal <= (int)(bestN0Move.EdgeNOriginal * minFracN))
     {
       decision.Outcome = RevaluationSwitchOutcome.KeepInsufficientN;

@@ -58,7 +58,8 @@ public record BestMoveInfoMCGS
     SearchResult,
 
     /// <summary>
-    /// BestMoveModeEnum is set to TopV (play best move based on value head).
+    /// The move was forced via MCGSManager.TopVForcedMove
+    /// (best move chosen directly from the value or action head in 1-node searches).
     /// </summary>
     TopVMove,
 

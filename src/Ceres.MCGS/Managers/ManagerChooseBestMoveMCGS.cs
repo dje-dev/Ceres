@@ -39,7 +39,17 @@ namespace Ceres.MCGS.Managers;
 public class ManagerChooseBestMoveMCGS
 {
 
-  internal const float MIN_FRAC_N_REQUIRED_MIN = 0.325f;
+  /// <summary>
+  /// Absolute minimum fraction of N (relative to most visited move) ever required
+  /// for a move to qualify as best by Q (TopQIfSufficientN, the default mode).
+  /// </summary>
+  internal const float MIN_FRAC_N_REQUIRED_MIN = 0.18f;
+
+  /// <summary>
+  /// Absolute minimum fraction of N (relative to most visited move) ever required
+  /// for a move to qualify as best by Q (TopQIfSufficientNStrict mode).
+  /// </summary>
+  internal const float MIN_FRAC_N_REQUIRED_MIN_STRICT = 0.325f;
 
   public readonly GNode Node;
   public readonly MCGSManager Manager;
@@ -316,8 +326,7 @@ public class ManagerChooseBestMoveMCGS
 
     int thisMoveNum = Node.Graph.Store.NodesStore.PositionHistory.Moves.Count / 2; // convert ply to moves
 
-    // Never use Top Q for very small trees
-    const int MIN_N_USE_TOP_Q = 100;
+    // Never use Top Q for very small graphs
     if (Manager.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.RegularizedPolicyOptimizationLow)
     {
       const float LAMBDA = 0.125f;
@@ -335,8 +344,7 @@ public class ManagerChooseBestMoveMCGS
       return new BestMoveInfoMCGS(BestMoveInfoMCGS.BestMoveReason.SearchResult, position, bestChildEdge, (float)-edgesSortedQ[0].Q, childrenSortedN[0].N,
                                    BestNSecond, childrenSortedN[0], edgesSortedQ[0]);
     }
-    else if (Manager.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopN
-          || Node.N < MIN_N_USE_TOP_Q)
+    else if (Manager.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopN)
     {
       // Just return best N (note that tiebreaks are already decided with sort logic above)
       BestMoveInfoMCGS result = new BestMoveInfoMCGS(BestMoveInfoMCGS.BestMoveReason.SearchResult, position, childrenSortedN[0], (float)-edgesSortedQ[0].Q, childrenSortedN[0].N,
@@ -363,7 +371,7 @@ public class ManagerChooseBestMoveMCGS
 
         float differenceFromQOfBestN = MathF.Abs((float)candidate.Q - (float)childrenSortedN[0].Q);
 
-        float minFrac = MinFractionNToUseQ(Node, differenceFromQOfBestN, Manager.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientN);
+        float minFrac = MinFractionNToUseQ(EffectiveBestMoveMode(Manager.ParamsSearch, Node.N), differenceFromQOfBestN);
 
         int minNToBeConsideredForBestQ = (int)(nOfChildWithHighestN * minFrac);
         if (candidate.N > minNToBeConsideredForBestQ)
@@ -477,8 +485,11 @@ public class ManagerChooseBestMoveMCGS
       // Apply the same "sufficient N" logic used elsewhere to ensure the candidate
       // has enough visits to be considered reliable. The candidate must have at least
       // a minimum fraction of the best move's N, where the fraction depends on the Q difference.
-      float minFrac = MinFractionNToUseQ(Node, qDifference, 
-                                         Manager.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientN);
+      // Note: qDifference may be negative (candidateB has better Q than moveA but failed
+      // N-sufficiency during primary selection). MinFractionNToUseQ clamps negative
+      // differences to zero, so such a candidate must have full N parity
+      // (N at least that of moveA) to be eligible for the irreversibility override.
+      float minFrac = MinFractionNToUseQ(EffectiveBestMoveMode(Manager.ParamsSearch, Node.N), qDifference);
       int minNRequired = (int)(moveA.N * minFrac);
       if (candidateB.N < minNRequired)
       {
@@ -557,34 +568,74 @@ public class ManagerChooseBestMoveMCGS
   /// because:
   ///   - the less explored (lower N) a move is, the more uncertain we are of its true Q (could be worse).
   ///   - N partly reflects the influence of policy, which should not be lightly ignored.
+  ///
+  /// The returned value is always within [MinFracNFloor(mode), 1.0].
+  /// Negative qDifferenceFromBestQ (candidate Q better than reference)
+  /// is treated as zero difference, i.e. full N parity is required.
   /// </summary>
+  /// <param name="mode"></param>
   /// <param name="qDifferenceFromBestQ"></param>
   /// <returns></returns>
-  static internal float MinFractionNToUseQ(GNode node, float qDifferenceFromBestQ, bool permissive)
+  static internal float MinFractionNToUseQ(ParamsSearch.BestMoveModeEnum mode, float qDifferenceFromBestQ)
   {
     // Compute fraction required which decreases slowly below 1.0
     // as the Q difference increases (using a power function).
-    // Value of 25 yields these minimum fractions for various sample levels of Q difference:
+    // The strict value of 25 yields these minimum fractions for various sample levels of Q difference:
     //    0.005 --> 88%
     //    0.010 --> 78%
     //    0.020 --> 60%
     // Tests (using matches) suggest play quality is not highly sensitive to this POWER,
     // with a value of 30 possibly very slightly better than 20.
-    const float POWER = 25;
-    const float POWER_PERMISSIVE = 40;
+    const float POWER = 40;
+    const float POWER_STRICT = 25;
 
-    const float MIN_FRAC_N_REQUIRED_MIN_PERMISSIVE = 0.18f;
+    // All modes other than the default TopQIfSufficientN use the strict mapping
+    // (TopN and the RPO modes conservatively so).
+    bool strict = mode != ParamsSearch.BestMoveModeEnum.TopQIfSufficientN;
 
-    float minFrac = MathF.Pow(1.0f - qDifferenceFromBestQ, (permissive ? POWER_PERMISSIVE : POWER));
+    qDifferenceFromBestQ = Math.Clamp(qDifferenceFromBestQ, 0f, 1f);
+    float minFrac = MathF.Pow(1.0f - qDifferenceFromBestQ, (strict ? POWER_STRICT : POWER));
 
     // Impose absolute minimum fraction.
-    float minFracFloor = permissive ? MIN_FRAC_N_REQUIRED_MIN_PERMISSIVE : MIN_FRAC_N_REQUIRED_MIN;
-    if (minFrac < minFracFloor)
-    {
-      minFrac = minFracFloor;
-    }
-
-    return minFrac;
+    return MathF.Max(minFrac, MinFracNFloor(mode));
   }
+
+
+  /// <summary>
+  /// Absolute minimum fraction of the reference (most visited) move's N required
+  /// for a move to qualify as best by Q, i.e. the lower bound of MinFractionNToUseQ
+  /// over all Q differences.
+  /// TopN and the RPO modes have no fraction-based qualification of their own;
+  /// they map to the strict floor (conservative).
+  /// </summary>
+  /// <param name="mode"></param>
+  /// <returns></returns>
+  static internal float MinFracNFloor(ParamsSearch.BestMoveModeEnum mode)
+    => mode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientN
+         ? MIN_FRAC_N_REQUIRED_MIN
+         : MIN_FRAC_N_REQUIRED_MIN_STRICT;
+
+
+  /// <summary>
+  /// Minimum root N for the default TopQIfSufficientN mapping to apply.
+  /// Below this, a fixed fraction of N carries much weaker statistical evidence,
+  /// so the strict mapping is substituted
+  /// (graduating: TopN below MIN_N_USE_TOP_Q, then strict, then default).
+  /// </summary>
+  internal const int SMALL_GRAPH_STRICT_MIN_N = 100;
+
+  /// <summary>
+  /// Returns the best move mode to actually apply given the size of the search:
+  /// for small graphs (root N below SMALL_GRAPH_STRICT_MIN_N) TopQIfSufficientN
+  /// is replaced by TopQIfSufficientNStrict.
+  /// </summary>
+  /// <param name="paramsSearch"></param>
+  /// <param name="rootN"></param>
+  /// <returns></returns>
+  static internal ParamsSearch.BestMoveModeEnum EffectiveBestMoveMode(ParamsSearch paramsSearch, int rootN)
+    => (paramsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientN
+     && rootN < SMALL_GRAPH_STRICT_MIN_N)
+         ? ParamsSearch.BestMoveModeEnum.TopQIfSufficientNStrict
+         : paramsSearch.BestMoveMode;
 
 }

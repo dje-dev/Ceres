@@ -225,11 +225,6 @@ public class MCGSFutilityPruning
     float bestQ = (float)bestQEdge.Q;
     float qOfBestN = (float)bestNEdge.Q;
 
-    ManagerChooseBestMoveMCGS bestMoveChooser = new(Manager, Manager.Engine.SearchRootNode, false, default, false);
-
-    float MIN_BEST_N_FRAC_REQUIRED = ManagerChooseBestMoveMCGS.MIN_FRAC_N_REQUIRED_MIN;
-
-
     int numNewlyShutdown = 0;
     foreach ((GEdge edge, int indexChild) in SearchRoot.ChildEdgesExpandedWithIndex)
     {
@@ -267,7 +262,14 @@ public class MCGSFutilityPruning
       }
       else
       {
-        int minNRequired = (int)(bestQEdge.N * MIN_BEST_N_FRAC_REQUIRED);
+        // Under the TopQ modes a move can still become best once its N reaches the
+        // mode's minimum fraction floor of the most-visited child's N (the same
+        // reference DoCalcBestMove uses for qualification). The floor (rather than
+        // the Q-difference-dependent curve) is used because the move's Q gap may
+        // shrink with further search; the floor is the true lower bound.
+        // RPO modes have no N-threshold qualification; the strict floor is retained
+        // for them as a conservative proxy.
+        int minNRequired = (int)(bestNEdge.N * ManagerChooseBestMoveMCGS.MinFracNFloor(Manager.ParamsSearch.BestMoveMode));
         earlyStopGapRaw = minNRequired - edge.N;
       }
 
