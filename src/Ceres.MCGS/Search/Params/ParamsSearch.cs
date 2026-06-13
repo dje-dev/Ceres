@@ -745,8 +745,7 @@ public record ParamsSearch
       // The extension relies on history-mode invariants (terminal draw edges valid for
       // every path into a node; per-history node identity); in PositionEquivalence mode
       // creating terminal draw edges for repetitions is incorrect (coalesced nodes).
-      throw new Exception("EnableTranspositionAutoExtension requires EnableGraph=true and "
-                        + "PathTranspositionMode=PositionAndHistoryEquivalence.");
+      EnableTranspositionAutoExtension = false;
     }
 
     if (!TwofoldDrawEnabled)
