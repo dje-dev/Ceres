@@ -714,7 +714,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     }
     else
     {
-      double oldWPure = node.ComputeQPure() * startN;
+      double oldWPure = startN == 0 ? 0 : node.ComputeQPure() * startN;
       double newWPure = oldWPure + deltaW;
       double newQPure = newWPure / (startN + deltaN);
 
