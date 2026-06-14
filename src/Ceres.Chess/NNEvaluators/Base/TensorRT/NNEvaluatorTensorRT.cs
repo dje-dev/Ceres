@@ -142,9 +142,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
   // Input mode: byte inputs or Half inputs with /100 normalization
   private readonly bool useByteInputs;
 
-  // Shared buffers for TPG encoding
+  // Shared call-level input staging buffers (allocated lazily / grown on demand by EnsureInputBuffers)
   private byte[] squareByteBuffer;
-  private byte[] inputByteBuffer;
   private Half[] inputHalfBuffer;
   private int maxBatchSize;
 
@@ -461,20 +460,14 @@ public class NNEvaluatorTensorRT : NNEvaluator
     hasAction = actionSizePerPos == EncodedPolicyVector.POLICY_VECTOR_LENGTH * 3; // [B, 1858, 3] - WDL logits for all possible moves
     hasQDeviation = qDevLowerSize > 0 && qDevUpperSize > 0;
 
-    if (netType == ONNXNetExecutor.NetTypeEnum.TPG)
-    {
-      int bytesPerSquareRecord = TPGRecord.BYTES_PER_SQUARE_RECORD;
-      squareByteBuffer = new byte[maxBatchSize * 64 * bytesPerSquareRecord];
-    }
-
-    if (useByteInputs)
-    {
-      inputByteBuffer = new byte[maxBatchSize * inputElementsPerPosition];
-    }
-    else
-    {
-      inputHalfBuffer = new Half[maxBatchSize * inputElementsPerPosition];
-    }
+    // Call-level input staging buffers (squareByteBuffer / inputHalfBuffer) are allocated
+    // lazily and grown on demand to the actual per-call batch size via EnsureInputBuffers,
+    // rather than pre-sized to the (soft) maxBatchSize. This way a large softMaxBatchSize
+    // headroom costs no host memory unless/until a batch that large actually arrives — the
+    // common case (search MaxBatchSize == 1024) never materializes the 4096-sized buffers.
+    // (The internal engine sub-batch splitting does NOT shrink these: they must hold the
+    //  whole call's input. The output/result buffers below are likewise sized to the whole
+    //  call by contract, so they remain pre-allocated to maxBatchSize.)
 
     outputFloatBufferSize = (int)pool.MaxTotalOutputSize;
 
@@ -591,6 +584,36 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
 
   /// <summary>
+  /// Ensures the call-level input staging buffers are large enough to hold numPos positions,
+  /// growing them on demand (grow-only; never shrinks). Sized to the actual batch rather than
+  /// the (soft) maxBatchSize so the softMaxBatchSize headroom costs no host memory until a batch
+  /// that large actually arrives. Mirrors the constructor's by-net-type / by-input-type allocation.
+  /// Must be called single-threaded at the top of an evaluation, before any input fill or the
+  /// (parallel) sub-batch handler runs.
+  /// </summary>
+  private void EnsureInputBuffers(int numPos)
+  {
+    if (NetType == ONNXNetExecutor.NetTypeEnum.TPG)
+    {
+      int squareBytes = numPos * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD;
+      if (squareByteBuffer == null || squareByteBuffer.Length < squareBytes)
+      {
+        squareByteBuffer = new byte[squareBytes];
+      }
+    }
+
+    if (!useByteInputs)
+    {
+      int halfElems = numPos * inputElementsPerPosition;
+      if (inputHalfBuffer == null || inputHalfBuffer.Length < halfElems)
+      {
+        inputHalfBuffer = new Half[halfElems];
+      }
+    }
+  }
+
+
+  /// <summary>
   /// Optional worker method which evaluates batch of positions which are already converted into native format needed by evaluator.
   /// </summary>
   /// <param name="positionsNativeInput">The positions in native TPG format</param>
@@ -633,14 +656,15 @@ public class NNEvaluatorTensorRT : NNEvaluator
       InitLookupTable();
     }
 
-    // Allocate thread-static buffers if needed
-    int bytesPerSquareRecord = TPGRecord.BYTES_PER_SQUARE_RECORD;
-    int maxBufferSize = MaxBatchSize * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD;
+    EnsureInputBuffers(numPositions);
 
-    if (inputsPrimaryNative == null || inputsPrimaryNative.Length < maxBufferSize)
+    // Allocate thread-static buffers if needed (sized to the actual batch, grown on demand)
+    int requiredBufferSize = numPositions * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD;
+
+    if (inputsPrimaryNative == null || inputsPrimaryNative.Length < requiredBufferSize)
     {
-      inputsPrimaryNative = new byte[maxBufferSize];
-      inputsPrimaryNativeF = new Half[maxBufferSize];
+      inputsPrimaryNative = new byte[requiredBufferSize];
+      inputsPrimaryNativeF = new Half[requiredBufferSize];
     }
 
     // Convert native input to flat format
@@ -1446,6 +1470,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     {
       throw new ArgumentException($"Batch size {numPos} exceeds maximum {maxBatchSize}");
     }
+
+    EnsureInputBuffers(numPos);
 
     // LC0 path: the plane->Half conversion is deferred to FillInputLC0, invoked inside
     // ProcessWithHandlerDirect, which writes the result straight into the pinned input
@@ -2411,7 +2437,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                               buildOptions,
                                               gpuIDs: gpuIDs,
                                               useCudaGraphs: EXACT_BATCHES,
-                                              softMaxBatchSize: 1024,
+                                              // Soft (logical) max batch size. Engines are NOT built at this size;
+                                              // larger logical batches are split into engine-sized sub-batches
+                                              // (engine ranges remain [96, 1024] above, exact sizes when CUDA graphs).
+                                              // Drives only the host-side per-position buffers, not engine/pinned VRAM.
+                                              softMaxBatchSize: 4096,
                                               optimizationLevel: options.OptimizationLevel,
                                               forceBF16: forceBF16,
                                               refittable: refittable,
