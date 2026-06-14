@@ -660,6 +660,7 @@ public record ParamsSearch
 
   /// <summary>
   /// Mode for optional post-backup recomputation/propagation of node Q values.
+  /// Tests suggest backup corrections magnitudes are extremely modest and the computational overhead is significant.
   /// </summary>
   public PostBackupQModeType PostBackupQMode = PostBackupQModeType.Off;
 
