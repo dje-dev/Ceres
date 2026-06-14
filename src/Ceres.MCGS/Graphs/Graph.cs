@@ -146,6 +146,18 @@ public unsafe partial class Graph : IDisposable
   public int NumLinksToExistingNodes;
 
   /// <summary>
+  /// Stress-test knob: when the environment variable CERES_CHAOS_NONBLOCK contains '1',
+  /// AddEdgeToNewOrExistingNode simulates frequent non-blocking lock contention (1 in 8
+  /// calls fail as if the existing node's lock were held). This exercises the select-phase
+  /// contention fallbacks (expansion blocking, dropped-visit ledger backout) which are
+  /// otherwise too rare to test; a search under chaos must still end with zero residual
+  /// in-flight counts. Zero cost when unset (the static readonly false branch is JITted away).
+  /// </summary>
+  internal static readonly bool CHAOS_NONBLOCK_SITE_A =
+    (System.Environment.GetEnvironmentVariable("CERES_CHAOS_NONBLOCK") ?? "").Contains('1');
+  internal static int chaosCounter;
+
+  /// <summary>
   /// Threshold for repetition-draw discounting of pseudotransposition blending donors:
   /// donor weight is scaled by max(0, 1 - donor.RepDrawFraction / thisValue);
   /// values less than or equal to 0 disable the discounting.
@@ -913,6 +925,16 @@ public unsafe partial class Graph : IDisposable
                                                                          bool nonBlockingExistingNodeLock = false)
   {
     Debug.Assert(parentNode.IsLocked);
+
+    // Stress-test hook (see CHAOS_NONBLOCK_SITE_A): simulate frequent non-blocking
+    // lock contention to exercise callers' fallback ledger handling.
+    if (CHAOS_NONBLOCK_SITE_A && nonBlockingExistingNodeLock
+     && (System.Threading.Interlocked.Increment(ref chaosCounter) & 7) == 0)
+    {
+      wasCreated = false;
+      standaloneTranspositionNode = default;
+      return default;
+    }
 
     if (!parentNode.IsGraphRoot)
     {

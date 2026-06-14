@@ -356,6 +356,10 @@ public class MCGSIterator : IDisposable
 
     if (PathsSet.Paths.Count == 0)
     {
+      // No paths to evaluate/backup, but any visits dropped during select still need
+      // their deferred ledger backout applied (otherwise their edge in-flight counts
+      // and ancestor visit counters would leak).
+      ApplyPendingDroppedVisits();
       return;
     }
 
@@ -529,6 +533,8 @@ public class MCGSIterator : IDisposable
 
     if (PathsSet.Paths.Count == 0)
     {
+      // Apply any deferred ledger backouts for visits dropped during select.
+      ApplyPendingDroppedVisits();
       return new List<(NodeIndex node, int depthBelow, int terminalKind, double leafQFromStart, NodeIndex[] sequence)>(0);
     }
 
@@ -1051,10 +1057,26 @@ public class MCGSIterator : IDisposable
 
 
   /// <summary>
-  /// Executes the backup phase for the current set of paths using the specified backup mode. 
+  /// Applies the deferred ledger backouts for visits dropped during the select phase
+  /// (see MCGSPathsSet.PendingDroppedVisits). Must run before any path backup so the
+  /// merge counters at shared ancestor visits reflect only the visits actually carried.
+  /// </summary>
+  internal void ApplyPendingDroppedVisits()
+  {
+    while (PathsSet.PendingDroppedVisits.TryDequeue(out (MCGSPath path, int numSlotsUsed, int numVisits) drop))
+    {
+      MCGSSelect.ApplyDroppedVisits(drop.path, drop.numSlotsUsed, drop.numVisits);
+    }
+  }
+
+
+  /// <summary>
+  /// Executes the backup phase for the current set of paths using the specified backup mode.
   /// </summary>
   void RunBackupPhase()
   {
+    ApplyPendingDroppedVisits();
+
 #if DEBUG
     foreach (MCGSPath path in PathsSet.Paths)
     {

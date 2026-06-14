@@ -82,6 +82,30 @@ public partial class MCGSPathsSet : IDisposable
   /// </summary>
   internal bool NNEvalBudgetExhausted => NNPaths.Count >= NNEvalSlotLimit;
 
+  /// <summary>
+  /// Records of visits abandoned mid-frame during select (expansion blocked by lock
+  /// contention, suboptimality rejection) whose ledger backout (ancestor visits'
+  /// attempted/pending counters and edge in-flight counts) must be applied at the START
+  /// of the backup phase. The backout walks ancestor path-segment slots; doing that
+  /// during select would race with concurrent growth of those segments by other select
+  /// workers (ArraySegmentRef.EnsureSize reallocates and copies the storage), so the
+  /// records are deferred to the quiescent backup phase (see MCGSSelect.ApplyDroppedVisits).
+  /// </summary>
+  internal readonly ConcurrentQueue<(MCGSPath path, int numSlotsUsed, int numVisits)> PendingDroppedVisits = new();
+
+  /// <summary>
+  /// Records that numVisits assigned down this path are being abandoned at its current
+  /// position (capturing the current slot count so the later backout walks exactly the
+  /// ancestors as of this point, even if the path is subsequently extended).
+  /// </summary>
+  internal void RecordDroppedVisits(MCGSPath path, int numVisits)
+  {
+    if (path.NumVisitsInPath > 0)
+    {
+      PendingDroppedVisits.Enqueue((path, path.numSlotsUsed, numVisits));
+    }
+  }
+
 
   private bool disposedValue;
 
@@ -150,6 +174,7 @@ public partial class MCGSPathsSet : IDisposable
     Paths.Clear();
     NNPaths.Clear();
     NNEvalSlotLimit = int.MaxValue;
+    PendingDroppedVisits.Clear();
     Array.Clear(PathLengthDistribution, 0, PathLengthDistribution.Length);
   }
 

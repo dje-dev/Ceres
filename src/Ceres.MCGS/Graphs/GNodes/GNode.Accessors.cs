@@ -233,7 +233,7 @@ public readonly partial struct GNode : IComparable<GNode>, IEquatable<GNode>
     get
     {
       // Do not expect to find deferred copy here
-      // (should have called DoPolicyCopyFromDeferredNodeSource already).
+      // (should have called TryDoDeferredPolicyCopyIfNeeded already).
       Debug.Assert(!NodeRef.edgeHeaderBlockIndexOrDeferredNode.IsNodeIndex);
       return NodeRef.edgeHeaderBlockIndexOrDeferredNode.BlockIndexIntoEdgeHeaderStore;
     }
@@ -246,31 +246,45 @@ public readonly partial struct GNode : IComparable<GNode>, IEquatable<GNode>
   public readonly bool IsPendingPolicyCopy => NodeRef.edgeHeaderBlockIndexOrDeferredNode.IsNodeIndex;
 
 
-  internal void DoDeferredPolicyCopyIfNeeded()
+  /// <summary>
+  /// If a deferred policy copy is pending, attempts to materialize it now
+  /// (allocating edge headers and copying policy from the source node).
+  /// Returns false if the source node's lock could not be acquired.
+  ///
+  /// The source lock is acquired NON-blockingly: the caller holds this node's lock
+  /// (typically as a select-phase expansion parent), and a blocking acquire of a
+  /// second node lock while holding one creates a deadlock surface (see the same
+  /// pattern in TranspositionAutoExtension). On contention the copy simply remains
+  /// deferred; callers abort/retry at their level.
+  /// </summary>
+  internal bool TryDoDeferredPolicyCopyIfNeeded()
   {
-    if (IsPendingPolicyCopy)
+    if (!IsPendingPolicyCopy)
     {
-      DoPolicyCopyFromDeferredNodeSource();
+      return true;
     }
-  }
 
-
-  internal void DoPolicyCopyFromDeferredNodeSource()
-  {
     ref GNodeStruct nodeRef = ref NodeRef;
 
-    EdgeHeaderBlockIndexOrNodeIndex blockIndexIntoEdgeHeaderStore = nodeRef.edgeHeaderBlockIndexOrDeferredNode;
-
-    // If just a pointer to a source node, then allocate and copy values now.
-    GNode copyFrom = Graph[blockIndexIntoEdgeHeaderStore.NodeIndex];
+    // The stored value is a pointer to the source node; allocate and copy values now.
+    GNode copyFrom = Graph[nodeRef.edgeHeaderBlockIndexOrDeferredNode.NodeIndex];
 
     Debug.Assert(this.IsLocked);
-    using (new NodeLockBlock(copyFrom))
+    if (!copyFrom.TryAcquireLock())
+    {
+      return false;
+    }
+    try
     {
       nodeRef.edgeHeaderBlockIndexOrDeferredNode.Clear();
       Graph.AllocateAndCopyPolicyValues(copyFrom, this);
     }
+    finally
+    {
+      copyFrom.ReleaseLock();
+    }
 
+    return true;
   }
 
 

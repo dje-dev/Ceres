@@ -151,6 +151,16 @@ public partial class MCGSBackup
       {
         if (!visit.PathVisitRef.ParentChildEdge.ParentNode.IsSearchRoot) // accumulation not done at root
         {
+          // Dump details before asserting (aids diagnosis of select/backup ledger bugs).
+          if (visit.PathVisitRef.NumVisitsAttemptedPendingBackup != 0 || visit.PathVisitRef.NumVisitsAttempted <= 0)
+          {
+            MCGSPath p = cachedPathsBuffer[i];
+            Console.WriteLine($"[LEDGER] pend={visit.PathVisitRef.NumVisitsAttemptedPendingBackup} "
+                            + $"att={visit.PathVisitRef.NumVisitsAttempted} acc={visit.PathVisitRef.NumVisitsAccepted} "
+                            + $"pathID={p.PathID} reason={p.TerminationReason} pathLen={p.NumVisitsInPath} "
+                            + $"slot={visit.LocalSlotIndex} pathIdx={visit.PathIndex} "
+                            + $"edge={visit.PathVisitRef.ParentChildEdge}");
+          }
           Debug.Assert(visit.PathVisitRef.NumVisitsAttemptedPendingBackup == 0);
           Debug.Assert(visit.PathVisitRef.NumVisitsAttempted > 0);
         }

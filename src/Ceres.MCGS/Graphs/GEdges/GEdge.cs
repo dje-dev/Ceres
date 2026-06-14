@@ -105,9 +105,11 @@ public unsafe readonly struct GEdge : IEquatable<GEdge>
   public Graph Graph => graph;
 
   /// <summary>
-  /// If the GEdge is uninitialized.
+  /// If the GEdge is uninitialized (either a default GEdge with no underlying
+  /// storage, e.g. returned by Graph.AddEdgeToNewOrExistingNode on non-blocking
+  /// lock contention, or an edge whose type has not yet been set).
   /// </summary>
-  public readonly bool IsNull => Type == GEdgeStruct.EdgeType.Uninitialized;
+  public readonly bool IsNull => edgeStructPtr == null || Type == GEdgeStruct.EdgeType.Uninitialized;
 
 
   /// <summary>
