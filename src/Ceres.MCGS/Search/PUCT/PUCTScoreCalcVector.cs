@@ -206,6 +206,9 @@ public unsafe static class PUCTScoreCalcVector
     int numVisits = 0;
     int numTooSuboptimal = 0;
 
+    // Allow at least 1 and up to 20% of requested visits to exceed the limit (or up to 5% of parent N).
+    int maxVisitsAllowedOverSuboptimalityLimit = 1 + Math.Max(numVisitsToCompute / 5, parentN / 20);
+
     while (numVisits < numVisitsToCompute
         || numVisits == 0 && numVisitsToCompute == 0) // just querying scores, no children to select
     {
@@ -243,16 +246,14 @@ public unsafe static class PUCTScoreCalcVector
         double thisQ = childStats.W.Span[maxIndex] / childStats.N.Span[maxIndex];
         double qSuboptimality = thisQ + qParent;
 
-        // Allow at least 1 and up to 10% of requested visits to exceed the limit.
-        int maxVisitsAllowedOverSuboptimalityLimit = 1 + parentN / 10;
         if (qSuboptimality > thresholdPUCTSuboptimalityReject)
         {
           numTooSuboptimal++;
 
           if (numTooSuboptimal > maxVisitsAllowedOverSuboptimalityLimit)
           {
-//            Console.WriteLine($"Reducing visit count from {numVisitsToCompute} to {numVisits} at parentN= {parentN}");
-            numTooSuboptimal++;
+//if (Random.Shared.Next(100) == 0)
+//  Console.WriteLine($"Reducing visit count from {numVisitsToCompute} to {numVisits} at parentN= {parentN} due to Q suboptimality {qSuboptimality}");
             return numVisits;
           }
         }
