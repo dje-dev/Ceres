@@ -794,6 +794,47 @@ public class MCGSSelect
 
 
   /// <summary>
+  /// Reconciles the at-creation sibling blend after a successful transposition auto-extension.
+  ///
+  /// PossiblyInstallSiblingBlendAtCreation installs the blend using an effective target N of 1
+  /// (the node's imminent first visit). When auto-extension then runs, it installs the node at a
+  /// higher N (typically 2), but composes only the EXISTING (N=1-weighted) sibling fields. For a
+  /// non-cap-saturated donor (e.g. a twin with N just above the target) the correct weight at the
+  /// post-extension N is smaller - so without this the node carries a transiently over-weighted
+  /// blend until its next ordinary select-phase refresh.
+  ///
+  /// This recomputes the blend at the node's true current N via the same path the ordinary refresh
+  /// uses (ResetNodeQUsingNewQPure with refreshSiblingContribution: true), recovering the exact pure
+  /// Q first (ComputeQPure inverts the stored N=1 blend) so only the sibling weighting changes.
+  /// Best-effort: a node carrying no installed blend (SiblingsQFrac == 0, e.g. no eligible donors or
+  /// the creation install lost its lock race) needs nothing, and on lock contention the install is
+  /// simply skipped - the ordinary refresh would correct it a visit later anyway.
+  /// </summary>
+  private static void ReconcileSiblingBlendAfterAutoExtension(GNode node)
+  {
+    if (node.NodeRef.SiblingsQFrac == 0)
+    {
+      // No blend was installed at creation; a higher target N can only reduce donor eligibility,
+      // so there is nothing to recompute.
+      return;
+    }
+
+    if (!node.TryAcquireLock())
+    {
+      return;
+    }
+    try
+    {
+      node.ResetNodeQUsingNewQPure(node.ComputeQPure(), refreshSiblingContribution: true);
+    }
+    finally
+    {
+      node.ReleaseLock();
+    }
+  }
+
+
+  /// <summary>
   /// Determines the dynamic threshold of visits to a child node,
   /// based off of the ParamsSearchExecution but possibly adjusted if the
   /// graph is large (since paths become longer and parallelism is more beneficial).
@@ -1484,8 +1525,14 @@ public class MCGSSelect
       // N.B. must run BEFORE the auto-extension below: the extension performs the node's
       //      first backups, whose ResetNodeQUsingNewQPure composes the stored sibling
       //      blend with the (extension-improved) pure Q.
-      if (Engine.Manager.ParamsSearch.EnablePseudoTranspositionBlendingAtCreation
-       && Engine.Manager.ParamsSearch.EnablePseudoTranspositionBlending)
+      // The feature is meaningful only in PositionAndHistoryEquivalence mode: under
+      // PositionEquivalence same-position nodes are coalesced, so the donor set is empty
+      // (only self) and GetTranspositionStats can never contribute - gate it out so the
+      // work (and the call) is skipped entirely.
+      bool ptbAtCreationActive = Engine.Manager.ParamsSearch.EnablePseudoTranspositionBlendingAtCreation
+                              && Engine.Manager.ParamsSearch.EnablePseudoTranspositionBlending
+                              && Engine.Manager.ParamsSearch.PathTranspositionMode != PathMode.PositionEquivalence;
+      if (ptbAtCreationActive)
       {
         PossiblyInstallSiblingBlendAtCreation(childEdge.ChildNode,
                                               in childPosInfo.childPos, childPosInfo.childPositionHash64);
@@ -1502,6 +1549,17 @@ public class MCGSSelect
                                                childPosInfo.wasIrreversibleMove))
       {
         path.TerminationReason = MCGSPathTerminationReason.TranspositionCopyValuesAutoExtended;
+
+        // Reconcile the at-creation blend with the post-extension visit count. The install
+        // above used an effective target N of 1 (the imminent first visit), but the extension
+        // has since installed the node at a higher N (typically 2). Recompute the blend at
+        // that true N - exactly the computation the ordinary select-phase refresh performs -
+        // so the stored weight is correct immediately rather than carrying the over-weighted
+        // N=1 value until the node's next select-phase refresh.
+        if (ptbAtCreationActive)
+        {
+          ReconcileSiblingBlendAfterAutoExtension(childEdge.ChildNode);
+        }
       }
     }
     else
