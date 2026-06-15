@@ -143,8 +143,6 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   public NNEvaluatorSet Evaluators { get; private set; }
 
 
-  readonly BestMoveInfoMCGS lastBestMoveInfo;
-
   readonly Action<string> InfoLogger;
 
   #endregion
@@ -466,7 +464,7 @@ public class GameEngineCeresMCGSInProcess : GameEngine
 
     if (GatherVerboseMoveStats)
     {
-      result.VerboseMoveStats = GetVerboseMoveStats();
+      result.VerboseMoveStats = GetVerboseMoveStats(result.BestMoveInfo);
     }
 
     if (OutputVerboseMoveStats)
@@ -650,14 +648,14 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   /// Returns list of verbose move statistics pertaining to current search root node.
   /// </summary>
   /// <returns></returns>
-  public List<VerboseMoveStat> GetVerboseMoveStats()
+  public List<VerboseMoveStat> GetVerboseMoveStats(BestMoveInfoMCGS bestMoveInfo)
   {
     if (Search == null)
     {
       throw new Exception("GetVerboseMoveStats cannot return search statistics because no search has run yet.");
     }
 
-    return VerboseMoveStatsFromMCGSNode.BuildStats(Search.Manager, lastBestMoveInfo);
+    return VerboseMoveStatsFromMCGSNode.BuildStats(Search.Manager, bestMoveInfo);
   }
 
 
