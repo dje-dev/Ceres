@@ -38,6 +38,7 @@ using Ceres.Chess.NNEvaluators.Internals;
 using System.Linq;
 using Ceres.MCGS.GameEngines;
 using Ceres.MCGS.Search.Params;
+using Ceres.Chess.SearchResultVerboseMoveInfo;
 
 #endregion
 
@@ -103,6 +104,15 @@ namespace Ceres.Features.Suites
       }
 
       GameEngine engine = defForWorker.CreateEngine();
+
+      // Enable per-move (root) visit statistics so the policy-difference (KLD) metric can be
+      // computed. MCGS only populates GameEngineSearchResult.VerboseMoveStats when this flag is
+      // set; it is a cheap post-search root walk and does not change search behavior or output.
+      if (engine is GameEngineCeresMCGSInProcess mcgsEngine)
+      {
+        mcgsEngine.GatherVerboseMoveStats = true;
+      }
+
       engine.Warmup(playerDef.SearchLimit.KnownMaxNumNodes);
       return engine;
     }
@@ -243,6 +253,36 @@ namespace Ceres.Features.Suites
     int sumEvalNumBatches2;
     int sumEvalNumPos2;
 
+    long sumTablebaseHits1;
+    long sumTablebaseHits2;
+
+    // Correct-move-visit counters: over positions where both engines exposed root visit stats,
+    // how often each engine put a (meaningfully, by > 3 percentage points) larger fraction of
+    // its final visits on the correct move(s), and how often the two were within 3 points.
+    int countEngine1MoreCorrectVisits;
+    int countEngine2MoreCorrectVisits;
+    int countCorrectVisitsEqual;
+    int countCorrectVisitsCompared;
+
+    // Accumulates per-column statistics so a summary row (average of each column) can be
+    // emitted at end of suite, and used to populate the comprehensive SuiteTestResult.
+    readonly ColumnAccumulator columnAcc = new();
+
+    // Whether the per-position detail table is being printed (governs the summary row).
+    bool outputDetailRun;
+
+    // Policy difference: symmetric KLD of the two engines' root visit distributions, summed
+    // over positions where both engines exposed per-move visit statistics.
+    double sumPolicyKLD;
+    int countPolicyKLD;
+
+    // Per-engine evaluations-per-second (EPS), accumulated from each search result.
+    long sumEPS1;
+    long sumEPS2;
+
+    // Number of positions in the test set actually run (after filtering/slicing).
+    int numPositionsInRun;
+
 
 #if NOT
     void DumpParams(TextWriter writer, bool differentOnly)
@@ -318,6 +358,8 @@ namespace Ceres.Features.Suites
                                bool saveCacheWhenDone = true,
                                bool enableCancelVialCtrlC = true)
     {
+      outputDetailRun = outputDetail;
+
       // Tree reuse is no help, indicate that we won't need it
       Def.Engine1Def.DisableTreeReuse();
       Def.Engine2Def?.DisableTreeReuse();
@@ -436,6 +478,8 @@ namespace Ceres.Features.Suites
       if (Def.MaxNumPositions > epds.Count) Def.MaxNumPositions = epds.Count;
       epds = epds.GetRange(Def.FirstTestPosition, Def.MaxNumPositions);
 
+      numPositionsInRun = epds.Count;
+
       int numExternalGameProcesses = 1;
 
       numConcurrentSuiteThreads = Math.Min(Def.MaxNumPositions, numConcurrentSuiteThreads);
@@ -529,6 +573,16 @@ namespace Ceres.Features.Suites
 
       Shutdown(externalEnginePool);
 
+      // Mean of a per-position column (from the accumulator), coalescing NaN (absent column) to 0.
+      float ColAvg(string id)
+      {
+        double v = columnAcc.Average(id);
+        return double.IsNaN(v) ? 0.0f : (float)v;
+      }
+
+      float avgEPS1 = numSearches > 0 ? (float)sumEPS1 / numSearches : 0;
+      float avgEPS2 = numSearches > 0 ? (float)sumEPS2 / numSearches : 0;
+
       return new SuiteTestResult(Def)
       {
         AvgScore1 = (float)accCeres1 / numSearches,
@@ -548,7 +602,54 @@ namespace Ceres.Features.Suites
         TotalNodes1 = totalNodes1,
         TotalNodes2 = totalNodes2,
 
-        AvgAbsQDifference = finalQ2.Count == 0 ? 0 : StatUtils.Average(StatUtils.AbsDiff(finalQ1.ToArray(), finalQ2.ToArray()))
+        AvgAbsQDifference = finalQ2.Count == 0 ? 0 : StatUtils.Average(StatUtils.AbsDiff(finalQ1.ToArray(), finalQ2.ToArray())),
+
+        // Per-position averages (mirroring the console columns).
+        AvgDepth1 = ColAvg("ADep"),
+        AvgDepth2 = ColAvg("ADep2"),
+        MaxDepth1 = ColAvg("MDep"),
+        MaxDepth2 = ColAvg("MDep2"),
+        VisitEntropy1 = ColAvg("VEnt"),
+        VisitEntropy2 = ColAvg("VEnt2"),
+        YieldFrac1 = ColAvg("Yld"),
+        YieldFrac2 = ColAvg("Yld2"),
+        CorrectMoveVisitFracPct1 = ColAvg("Fr"),
+        CorrectMoveVisitFracPct2 = ColAvg("Fr2"),
+        AvgQ1 = ColAvg("QC"),
+        AvgQ2 = ColAvg("QC2"),
+        AvgQLC0 = ColAvg("QEx"),
+
+        // Totals (sums) over all positions.
+        TotalNNBatches1 = sumEvalNumBatches1,
+        TotalNNBatches2 = sumEvalNumBatches2,
+        TotalNNEvals1 = sumEvalNumPos1,
+        TotalNNEvals2 = sumEvalNumPos2,
+        TotalTablebaseHits1 = sumTablebaseHits1,
+        TotalTablebaseHits2 = sumTablebaseHits2,
+        TotalNodesWhenChoseTopN1 = sumCeres1NumNodesWhenChoseTopNode,
+        TotalNodesWhenChoseTopN2 = sumCeres2NumNodesWhenChoseTopNode,
+
+        // Correct-move-visit comparison (positions where both engines exposed root visit stats).
+        CountEngine1MoreCorrectVisits = countEngine1MoreCorrectVisits,
+        CountEngine2MoreCorrectVisits = countEngine2MoreCorrectVisits,
+        CountCorrectVisitsEqual = countCorrectVisitsEqual,
+        CountCorrectVisitsCompared = countCorrectVisitsCompared,
+
+        // Suite identity.
+        ID = Def.ID,
+        EPDFileName = Def.EPDFileName,
+        NumPositionsTested = numPositionsInRun,
+        SearchLimit1 = Def.CeresEngine1Def?.SearchLimit,
+        SearchLimit2 = Def.CeresEngine2Def?.SearchLimit,
+        MachineName = Environment.MachineName,
+        RunDateTime = DateTime.Now,
+
+        // Performance summary metrics.
+        MeanPolicyKLD = countPolicyKLD > 0 ? (float)(sumPolicyKLD / countPolicyKLD) : float.NaN,
+        CountPolicyKLDPositions = countPolicyKLD,
+        AvgEPS1 = avgEPS1,
+        AvgEPS2 = avgEPS2,
+        RelativeEPSPct = avgEPS2 > 0 ? (avgEPS1 / avgEPS2 - 1.0f) * 100.0f : 0
       };
 
     }
@@ -572,6 +673,12 @@ namespace Ceres.Features.Suites
 
     private void WriteSummaries()
     {
+      // Averaged summary row, aligned directly beneath the per-position detail table.
+      if (outputDetailRun)
+      {
+        WriteSummaryRow();
+      }
+
       Def.Output.WriteLine();
 
       Def.Output.WriteLine();
@@ -617,7 +724,297 @@ namespace Ceres.Features.Suites
       float stdFaster = (float)StatUtils.StdDev(solvedPct1MinusPct2Samples) / MathF.Sqrt(solvedPct1MinusPct2Samples.Count);
       Def.Output.WriteLine($"Ceres1 time required to solve vs. Ceres2 (%) {(100* avgFaster),5:F2} +/-{(100 * stdFaster),5:F2}");
 
+      if (Def.CeresEngine2Def != null)
+      {
+        Def.Output.WriteLine();
+        Def.Output.WriteLine($"Correct move visits (fraction of root visits on the correct move(s), ~equal = within 3 points):");
+        Def.Output.WriteLine($"  Ceres1 more visits {countEngine1MoreCorrectVisits,5}   "
+                           + $"Ceres2 more visits {countEngine2MoreCorrectVisits,5}   "
+                           + $"~equal {countCorrectVisitsEqual,5}   of {countCorrectVisitsCompared,5}");
+      }
+
+      // Recap header block followed by the boxed performance summary, at the very end of output.
       Def.Output.WriteLine();
+      WriteSuiteHeaderBlock();
+      if (Def.CeresEngine2Def != null)
+      {
+        Def.Output.WriteLine();
+        WritePerformanceSummary();
+      }
+
+      Def.Output.WriteLine();
+    }
+
+
+    /// <summary>
+    /// Emits a final "summary row" beneath the per-position detail table. Each column shows
+    /// the average of its per-position values, except the running cumulative-average score
+    /// columns (rendered as their final converged value) and non-numeric columns (blank).
+    /// The row reuses the exact column ids and widths captured during the run, so it aligns
+    /// directly under the table headers.
+    /// </summary>
+    private void WriteSummaryRow()
+    {
+      if (columnAcc.RowCount == 0)
+      {
+        return;
+      }
+
+      Writer w = new Writer(true);
+      foreach ((string id, int width, CellAgg agg, string summaryFormat) in columnAcc.Order)
+      {
+        string display;
+        if (id == "#")
+        {
+          display = "AVG";
+        }
+        else if (agg == CellAgg.None)
+        {
+          display = "";
+        }
+        else if (agg == CellAgg.Final)
+        {
+          display = FormatFinal(id, summaryFormat);
+        }
+        else
+        {
+          double avg = columnAcc.Average(id);
+          display = double.IsNaN(avg) ? "" : string.Format(summaryFormat, avg);
+        }
+
+        w.Add(id, display, width);
+      }
+
+      Def.Output.WriteLine(w.dividers.ToString());
+      Def.Output.WriteLine(w.text.ToString());
+    }
+
+
+    /// <summary>
+    /// Renders the final converged value of a running cumulative-average "score" column,
+    /// computed directly from the authoritative accumulators (matching the per-position
+    /// interpolation), using the supplied composite format string.
+    /// </summary>
+    private string FormatFinal(string id, string summaryFormat)
+    {
+      double v = id switch
+      {
+        "CEx" => numSearches == 0 ? 0 : (double)avgOther / numSearches,
+        "CC"  => numSearches == 0 ? 0 : (double)accCeres1 / numSearches,
+        "CC2" => numSearches == 0 ? 0 : (double)accCeres2 / numSearches,
+        "P"   => numSearchesBothFound == 0 ? 0 : 0.001 * accWCeres1 / numSearchesBothFound,
+        "P2"  => numSearchesBothFound == 0 ? 0 : 0.001 * accWCeres2 / numSearchesBothFound,
+        _     => double.NaN
+      };
+
+      return double.IsNaN(v) ? "" : string.Format(summaryFormat, v);
+    }
+
+
+    /// <summary>
+    /// Converts a list of per-move verbose stats into an empirical policy distribution
+    /// (move -> probability) using final visit counts, excluding the "node" pseudo-entry.
+    /// Returns null if there were no visits.
+    /// </summary>
+    private static Dictionary<string, double> EmpiricalPolicyDistribution(List<VerboseMoveStat> stats)
+    {
+      Dictionary<string, long> counts = new();
+      long total = 0;
+      foreach (VerboseMoveStat s in stats)
+      {
+        if (s.MoveString == null || s.MoveString == "node")
+        {
+          continue;
+        }
+        counts.TryGetValue(s.MoveString, out long c);
+        counts[s.MoveString] = c + s.VisitCount;
+        total += s.VisitCount;
+      }
+
+      if (total <= 0 || counts.Count == 0)
+      {
+        return null;
+      }
+
+      Dictionary<string, double> dist = new(counts.Count);
+      foreach (KeyValuePair<string, long> kv in counts)
+      {
+        dist[kv.Key] = (double)kv.Value / total;
+      }
+      return dist;
+    }
+
+
+    /// <summary>
+    /// Symmetric KL divergence 0.5*(KL(P1||P2) + KL(P2||P1)) between the two engines' empirical
+    /// root-move visit distributions. Returns NaN if either distribution is unavailable.
+    /// A small probability floor avoids log(0) for moves visited by only one engine.
+    /// </summary>
+    private static double PolicySymmetricKLD(List<VerboseMoveStat> stats1, List<VerboseMoveStat> stats2)
+    {
+      Dictionary<string, double> d1 = EmpiricalPolicyDistribution(stats1);
+      Dictionary<string, double> d2 = EmpiricalPolicyDistribution(stats2);
+      if (d1 == null || d2 == null)
+      {
+        return double.NaN;
+      }
+
+      HashSet<string> moves = new(d1.Keys);
+      moves.UnionWith(d2.Keys);
+
+      const double FLOOR = 1e-9;
+      double KL(Dictionary<string, double> p, Dictionary<string, double> q)
+      {
+        double acc = 0;
+        foreach (string m in moves)
+        {
+          p.TryGetValue(m, out double pv);
+          if (pv <= 0)
+          {
+            continue;
+          }
+          q.TryGetValue(m, out double qv);
+          acc += pv * Math.Log(pv / Math.Max(qv, FLOOR));
+        }
+        return acc;
+      }
+
+      return 0.5 * (KL(d1, d2) + KL(d2, d1));
+    }
+
+
+    /// <summary>
+    /// Returns the percentage of the search's total root visits (FinalN) that landed on the
+    /// correct move(s) for this position, summed over all correct moves (handles multi-best and
+    /// avoid-move EPDs uniformly via EPDEntry.CorrectnessScore). Returns NaN if per-move visit
+    /// statistics are unavailable or the search had no visits.
+    /// </summary>
+    private static double CorrectMoveVisitFraction(GameEngineSearchResult search, EPDEntry epd)
+    {
+      if (search?.VerboseMoveStats == null || search.FinalN <= 0)
+      {
+        return double.NaN;
+      }
+
+      Position position = epd.Position;
+      long correctVisits = 0;
+      foreach (VerboseMoveStat stat in search.VerboseMoveStats)
+      {
+        if (stat.MoveString == null || stat.MoveString == "node")
+        {
+          continue;
+        }
+
+        Move move;
+        try
+        {
+          move = Move.FromUCI(in position, stat.MoveString);
+        }
+        catch
+        {
+          continue;
+        }
+
+        if (epd.CorrectnessScore(move, 10) == 10)
+        {
+          correctVisits += stat.VisitCount;
+        }
+      }
+
+      return 100.0 * correctVisits / search.FinalN;
+    }
+
+
+    /// <summary>
+    /// Writes a recap header block (loosely patterned after TournamentDef.DumpParams) identifying
+    /// the suite, machine, positions, EPD file, and the engine player definitions.
+    /// </summary>
+    private void WriteSuiteHeaderBlock()
+    {
+      void Line(string label, object value) => Def.Output.WriteLine($"  {label,-20}: {value}");
+
+      Def.Output.WriteLine("SUITE TEST");
+      Line("ID", Def.ID);
+      Line("Machine Name", Environment.MachineName);
+      Line("Date/Time", DateTime.Now);
+      Line("Test Positions", numPositionsInRun);
+      Line("EPD file name", Def.EPDFileName);
+      Def.Output.WriteLine($"  Player 1 : {Def.CeresEngine1Def}");
+      if (Def.RunCeres2Engine)
+      {
+        Def.Output.WriteLine($"  Player 2 : {Def.CeresEngine2Def}");
+      }
+      if (Def.ExternalEngineDef != null)
+      {
+        Def.Output.WriteLine($"  External : {Def.ExternalEngineDef}");
+      }
+    }
+
+
+    /// <summary>
+    /// Writes the boxed performance-summary table of head-to-head metrics (engine 1 vs engine 2).
+    /// </summary>
+    private void WritePerformanceSummary()
+    {
+      float meanAbsQ = (finalQ2 == null || finalQ2.Count == 0)
+                     ? 0
+                     : (float)StatUtils.Average(StatUtils.AbsDiff(finalQ1.ToArray(), finalQ2.ToArray()));
+
+      float avgScore1 = numSearches > 0 ? (float)accCeres1 / numSearches : 0;
+      float avgScore2 = numSearches > 0 ? (float)accCeres2 / numSearches : 0;
+
+      float avgEPS1 = numSearches > 0 ? (float)sumEPS1 / numSearches : 0;
+      float avgEPS2 = numSearches > 0 ? (float)sumEPS2 / numSearches : 0;
+      float relEPS = avgEPS2 > 0 ? (avgEPS1 / avgEPS2 - 1.0f) * 100.0f : 0;
+
+      string policyStr = countPolicyKLD > 0
+                       ? (sumPolicyKLD / countPolicyKLD).ToString("F4")
+                       : "n/a";
+
+      List<(string, string)> rows = new()
+      {
+        ("Q difference (mean abs)",       meanAbsQ.ToString("F4")),
+        ("Policy difference (sym KLD)",   policyStr),
+        ("Evaluation intensity (EPS)",    $"{relEPS.ToString("+0.0;-0.0")}%  ({avgEPS1:N0} vs {avgEPS2:N0})"),
+        ("Solve score difference",        $"{(avgScore1 - avgScore2).ToString("+0.00;-0.00")} ({avgScore1:F2} vs {avgScore2:F2})"),
+        ("Solve correct move visits (3%)", $"{countEngine1MoreCorrectVisits} better vs {countEngine2MoreCorrectVisits} better"),
+      };
+
+      WriteBoxedTable("PERFORMANCE SUMMARY  (C1 vs C2)", rows);
+    }
+
+
+    /// <summary>
+    /// Writes a simple ASCII boxed table: a title row, then one "label : value" row per entry,
+    /// auto-sized to the widest content. ASCII borders are used for cross-platform/log safety.
+    /// </summary>
+    private void WriteBoxedTable(string title, List<(string Label, string Value)> rows)
+    {
+      int labelWidth = 0;
+      foreach ((string label, _) in rows)
+      {
+        labelWidth = Math.Max(labelWidth, label.Length);
+      }
+
+      List<string> contentLines = new(rows.Count);
+      int innerWidth = title.Length;
+      foreach ((string label, string value) in rows)
+      {
+        string line = $"{label.PadRight(labelWidth)} : {value}";
+        contentLines.Add(line);
+        innerWidth = Math.Max(innerWidth, line.Length);
+      }
+
+      string border = "+" + new string('-', innerWidth + 2) + "+";
+
+      Def.Output.WriteLine(border);
+      Def.Output.WriteLine($"| {title.PadRight(innerWidth)} |");
+      Def.Output.WriteLine(border);
+      foreach (string line in contentLines)
+      {
+        Def.Output.WriteLine($"| {line.PadRight(innerWidth)} |");
+      }
+      Def.Output.WriteLine(border);
     }
 
 
@@ -718,6 +1115,11 @@ namespace Ceres.Features.Suites
       int evalNumBatches2 = search2 == null ? 0 : search2.NumNNBatches;
       int evalNumPos2 = search2 == null ? 0 : search2.NumNNNodes;
 
+      // Fraction (percent) of total root visits (FinalN) each engine placed on the correct
+      // move(s) at the end of search (NaN if per-move visit statistics are unavailable).
+      double correctVisitFrac1 = CorrectMoveVisitFraction(search1, epd);
+      double correctVisitFrac2 = search2 == null ? double.NaN : CorrectMoveVisitFraction(search2, epd);
+
       string correctMove = null;
       if (epd.AMMoves != null)
       {
@@ -739,6 +1141,8 @@ namespace Ceres.Features.Suites
         sumEvalNumPosOther += otherEngineAnalysis2 == null ? 0 : (int)otherEngineAnalysis2.Nodes;
         sumEvalNumBatches1 += evalNumBatches1;
         sumEvalNumPos1 += evalNumPos1;
+        sumTablebaseHits1 += search1.CountSearchContinuations > 0 ? 0 : search1.CountTablebaseHits;
+        sumEPS1 += search1.EPS;
 
         if (Def.RunCeres2Engine)
         {
@@ -746,10 +1150,30 @@ namespace Ceres.Features.Suites
           totalNodes2 += search2.FinalN;
           sumEvalNumBatches2 += evalNumBatches2;
           sumEvalNumPos2 += evalNumPos2;
+          sumTablebaseHits2 += search2.CountSearchContinuations > 0 ? 0 : search2.CountTablebaseHits;
+          sumEPS2 += search2.EPS;
+        }
+
+        // Correct-move-visit comparison: which engine placed a larger fraction of its visits on
+        // the correct move(s), counting the two as tied when within 3 percentage points.
+        if (search2 != null && !double.IsNaN(correctVisitFrac1) && !double.IsNaN(correctVisitFrac2))
+        {
+          double diffPts = correctVisitFrac1 - correctVisitFrac2;
+          if (Math.Abs(diffPts) <= 3.0)
+          {
+            countCorrectVisitsEqual++;
+          }
+          else if (diffPts > 0)
+          {
+            countEngine1MoreCorrectVisits++;
+          }
+          else
+          {
+            countEngine2MoreCorrectVisits++;
+          }
+          countCorrectVisitsCompared++;
         }
       }
-
-      float Adjust(int score, float frac) => score == 0 ? 0 : Math.Max(1.0f, MathF.Round(frac * 100.0f, 0));
 
       string worker1PickedNonTopNMoveStr = search1.PickedNonTopNMoveStr;
       string worker2PickedNonTopNMoveStr = search2?.PickedNonTopNMoveStr;
@@ -758,135 +1182,157 @@ namespace Ceres.Features.Suites
       bool c2 = search2 != null;
 
       Writer writer = new Writer(epdNum == 0);
-      writer.Add("#", $"{epdNum,4}", 6);
+
+      // Every column is emitted via this single helper, which both writes the per-position
+      // cell to the Writer (byte-identical to the historical output) and records a Cell so
+      // the same column layout can be replayed as an averaged summary row at end of suite.
+      List<Cell> cells = new();
+      void Emit(string id, string display, int width, CellAgg agg, double value = 0, string summaryFormat = null)
+      {
+        writer.Add(id, display, width);
+        cells.Add(new Cell(id, width, display, agg, value, summaryFormat));
+      }
+
+      // Renders a correct-move-visit-fraction cell (NaN -> "n/a"), prefixed by the non-top-N flag.
+      string FrCell(string prefix, double frac) => double.IsNaN(frac) ? $"{prefix}n/a" : $"{prefix}{frac,3:F0}%";
+
+      Emit("#", $"{epdNum,4}", 6, CellAgg.None);
 
       if (ex)
       {
-        writer.Add("CEx", $"{avgOther,5:F2}", 7);
+        Emit("CEx", $"{avgOther,5:F2}", 7, CellAgg.Final, summaryFormat: "{0,5:F2}");
       }
 
-      writer.Add("CC", $"{avgCeres1,5:F2}", 7);
+      Emit("CC", $"{avgCeres1,5:F2}", 7, CellAgg.Final, summaryFormat: "{0,5:F2}");
       if (c2)
       {
-        writer.Add("CC2", $"{avgCeres2,5:F2}", 7);
+        Emit("CC2", $"{avgCeres2,5:F2}", 7, CellAgg.Final, summaryFormat: "{0,5:F2}");
       }
 
-      writer.Add("P", $"{0.001f * avgWCeres1,6:f2}", 8);
+      Emit("P", $"{0.001f * avgWCeres1,6:f2}", 8, CellAgg.Final, summaryFormat: "{0,6:F2}");
       if (c2)
       {
-        writer.Add("P2", $"{0.001f * avgWCeres2,6:f2}", 8);
+        Emit("P2", $"{0.001f * avgWCeres2,6:f2}", 8, CellAgg.Final, summaryFormat: "{0,6:F2}");
       }
 
       if (ex)
       {
-        writer.Add("SEx", $" {scoreOtherEngine,3}", 5);
+        Emit("SEx", $" {scoreOtherEngine,3}", 5, CellAgg.Average, scoreOtherEngine, " {0,3:F1}");
       }
 
-      writer.Add("SC", $" {scoreCeres1,3}", 5);
+      Emit("SC", $" {scoreCeres1,3}", 5, CellAgg.Average, scoreCeres1, " {0,3:F1}");
       if (c2)
       {
-        writer.Add("SC2", $" {scoreCeres2,3}", 5);
+        Emit("SC2", $" {scoreCeres2,3}", 5, CellAgg.Average, scoreCeres2, " {0,3:F1}");
       }
 
       if (ex)
       {
-        writer.Add("MEx", $"{otherEngineAnalysis2.BestMove,7}", 9);
+        Emit("MEx", $"{otherEngineAnalysis2.BestMove,7}", 9, CellAgg.None);
       }
 
-      writer.Add("MC", $"{search1.BestMoveMG,7}", 9);
+      Emit("MC", $"{search1.BestMoveMG,7}", 9, CellAgg.None);
       if (c2)
       {
-        writer.Add("MC2", $"{search2.BestMoveMG,7}", 9);
+        Emit("MC2", $"{search2.BestMoveMG,7}", 9, CellAgg.None);
       }
 
-      writer.Add("Fr", $"{worker1PickedNonTopNMoveStr}{100.0f * search1.TopNNodeN / search1.FinalN,3:F0}%", 8);
+      // Fr / Fr2: percentage of total root visits placed on the correct move(s) at end of search.
+      Emit("Fr", FrCell(worker1PickedNonTopNMoveStr, correctVisitFrac1), 8,
+           CellAgg.Average, correctVisitFrac1, "{0,3:F0}%");
       if (c2)
       {
-        writer.Add("Fr2", $"{worker2PickedNonTopNMoveStr}{100.0f * search2?.TopNNodeN / search2?.FinalN,3:F0}%", 8);
+        Emit("Fr2", FrCell(worker2PickedNonTopNMoveStr, correctVisitFrac2), 8,
+             CellAgg.Average, correctVisitFrac2, "{0,3:F0}%");
       }
 
-      writer.Add("Yld", $"{search1.NodeSelectionYieldFrac,6:f3}", 9);
+      Emit("Yld", $"{search1.NodeSelectionYieldFrac,6:f3}", 9, CellAgg.Average, search1.NodeSelectionYieldFrac, "{0,6:F3}");
       if (c2)
       {
-        writer.Add("Yld2", $"{search2.NodeSelectionYieldFrac,6:f3}", 9);
+        Emit("Yld2", $"{search2.NodeSelectionYieldFrac,6:f3}", 9, CellAgg.Average, search2.NodeSelectionYieldFrac, "{0,6:F3}");
       }
 
       // Search time
       if (ex)
       {
-        writer.Add("TimeEx", $"{otherEngineTime,7:F2}", 9);
+        Emit("TimeEx", $"{otherEngineTime,7:F2}", 9, CellAgg.Average, otherEngineTime, "{0,7:F2}");
       }
 
-      writer.Add("TimeC", $"{search1.TimingStats.ElapsedTimeSecs,7:F2}", 9);
+      Emit("TimeC", $"{search1.TimingStats.ElapsedTimeSecs,7:F2}", 9, CellAgg.Average, search1.TimingStats.ElapsedTimeSecs, "{0,7:F2}");
       if (c2)
       {
-        writer.Add("TimeC2", $"{search2.TimingStats.ElapsedTimeSecs,7:F2}", 9);
+        Emit("TimeC2", $"{search2.TimingStats.ElapsedTimeSecs,7:F2}", 9, CellAgg.Average, search2.TimingStats.ElapsedTimeSecs, "{0,7:F2}");
       }
 
-      writer.Add("ADep", $"{search1.AvgDepth,5:f1}", 7);
+      Emit("ADep", $"{search1.AvgDepth,5:f1}", 7, CellAgg.Average, search1.AvgDepth, "{0,5:F1}");
       if (c2)
       {
-        writer.Add("ADep2", $"{search2.AvgDepth,5:f1}", 7);
+        Emit("ADep2", $"{search2.AvgDepth,5:f1}", 7, CellAgg.Average, search2.AvgDepth, "{0,5:F1}");
       }
 
-      writer.Add("MDep", $"{search1.MaxDepth,5:f1}", 7);
+      Emit("MDep", $"{search1.MaxDepth,5:f1}", 7, CellAgg.Average, search1.MaxDepth, "{0,5:F1}");
       if (c2)
       {
-        writer.Add("MDep2", $"{search2.MaxDepth,5:f1}", 7);
+        Emit("MDep2", $"{search2.MaxDepth,5:f1}", 7, CellAgg.Average, search2.MaxDepth, "{0,5:F1}");
       }
 
-      writer.Add("VEnt", $"{search1.VisitEntropy,5:f2}", 7);
+      Emit("VEnt", $"{search1.VisitEntropy,5:f2}", 7, CellAgg.Average, search1.VisitEntropy, "{0,5:F2}");
       if (c2)
       {
-        writer.Add("VEnt2", $"{search2.VisitEntropy,5:f2}", 7);
+        Emit("VEnt2", $"{search2.VisitEntropy,5:f2}", 7, CellAgg.Average, search2.VisitEntropy, "{0,5:F2}");
       }
 
       // Nodes
-      if (ex) writer.Add("NEx", $"{otherEngineAnalysis2.Nodes,12:N0}", 14);
-      writer.Add("Nodes", $"{search1.FinalN,12:N0}", 14);
-      if (c2)
+      if (ex)
       {
-        writer.Add("Nodes2", $"{search2.FinalN,12:N0}", 14);
+        Emit("NEx", $"{otherEngineAnalysis2.Nodes,12:N0}", 14, CellAgg.Average, otherEngineAnalysis2.Nodes, "{0,12:N0}");
       }
-
-      // Fraction when chose top N
-      writer.Add("Frac", $"{Adjust(scoreCeres1, search1.FractionNumNodesWhenChoseTopNNode),4:F0}", 6);
+      Emit("Nodes", $"{search1.FinalN,12:N0}", 14, CellAgg.Average, search1.FinalN, "{0,12:N0}");
       if (c2)
       {
-        writer.Add("Frac2", $"{Adjust(scoreCeres2, search2.FractionNumNodesWhenChoseTopNNode),4:F0}", 6);
+        Emit("Nodes2", $"{search2.FinalN,12:N0}", 14, CellAgg.Average, search2.FinalN, "{0,12:N0}");
       }
 
       // Score (Q)
       if (ex)
       {
-        writer.Add("QEx", $"{otherEngineAnalysis2.ScoreLogistic,6:F3}", 8);
+        Emit("QEx", $"{otherEngineAnalysis2.ScoreLogistic,6:F3}", 8, CellAgg.Average, otherEngineAnalysis2.ScoreLogistic, "{0,6:F3}");
       }
 
-      writer.Add("QC", $"{search1.ScoreQRoot,6:F3}", 8);
+      Emit("QC", $"{search1.ScoreQRoot,6:F3}", 8, CellAgg.Average, search1.ScoreQRoot, "{0,6:F3}");
       if (c2)
       {
-        writer.Add("QC2", $"{search2.ScoreQRoot,6:F3}", 8);
+        Emit("QC2", $"{search2.ScoreQRoot,6:F3}", 8, CellAgg.Average, search2.ScoreQRoot, "{0,6:F3}");
       }
 
       // Num batches&positions
-      writer.Add("Batches", $"{evalNumBatches1,8:N0}", 10);
-      writer.Add("NNEvals", $"{evalNumPos1,11:N0}", 13);
+      Emit("Batches", $"{evalNumBatches1,8:N0}", 10, CellAgg.Average, evalNumBatches1, "{0,8:N0}");
+      Emit("NNEvals", $"{evalNumPos1,11:N0}", 13, CellAgg.Average, evalNumPos1, "{0,11:N0}");
       if (c2)
       {
-        writer.Add("Batches2", $"{evalNumBatches2,8:N0}", 10);
-        writer.Add("NNEvals2", $"{evalNumPos2,11:N0}", 13);
+        Emit("Batches2", $"{evalNumBatches2,8:N0}", 10, CellAgg.Average, evalNumBatches2, "{0,8:N0}");
+        Emit("NNEvals2", $"{evalNumPos2,11:N0}", 13, CellAgg.Average, evalNumPos2, "{0,11:N0}");
       }
 
       // Tablebase hits
-      writer.Add("TBase", $"{(search1.CountSearchContinuations > 0 ? 0 : search1.CountTablebaseHits),8:N0}", 10);
+      Emit("TBase", $"{(search1.CountSearchContinuations > 0 ? 0 : search1.CountTablebaseHits),8:N0}", 10,
+           CellAgg.Average, search1.CountSearchContinuations > 0 ? 0 : search1.CountTablebaseHits, "{0,8:N0}");
       if (c2)
       {
-        writer.Add("TBase2", $"{(search2.CountSearchContinuations > 0 ? 0 : search2.CountTablebaseHits),8:N0}", 10);
+        Emit("TBase2", $"{(search2.CountSearchContinuations > 0 ? 0 : search2.CountTablebaseHits),8:N0}", 10,
+             CellAgg.Average, search2.CountSearchContinuations > 0 ? 0 : search2.CountTablebaseHits, "{0,8:N0}");
       }
 
       if (Def.DumpEPDInfo)
       {
-        writer.Add("FEN", epd.FEN, -1);
+        Emit("FEN", epd.FEN, -1, CellAgg.None);
+      }
+
+      // Merge this row's columns into the run-level accumulator (atomically, under the lock),
+      // so the summary row and the comprehensive SuiteTestResult can be produced at the end.
+      lock (lockObj)
+      {
+        columnAcc.Merge(cells);
       }
 
       if (outputDetail)
@@ -1090,6 +1536,19 @@ namespace Ceres.Features.Suites
           }
           numSearchesBothFound++;
         }
+
+        // Policy difference: symmetric KLD between the two engines' root visit distributions
+        // (only when both engines exposed per-move visit statistics for this position).
+        if (search2 != null && search1.VerboseMoveStats != null && search2.VerboseMoveStats != null)
+        {
+          double kld = PolicySymmetricKLD(search1.VerboseMoveStats, search2.VerboseMoveStats);
+          if (!double.IsNaN(kld))
+          {
+            sumPolicyKLD += kld;
+            countPolicyKLD++;
+          }
+        }
+
         this.avgOther += scoreOtherEngine;
 
         numSearches++;
@@ -1148,6 +1607,124 @@ namespace Ceres.Features.Suites
       int padLeft = pad / 2 + str.Length;
       return str.PadLeft(padLeft, ' ').PadRight(width, ' ');
     }
+  }
+
+
+  /// <summary>
+  /// Aggregation behavior for a console column when building the summary row at end of suite.
+  /// </summary>
+  internal enum CellAgg
+  {
+    /// <summary>Non-numeric column (e.g. a move or FEN); blank in the summary row.</summary>
+    None,
+
+    /// <summary>Summary cell is the average of the per-position numeric values.</summary>
+    Average,
+
+    /// <summary>
+    /// Summary cell is a single converged value (used by the running cumulative-average
+    /// "score" columns, which are rendered from the authoritative accumulators).
+    /// </summary>
+    Final
+  }
+
+
+  /// <summary>
+  /// One console table cell, capturing both the exact display string emitted per position
+  /// and the metadata needed to render the corresponding cell in the final summary row.
+  /// </summary>
+  internal readonly struct Cell
+  {
+    /// <summary>Column id (header).</summary>
+    public readonly string Id;
+
+    /// <summary>Column width (passed to the Writer; -1 means unbounded/raw).</summary>
+    public readonly int Width;
+
+    /// <summary>Exact string emitted for this cell in the per-position row.</summary>
+    public readonly string Display;
+
+    /// <summary>How this column is aggregated into the summary row.</summary>
+    public readonly CellAgg Agg;
+
+    /// <summary>Numeric payload used when Agg == Average (ignored otherwise).</summary>
+    public readonly double Value;
+
+    /// <summary>
+    /// Composite format string (including any literal prefix/suffix) used to render the
+    /// summary cell so that its width matches the per-position cell exactly.
+    /// </summary>
+    public readonly string SummaryFormat;
+
+    public Cell(string id, int width, string display, CellAgg agg,
+                double value = 0, string summaryFormat = null)
+    {
+      Id = id;
+      Width = width;
+      Display = display;
+      Agg = agg;
+      Value = value;
+      SummaryFormat = summaryFormat;
+    }
+  }
+
+
+  /// <summary>
+  /// Accumulates per-column statistics across all suite positions so that a single averaged
+  /// summary row (aligned under the existing columns) can be emitted at the end of the run.
+  ///
+  /// A full row's cell list is merged atomically (caller holds the lock); the first merged
+  /// row establishes the canonical ordered set of columns. This is safe because the present
+  /// column set is constant for a given run (the external engine and second Ceres engine are
+  /// configured once, so the ex/c2 conditional columns never change between rows).
+  /// </summary>
+  internal sealed class ColumnAccumulator
+  {
+    readonly List<(string Id, int Width, CellAgg Agg, string SummaryFormat)> order = new();
+    readonly Dictionary<string, double> sumById = new();
+    readonly Dictionary<string, int> countById = new();
+    bool orderEstablished = false;
+
+    /// <summary>Number of rows (positions) merged.</summary>
+    public int RowCount { get; private set; }
+
+    /// <summary>The canonical ordered column metadata (from the first merged row).</summary>
+    public IReadOnlyList<(string Id, int Width, CellAgg Agg, string SummaryFormat)> Order => order;
+
+    /// <summary>
+    /// Merges one position's complete ordered cell list. Caller must hold the lock.
+    /// </summary>
+    public void Merge(IReadOnlyList<Cell> cells)
+    {
+      if (!orderEstablished)
+      {
+        foreach (Cell c in cells)
+        {
+          order.Add((c.Id, c.Width, c.Agg, c.SummaryFormat));
+        }
+        orderEstablished = true;
+      }
+
+      foreach (Cell c in cells)
+      {
+        if (c.Agg == CellAgg.Average && !double.IsNaN(c.Value))
+        {
+          sumById.TryGetValue(c.Id, out double s);
+          countById.TryGetValue(c.Id, out int n);
+          sumById[c.Id] = s + c.Value;
+          countById[c.Id] = n + 1;
+        }
+      }
+
+      RowCount++;
+    }
+
+    /// <summary>
+    /// Returns the mean of the per-position values for a column, or NaN if the column was
+    /// never seen or had no values (e.g. an absent external-engine or second-Ceres column).
+    /// </summary>
+    public double Average(string id)
+      => countById.TryGetValue(id, out int n) && n > 0 ? sumById[id] / n : double.NaN;
   }
 
 }
