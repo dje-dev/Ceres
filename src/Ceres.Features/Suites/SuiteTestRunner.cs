@@ -54,14 +54,21 @@ namespace Ceres.Features.Suites
     public int NumConcurrent;
 
     /// <summary>
-    /// Engine for first Ceres engine definition.
+    /// Optionally a flat sequence of GPU device IDs over which the concurrent suite
+    /// workers are allocated. The IDs are partitioned into consecutive chunks (one chunk
+    /// per worker), where the chunk size equals the number of devices in the engine
+    /// specification. When null the engines are used exactly as specified
+    /// (no per-worker device assignment).
     /// </summary>
-    public ConcurrentBag<GameEngine> EnginesCeres1 = new();
+    public int[] DeviceIDs;
 
     /// <summary>
-    /// Engine for optional second optional Ceres engine definition.
+    /// Pool of (paired) Ceres engine instances available to the concurrent suite workers.
+    /// Each entry holds the first Ceres engine and (optionally) the second Ceres engine
+    /// for one worker; the two engines in a pair share the same assigned device(s), so a
+    /// worker always runs both engines on the same GPU(s).
     /// </summary>
-    public ConcurrentBag<GameEngine> EnginesCeres2 = new();
+    public ConcurrentBag<(GameEngine Engine1, GameEngine Engine2)> EngineSets = new();
 
     /// <summary>
     /// Engine for optional external UCI engine.
@@ -72,17 +79,30 @@ namespace Ceres.Features.Suites
     int numConcurrentSuiteThreads;
 
 
-    static void PopulateCeresEngines(GameEngineDef engineDef, EnginePlayerDef playerDef, ConcurrentBag<GameEngine> engines, int count)
+    /// <summary>
+    /// Creates and warms up a single engine instance for a worker, optionally rewriting
+    /// the device indices (of an isolated clone of the engine definition) so the worker
+    /// runs on a specific set of GPUs.
+    /// </summary>
+    static GameEngine CreateWorkerEngine(GameEngineDef engineDef, EnginePlayerDef playerDef, int[] deviceIDsForWorker)
     {
-      if (engineDef != null)
+      if (engineDef == null)
       {
-        for (int i = 0; i < count; i++)
-        {
-          GameEngine engine = engineDef.CreateEngine();
-          engine.Warmup(playerDef.SearchLimit.KnownMaxNumNodes);
-          engines.Add(engine);
-        }
+        return null;
       }
+
+      GameEngineDef defForWorker = engineDef;
+      if (deviceIDsForWorker != null)
+      {
+        // Clone so the device rewrite is isolated to this worker
+        // (binary deep clone, the same mechanism used by TournamentDef.Clone).
+        defForWorker = ObjUtils.DeepClone(engineDef);
+        defForWorker.TrySetDeviceIndicesIfNotPooled(deviceIDsForWorker);
+      }
+
+      GameEngine engine = defForWorker.CreateEngine();
+      engine.Warmup(playerDef.SearchLimit.KnownMaxNumNodes);
+      return engine;
     }
 
 
@@ -95,13 +115,110 @@ namespace Ceres.Features.Suites
       Def = def;
     }
 
-    void Init()
+
+    /// <summary>
+    /// Constructor specifying a level of concurrency and (optionally) a flat set of GPU
+    /// device IDs over which the concurrent suite workers are spread.
+    ///
+    /// The deviceIDs are treated as a flat pool partitioned into consecutive chunks (one
+    /// chunk per concurrent worker), where the chunk size equals the number of devices in
+    /// the engine's device specification. For example, with a "GPU:0,1" specification,
+    /// numConcurrent 2 and deviceIDs [0,1,2,3], one worker runs on GPUs [0,1] and the
+    /// other on GPUs [2,3]. (Modeled after TournamentManager.)
+    /// </summary>
+    /// <param name="def"></param>
+    /// <param name="numConcurrent"></param>
+    /// <param name="deviceIDs"></param>
+    public SuiteTestRunner(SuiteTestDef def, int numConcurrent, int[] deviceIDs = null)
     {
-      // Create and warmup both engines (in parallel)
-      PopulateCeresEngines(Def.Engine1Def, Def.CeresEngine1Def, EnginesCeres1, numConcurrentSuiteThreads);
-      PopulateCeresEngines(Def.Engine2Def, Def.CeresEngine2Def, EnginesCeres2, numConcurrentSuiteThreads);
+      if (numConcurrent > 1 && deviceIDs == null)
+      {
+        throw new Exception("Must specify deviceIDs if numConcurrent > 1.");
+      }
+
+      Def = def;
+      NumConcurrent = numConcurrent;
+      DeviceIDs = deviceIDs;
+    }
+
+
+    /// <summary>
+    /// Returns the set of (absolute) GPU device IDs assigned to a given concurrent worker,
+    /// or null if no explicit device assignment is in effect.
+    /// </summary>
+    int[] DeviceSliceForWorker(int workerIndex, int numDevicesPerWorker)
+    {
+      if (DeviceIDs == null)
+      {
+        return null;
+      }
+
+      // Each worker gets its own disjoint chunk of the device pool (no wrap-around), so that
+      // concurrent workers never share a GPU. This is validated in ComputeAndValidateDevicePartitioning.
+      int start = workerIndex * numDevicesPerWorker;
+      int[] ret = new int[numDevicesPerWorker];
+      Array.Copy(DeviceIDs, start, ret, 0, numDevicesPerWorker);
+      return ret;
+    }
+
+
+    void Init(int numDevicesPerWorker)
+    {
+      // Create and warm up the engine pairs (one pair per concurrent worker).
+      for (int i = 0; i < numConcurrentSuiteThreads; i++)
+      {
+        int[] deviceIDsForWorker = DeviceSliceForWorker(i, numDevicesPerWorker);
+        GameEngine engine1 = CreateWorkerEngine(Def.Engine1Def, Def.CeresEngine1Def, deviceIDsForWorker);
+        GameEngine engine2 = CreateWorkerEngine(Def.Engine2Def, Def.CeresEngine2Def, deviceIDsForWorker);
+        EngineSets.Add((engine1, engine2));
+      }
+
       Def.ExternalEngineDef?.EngineDef.CreateEngine(); EngineExternal?.Warmup(Def.ExternalEngineDef.SearchLimit.KnownMaxNumNodes);
     }
+
+
+    /// <summary>
+    /// Validates that the supplied DeviceIDs pool can be evenly partitioned into one chunk
+    /// per concurrent worker, and returns the number of devices per worker (the number of
+    /// devices in the engine specification).
+    /// </summary>
+    int ComputeAndValidateDevicePartitioning()
+    {
+      Chess.NNEvaluators.Defs.NNEvaluatorDef evalDef1 = Def.Engine1Def.GetEvaluatorDef();
+      if (evalDef1 == null)
+      {
+        throw new Exception("DeviceIDs were specified but the first engine is not a Ceres engine with an evaluator.");
+      }
+
+      int numDevicesPerWorker = evalDef1.NumDevices;
+      if (numDevicesPerWorker < 1)
+      {
+        throw new Exception("Engine specification must reference at least one device.");
+      }
+
+      Chess.NNEvaluators.Defs.NNEvaluatorDef evalDef2 = Def.Engine2Def?.GetEvaluatorDef();
+      if (evalDef2 != null && evalDef2.NumDevices != numDevicesPerWorker)
+      {
+        throw new Exception($"Both Ceres engines must reference the same number of devices when using DeviceIDs "
+                          + $"(engine1 has {numDevicesPerWorker}, engine2 has {evalDef2.NumDevices}).");
+      }
+
+      // Require enough device IDs that every concurrent worker is assigned its OWN disjoint
+      // set of GPUs (no sharing across workers). This is essential for fairness: for any
+      // position the two engines run sequentially on the worker's GPU(s), so if a worker had
+      // exclusive use of its GPU(s) the measured per-engine execution times are directly
+      // comparable; sharing GPUs between concurrent workers would distort those timings.
+      int numWorkers = NumConcurrent;
+      if (DeviceIDs.Length < numWorkers * numDevicesPerWorker)
+      {
+        throw new Exception($"Insufficient DeviceIDs ({DeviceIDs.Length}): need at least "
+                          + $"NumConcurrent ({numWorkers}) * devices-per-engine ({numDevicesPerWorker}) "
+                          + $"= {numWorkers * numDevicesPerWorker}, so each concurrent worker has its own GPU(s).");
+      }
+
+      return numDevicesPerWorker;
+    }
+
 
     int numSearches = 0;
     int numSearchesBothFound = 0;
@@ -153,9 +270,19 @@ namespace Ceres.Features.Suites
       // for the warmup which is confusing because different parameters
       // will be chosen for the actual search.
       //DumpParams(Def.Output, true);
+
+      // If a device pool was supplied (via the concurrency constructor) then it governs
+      // the number of concurrent workers, and each worker is assigned a distinct set of GPUs.
+      int numDevicesPerWorker = 0;
+      if (DeviceIDs != null)
+      {
+        numConcurrentSuiteThreads = NumConcurrent;
+        numDevicesPerWorker = ComputeAndValidateDevicePartitioning();
+      }
+
       this.numConcurrentSuiteThreads = numConcurrentSuiteThreads;
 
-      Init();
+      Init(numDevicesPerWorker);
 
       // Install Ctrl-C handler to allow ad hoc clean termination (with stats).
       bool stopRequested = false;
@@ -370,17 +497,12 @@ namespace Ceres.Features.Suites
       return;
 
       // TODO: restore this, currently buggy (stack overflow)
-      foreach (var engine in EnginesCeres1)
+      foreach (var engineSet in EngineSets)
       {
-        engine.Dispose();
+        engineSet.Engine1?.Dispose();
+        engineSet.Engine2?.Dispose();
       }
-      EnginesCeres1.Clear();
-
-      foreach (var engine in EnginesCeres2)
-      {
-        engine.Dispose();
-      }
-      EnginesCeres2.Clear();
+      EngineSets.Clear();
 
       EngineExternal?.Dispose();
 
@@ -446,21 +568,13 @@ namespace Ceres.Features.Suites
 
     void ProcessEPD(int epdNum, EPDEntry epd, bool outputDetail, ObjectPool<object> otherEngines)
     {
-      GameEngine EngineCeres1 = null;
-      GameEngine EngineCeres2 = null;
-
-      if (!EnginesCeres1.TryTake(out EngineCeres1))
+      if (!EngineSets.TryTake(out var engineSet))
       {
         throw new Exception("No engine available");
       }
 
-      if (Def.Engine2Def != null)
-      {
-        if (!EnginesCeres2.TryTake(out EngineCeres2))
-        {
-          throw new Exception("No engine available");
-        }
-      }
+      GameEngine EngineCeres1 = engineSet.Engine1;
+      GameEngine EngineCeres2 = engineSet.Engine2;
 
       EngineCeres1.ResetGame();
       EngineCeres2?.ResetGame();
@@ -837,9 +951,8 @@ namespace Ceres.Features.Suites
 
       if (restoreEnginesToPoolWhenDone)
       {
-        // Restore engines to pool
-        EnginesCeres1.Add(engineCeres1);
-        EnginesCeres2?.Add(engineCeres2);
+        // Restore engines to pool (as a pair, so a worker keeps its assigned device(s)).
+        EngineSets.Add((engineCeres1, engineCeres2));
       }
 
       lock (lockObj)

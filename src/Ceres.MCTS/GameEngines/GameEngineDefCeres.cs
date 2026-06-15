@@ -123,6 +123,13 @@ public class GameEngineDefCeres : GameEngineDef
     }
   }
 
+  /// <inheritdoc/>
+  public override void TrySetDeviceIndicesIfNotPooled(int[] deviceIDs)
+  {
+    EvaluatorDef.TrySetDeviceIndices(deviceIDs);
+    EvaluatorDefSecondary?.TrySetDeviceIndices(deviceIDs);
+  }
+
   public override NNEvaluatorDef GetEvaluatorDef() => EvaluatorDef;
   public override void DisableTreeReuse() => SearchParams.TreeReuseEnabled = false;
   public override bool GetReusePositionEvaluationsFromOther() => SearchParams.ReusePositionEvaluationsFromOtherTree;

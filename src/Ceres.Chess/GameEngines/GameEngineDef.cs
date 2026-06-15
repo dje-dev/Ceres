@@ -68,6 +68,18 @@ namespace Ceres.Chess.GameEngines
     public abstract void ModifyDeviceIndexIfNotPooled(int deviceIndexIncrement);
 
     /// <summary>
+    /// If applicable, sets the device indices of the underlying evaluator to the
+    /// specified (absolute) device IDs (unless the evaluator is pooled).
+    ///
+    /// Unlike ModifyDeviceIndexIfNotPooled (which adds an increment to a single device)
+    /// this supports evaluators spanning multiple devices (e.g. a "GPU:0,1" spec),
+    /// allowing concurrent workers to each be assigned a distinct set of GPUs.
+    /// </summary>
+    /// <param name="deviceIDs"></param>
+    public virtual void TrySetDeviceIndicesIfNotPooled(int[] deviceIDs)
+      => GetEvaluatorDef()?.TrySetDeviceIndices(deviceIDs);
+
+    /// <summary>
     /// If this engine definition is for a Ceres engine (MCTS or MCGS).
     /// </summary>
     public virtual bool IsCeresEngine => false;
