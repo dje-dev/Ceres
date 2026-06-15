@@ -78,6 +78,22 @@ namespace Ceres.Features.Suites
     /// </summary>
     public GameEngine EngineExternal { get; private set; }
 
+    /// <summary>
+    /// When Run is invoked with useMultiEngineMode (or the definition was already in multiengine
+    /// mode), holds the comprehensive multiengine result produced by the run (Run itself returns
+    /// null in that case, since its return type is the two-engine SuiteTestResult).
+    /// </summary>
+    public MultiEngineSuiteResult MultiEngineResult { get; private set; }
+
+    /// <summary>
+    /// Pool of engine instance arrays for multiengine mode (one array per concurrent worker,
+    /// with one engine instance per engine in the multiengine definition). The Ceres engines
+    /// within a worker's array all share that worker's assigned device(s), and for any position
+    /// a worker runs all its engines sequentially on those device(s) (preserving the fair-timing
+    /// property of the two-engine mode). Used only when Def.IsMultiEngine.
+    /// </summary>
+    public ConcurrentBag<GameEngine[]> EngineArrays = new();
+
 
     int numConcurrentSuiteThreads;
 
@@ -85,9 +101,10 @@ namespace Ceres.Features.Suites
     /// <summary>
     /// Creates and warms up a single engine instance for a worker, optionally rewriting
     /// the device indices (of an isolated clone of the engine definition) so the worker
-    /// runs on a specific set of GPUs.
+    /// runs on a specific set of GPUs. The engine is warmed up using the supplied search
+    /// limit (which may be null, in which case a default warmup is performed).
     /// </summary>
-    static GameEngine CreateWorkerEngine(GameEngineDef engineDef, EnginePlayerDef playerDef, int[] deviceIDsForWorker)
+    static GameEngine CreateWorkerEngine(GameEngineDef engineDef, SearchLimit warmupLimit, int[] deviceIDsForWorker)
     {
       if (engineDef == null)
       {
@@ -113,7 +130,7 @@ namespace Ceres.Features.Suites
         mcgsEngine.GatherVerboseMoveStats = true;
       }
 
-      engine.Warmup(playerDef.SearchLimit.KnownMaxNumNodes);
+      engine.Warmup(warmupLimit?.KnownMaxNumNodes);
       return engine;
     }
 
@@ -180,8 +197,8 @@ namespace Ceres.Features.Suites
       for (int i = 0; i < numConcurrentSuiteThreads; i++)
       {
         int[] deviceIDsForWorker = DeviceSliceForWorker(i, numDevicesPerWorker);
-        GameEngine engine1 = CreateWorkerEngine(Def.Engine1Def, Def.CeresEngine1Def, deviceIDsForWorker);
-        GameEngine engine2 = CreateWorkerEngine(Def.Engine2Def, Def.CeresEngine2Def, deviceIDsForWorker);
+        GameEngine engine1 = CreateWorkerEngine(Def.Engine1Def, Def.CeresEngine1Def?.SearchLimit, deviceIDsForWorker);
+        GameEngine engine2 = CreateWorkerEngine(Def.Engine2Def, Def.CeresEngine2Def?.SearchLimit, deviceIDsForWorker);
         EngineSets.Add((engine1, engine2));
       }
 
@@ -353,11 +370,34 @@ namespace Ceres.Features.Suites
     }
 
 
+    /// <summary>
+    /// Runs the suite test.
+    ///
+    /// When useMultiEngineMode is true a legacy (one/two/three engine) definition is converted
+    /// on the fly into multiengine mode (with the first Ceres engine as the baseline) and run via
+    /// the multiengine path — i.e. the single in-place-refreshed statistics block instead of the
+    /// per-position detail rows. In that case (or when the definition was already in multiengine
+    /// mode) the comprehensive result is exposed via the MultiEngineResult property and this
+    /// method returns null.
+    /// </summary>
     public SuiteTestResult Run(int numConcurrentSuiteThreads = 1,
                                bool outputDetail = true,
                                bool saveCacheWhenDone = true,
-                               bool enableCancelVialCtrlC = true)
+                               bool enableCancelVialCtrlC = true,
+                               bool useMultiEngineMode = false)
     {
+      // Optionally convert a legacy definition into multiengine mode (Engine1 = baseline).
+      if (useMultiEngineMode && !Def.IsMultiEngine)
+      {
+        Def.ConfigureMultiEngineFromLegacy();
+      }
+
+      if (Def.IsMultiEngine)
+      {
+        MultiEngineResult = RunMultiEngine(numConcurrentSuiteThreads, outputDetail, enableCancelVialCtrlC);
+        return null;
+      }
+
       outputDetailRun = outputDetail;
 
       // Tree reuse is no help, indicate that we won't need it
@@ -653,6 +693,558 @@ namespace Ceres.Features.Suites
       };
 
     }
+
+    #region Multiengine mode
+
+    // Index (into Def.MultiEngineDefs) of the baseline engine in multiengine mode.
+    int baselineIndexMulti;
+
+
+    /// <summary>
+    /// Runs the suite in "multiengine mode": an arbitrary number of engines (each a standard
+    /// in-process Ceres engine or an external engine) are compared at once on the same set of
+    /// positions. Results are shown in a single statistics block which is refreshed in place
+    /// as the suite runs (best value per row green, worst red), and returned as a comprehensive
+    /// MultiEngineSuiteResult. Requires a SuiteTestDef built with the multiengine constructor.
+    ///
+    /// As in the two-engine mode, each concurrent worker holds its own instance of every engine;
+    /// for any position a worker runs all its engines sequentially on its own GPU(s) (so the
+    /// measured per-engine timings/EPS remain directly comparable). Multi-GPU spreading via the
+    /// SuiteTestRunner(def, numConcurrent, deviceIDs) constructor is supported.
+    /// </summary>
+    public MultiEngineSuiteResult RunMultiEngine(int numConcurrentSuiteThreads = 1,
+                                                 bool outputDetail = true,
+                                                 bool enableCancelViaCtrlC = true)
+    {
+      if (!Def.IsMultiEngine)
+      {
+        throw new Exception("RunMultiEngine requires a SuiteTestDef constructed with the multiengine constructor.");
+      }
+
+      List<MultiEngineEntry> entries = Def.MultiEngineDefs;
+      baselineIndexMulti = entries.FindIndex(e => e.IsBaseline);
+      if (baselineIndexMulti < 0)
+      {
+        baselineIndexMulti = 0;
+      }
+
+      // Tree reuse is no help in suite testing.
+      foreach (MultiEngineEntry e in entries)
+      {
+        e.PlayerDef.EngineDef.DisableTreeReuse();
+      }
+
+      // If a device pool was supplied (via the concurrency constructor) it governs the number
+      // of concurrent workers, and each worker is assigned a distinct set of GPUs.
+      int numDevicesPerWorker = 0;
+      if (DeviceIDs != null)
+      {
+        numConcurrentSuiteThreads = NumConcurrent;
+        numDevicesPerWorker = ComputeAndValidateDevicePartitioningMulti();
+      }
+      this.numConcurrentSuiteThreads = numConcurrentSuiteThreads;
+
+      InitMultiEngine(numDevicesPerWorker);
+
+      // Install Ctrl-C handler to allow ad hoc clean termination (with stats so far).
+      bool stopRequested = false;
+      if (enableCancelViaCtrlC)
+      {
+        ConsoleCancelEventHandler ctrlCHandler = new ConsoleCancelEventHandler((object sender, ConsoleCancelEventArgs args) =>
+        {
+          Console.WriteLine("Suite pending shutdown....");
+          stopRequested = true;
+          args.Cancel = true;
+        });
+        Console.CancelKeyPress += ctrlCHandler;
+      }
+
+      List<EPDEntry> epds = LoadAndSliceEPDsMulti();
+      numPositionsInRun = epds.Count;
+
+      this.numConcurrentSuiteThreads = Math.Min(Math.Max(1, epds.Count), this.numConcurrentSuiteThreads);
+
+      WriteMultiEngineHeader();
+
+      MultiEngineAccumulator acc = new MultiEngineAccumulator(entries, baselineIndexMulti);
+      MultiEngineLiveDisplay display = new MultiEngineLiveDisplay(Def.Output, entries.ToArray(), epds.Count);
+
+      using (new TimingBlock("EPDS", Def.Output == Console.Out ? TimingBlock.LoggingType.Console : TimingBlock.LoggingType.None))
+      {
+        Parallel.For(0, epds.Count,
+                     new ParallelOptions() { MaxDegreeOfParallelism = this.numConcurrentSuiteThreads },
+                     delegate (int gameNum)
+                     {
+                       if (stopRequested)
+                       {
+                         return;
+                       }
+
+                       try
+                       {
+                         EPDEntry epd = epds[gameNum];
+
+                         // Skip positions which are already draws.
+                         if (epd.Position.CheckDrawBasedOnMaterial == Position.PositionDrawStatus.DrawByInsufficientMaterial)
+                         {
+                           return;
+                         }
+
+                         ProcessEPDMultiEngine(gameNum, epd, acc, display);
+                       }
+                       catch (Exception exc)
+                       {
+                         Def.Output.WriteLine("Error in ProcessEPDMultiEngine " + exc);
+                         throw;
+                       }
+                     });
+      }
+
+      // Final frozen statistics block.
+      MultiEngineEngineResult[] snapshot = acc.Snapshot();
+      display.RenderFinal(snapshot, acc.PositionsDone);
+
+      if (outputDetail)
+      {
+        WriteMultiEngineDetailDump(snapshot);
+      }
+
+      ShutdownMultiEngine();
+
+      return new MultiEngineSuiteResult(Def)
+      {
+        Engines = snapshot,
+        BaselineIndex = baselineIndexMulti,
+        ID = Def.ID,
+        EPDFileName = Def.EPDFileName,
+        NumPositionsTested = acc.PositionsDone,
+        MachineName = Environment.MachineName,
+        RunDateTime = DateTime.Now
+      };
+    }
+
+
+    /// <summary>
+    /// Loads, filters and slices the EPD test positions for a multiengine run
+    /// (Lichess puzzle format is not currently supported in multiengine mode).
+    /// </summary>
+    List<EPDEntry> LoadAndSliceEPDsMulti()
+    {
+      if (Def.EPDLichessPuzzleFormat)
+      {
+        throw new NotSupportedException("Lichess puzzle format EPD files are not yet supported in multiengine mode.");
+      }
+
+      List<EPDEntry> epds = EPDEntry.EPDEntriesInEPDFile(Def.EPDFileName, Def.MaxNumPositions,
+                                                         Def.EPDLichessPuzzleFormat,
+                                                         Def.EPDRawLineFilter, Def.EPDFilter);
+
+      if (Def.SkipNumPositions > 0)
+      {
+        if (Def.SkipNumPositions >= epds.Count)
+        {
+          throw new Exception("Insufficient positions in " + Def.EPDFileName + " to skip " + Def.SkipNumPositions);
+        }
+        epds = epds.GetRange(Def.SkipNumPositions, epds.Count - Def.SkipNumPositions);
+      }
+
+      if (Def.AcceptPosPredicate != null)
+      {
+        epds = epds.Where(s => Def.AcceptPosPredicate(s.Position)).ToList();
+      }
+
+      int first = Math.Min(Def.FirstTestPosition, epds.Count);
+      int max = (Def.MaxNumPositions <= 0 || Def.MaxNumPositions == int.MaxValue)
+              ? epds.Count - first
+              : Math.Min(Def.MaxNumPositions, epds.Count - first);
+      epds = epds.GetRange(first, max);
+      return epds;
+    }
+
+
+    /// <summary>
+    /// Validates that the supplied DeviceIDs pool can be partitioned into one chunk per
+    /// concurrent worker (one chunk per worker, chunk size = number of devices referenced by
+    /// the Ceres engines, which must all match), and returns the number of devices per worker.
+    /// </summary>
+    int ComputeAndValidateDevicePartitioningMulti()
+    {
+      int? numDevicesPerWorker = null;
+      foreach (MultiEngineEntry e in Def.MultiEngineDefs)
+      {
+        Chess.NNEvaluators.Defs.NNEvaluatorDef evalDef = e.PlayerDef.EngineDef.GetEvaluatorDef();
+        if (evalDef == null)
+        {
+          continue; // external engine: not assigned a GPU slice
+        }
+
+        int n = evalDef.NumDevices;
+        if (n < 1)
+        {
+          throw new Exception($"Engine {e.ID} specification must reference at least one device.");
+        }
+
+        if (numDevicesPerWorker == null)
+        {
+          numDevicesPerWorker = n;
+        }
+        else if (n != numDevicesPerWorker.Value)
+        {
+          throw new Exception($"All Ceres engines must reference the same number of devices when using DeviceIDs "
+                            + $"(engine {e.ID} has {n}, expected {numDevicesPerWorker.Value}).");
+        }
+      }
+
+      if (numDevicesPerWorker == null)
+      {
+        throw new Exception("DeviceIDs were specified but none of the engines is a Ceres engine with an evaluator.");
+      }
+
+      int numWorkers = NumConcurrent;
+      if (DeviceIDs.Length < numWorkers * numDevicesPerWorker.Value)
+      {
+        throw new Exception($"Insufficient DeviceIDs ({DeviceIDs.Length}): need at least "
+                          + $"NumConcurrent ({numWorkers}) * devices-per-engine ({numDevicesPerWorker.Value}) "
+                          + $"= {numWorkers * numDevicesPerWorker.Value}, so each concurrent worker has its own GPU(s).");
+      }
+
+      return numDevicesPerWorker.Value;
+    }
+
+
+    /// <summary>
+    /// Creates and warms up one array of engine instances per concurrent worker (one instance
+    /// per engine in the multiengine definition). Ceres engines are cloned onto the worker's
+    /// assigned device slice; external engines are created as-is (each worker gets its own).
+    /// </summary>
+    void InitMultiEngine(int numDevicesPerWorker)
+    {
+      List<MultiEngineEntry> entries = Def.MultiEngineDefs;
+      for (int i = 0; i < numConcurrentSuiteThreads; i++)
+      {
+        int[] deviceIDsForWorker = DeviceSliceForWorker(i, numDevicesPerWorker);
+        GameEngine[] arr = new GameEngine[entries.Count];
+        for (int k = 0; k < entries.Count; k++)
+        {
+          MultiEngineEntry e = entries[k];
+          int[] slice = e.IsCeresEngine ? deviceIDsForWorker : null;
+          arr[k] = CreateWorkerEngine(e.PlayerDef.EngineDef, e.Limit, slice);
+        }
+        EngineArrays.Add(arr);
+      }
+    }
+
+
+    /// <summary>
+    /// Evaluates one position with every engine (sequentially, on the worker's own device(s)),
+    /// merges the results into the accumulator and refreshes the live statistics block.
+    /// </summary>
+    void ProcessEPDMultiEngine(int epdNum, EPDEntry epd, MultiEngineAccumulator acc, MultiEngineLiveDisplay display)
+    {
+      if (!EngineArrays.TryTake(out GameEngine[] engines))
+      {
+        throw new Exception("No engine array available");
+      }
+
+      int n = engines.Length;
+      GameEngineSearchResult[] results = new GameEngineSearchResult[n];
+      PositionWithHistory pos = epd.PosWithHistory;
+
+      try
+      {
+        // Rotate the starting engine each position to avoid any systematic ordering effect.
+        int start = epdNum % n;
+        for (int j = 0; j < n; j++)
+        {
+          int k = (start + j) % n;
+          GameEngine eng = engines[k];
+          eng.ResetGame();
+          SearchLimit limit = Def.MultiEngineDefs[k].Limit.ConvertedGameToMoveLimit;
+          results[k] = eng.Search(pos, limit);
+        }
+      }
+      finally
+      {
+        // Restore the array to the pool (so this worker keeps its assigned device(s)).
+        EngineArrays.Add(engines);
+      }
+
+      lock (lockObj)
+      {
+        acc.AddPosition(results, epd);
+        MultiEngineEngineResult[] snapshot = acc.Snapshot();
+        display.Refresh(snapshot, acc.PositionsDone);
+      }
+    }
+
+
+    /// <summary>
+    /// Writes the multiengine header block (suite identity and the participating engines), and
+    /// any MCGS search/selection parameter differences of each engine versus the baseline.
+    /// </summary>
+    void WriteMultiEngineHeader()
+    {
+      Def.Output.WriteLine();
+      Def.Output.WriteLine("MULTIENGINE SUITE TEST: " + Def.ID);
+      Def.Output.WriteLine("  Machine      : " + Environment.MachineName);
+      Def.Output.WriteLine("  Date/Time    : " + DateTime.Now);
+      Def.Output.WriteLine("  EPD file     : " + Def.EPDFileName);
+      Def.Output.WriteLine("  Positions    : " + numPositionsInRun);
+      Def.Output.WriteLine("  Concurrency  : " + numConcurrentSuiteThreads
+                         + (DeviceIDs != null ? "   Devices [" + string.Join(",", DeviceIDs) + "]" : ""));
+      Def.Output.WriteLine();
+
+      foreach (MultiEngineEntry e in Def.MultiEngineDefs)
+      {
+        string kind = !e.IsCeresEngine ? "external"
+                    : (e.PlayerDef.EngineDef is GameEngineDefCeresMCGS ? "MCGS" : "MCTS");
+        Def.Output.WriteLine($"  {e.ID,-12}{(e.IsBaseline ? " *BASELINE" : "         ")}  [{kind,-8}]  limit={e.Limit}   {e.PlayerDef.EngineDef}");
+      }
+
+      DumpMultiEngineParamDifferences();
+
+      Def.Output.WriteLine();
+    }
+
+
+    /// <summary>
+    /// For each in-process MCGS engine, writes any differences in its ParamsSearch / ParamsSelect
+    /// versus the baseline engine (when the baseline is also an MCGS engine). Nothing is written
+    /// when the engines are not MCGS or their parameters are identical.
+    /// </summary>
+    void DumpMultiEngineParamDifferences()
+    {
+      if (!EngineArrays.TryPeek(out GameEngine[] arr))
+      {
+        return;
+      }
+
+      if (arr[baselineIndexMulti] is not GameEngineCeresMCGSInProcess baseMCGS)
+      {
+        return;
+      }
+
+      for (int k = 0; k < arr.Length; k++)
+      {
+        if (k == baselineIndexMulti || arr[k] is not GameEngineCeresMCGSInProcess mcgs)
+        {
+          continue;
+        }
+
+        string searchDiff = ObjUtils.FieldValuesDumpString<ParamsSearch>(mcgs.SearchParams, baseMCGS.SearchParams, true);
+        string selectDiff = ObjUtils.FieldValuesDumpString<ParamsSelect>(mcgs.SelectParams, baseMCGS.SelectParams, true);
+        if (searchDiff == null && selectDiff == null)
+        {
+          continue;
+        }
+
+        Def.Output.WriteLine();
+        Def.Output.WriteLine($"  {Def.MultiEngineDefs[k].ID} vs baseline {Def.MultiEngineDefs[baselineIndexMulti].ID} parameter differences:");
+        if (searchDiff != null)
+        {
+          Def.Output.WriteLine(searchDiff);
+        }
+        if (selectDiff != null)
+        {
+          Def.Output.WriteLine(selectDiff);
+        }
+      }
+    }
+
+
+    /// <summary>
+    /// Writes a per-engine detail recap (all available aggregate statistics) at end of run,
+    /// after the live statistics block has been frozen.
+    /// </summary>
+    void WriteMultiEngineDetailDump(MultiEngineEngineResult[] engines)
+    {
+      Def.Output.WriteLine();
+      Def.Output.WriteLine("PER-ENGINE DETAIL");
+      foreach (MultiEngineEngineResult r in engines)
+      {
+        string Fmt(float v, string fmt) => float.IsNaN(v) ? "n/a" : v.ToString(fmt);
+        Def.Output.WriteLine($"  {r.ID}{(r.IsBaseline ? "*" : "")} [{r.Kind}]  positions={r.NumPositions}");
+        Def.Output.WriteLine($"      solve={Fmt(r.AvgSolveScorePct, "F1")}%  EPS={Fmt(r.AvgEPS, "N0")}  Q={Fmt(r.AvgQ, "F3")}  "
+                           + $"|dQ|vsBase={Fmt(r.AvgAbsQDiffVsBaseline, "F3")}  KLDvsBase={Fmt(r.AvgPolicyKLDVsBaseline, "F4")}  "
+                           + $"correctVisits={Fmt(r.AvgCorrectMoveVisitPct, "F1")}%");
+        Def.Output.WriteLine($"      nodes={r.TotalNodes:N0}  time={r.TotalTimeSecs:F1}s  NNevals={r.TotalNNEvals:N0}  "
+                           + $"TBhits={r.TotalTablebaseHits:N0}  avgDepth={Fmt(r.AvgDepth, "F1")}  visitEntropy={Fmt(r.AvgVisitEntropy, "F2")}");
+      }
+      Def.Output.WriteLine();
+    }
+
+
+    void ShutdownMultiEngine()
+    {
+      // Note: like the two-engine Shutdown, engine disposal is currently skipped (the underlying
+      // dispose path has a known issue); we simply release the engine references.
+      EngineArrays.Clear();
+    }
+
+
+    /// <summary>
+    /// Accumulates per-engine aggregate statistics across all positions in a multiengine run,
+    /// including the baseline-relative difference statistics. A position's full set of engine
+    /// results is added atomically (caller holds the suite lock).
+    /// </summary>
+    internal sealed class MultiEngineAccumulator
+    {
+      readonly int n;
+      readonly int baselineIndex;
+      readonly MultiEngineEntry[] entries;
+      readonly MultiEngineKind[] kinds;
+
+      public int PositionsDone { get; private set; }
+      public int BaselineIndex => baselineIndex;
+
+      readonly double[] sumSolve; readonly int[] cntSolve;
+      readonly double[] sumEPS;   readonly int[] cntEPS;
+      readonly double[] sumQ;     readonly int[] cntQ;
+      readonly double[] sumCV;    readonly int[] cntCV;
+      readonly double[] sumQDiff; readonly int[] cntQDiff;
+      readonly double[] sumKLD;   readonly int[] cntKLD;
+      readonly long[] totNodes;
+      readonly double[] totTime;
+      readonly long[] totNNEvals;
+      readonly long[] totTB;
+      readonly double[] sumDepth; readonly int[] cntDepth;
+      readonly double[] sumEnt;   readonly int[] cntEnt;
+
+      public MultiEngineAccumulator(List<MultiEngineEntry> entriesList, int baselineIndex)
+      {
+        entries = entriesList.ToArray();
+        this.baselineIndex = baselineIndex;
+        n = entries.Length;
+
+        kinds = new MultiEngineKind[n];
+        for (int k = 0; k < n; k++)
+        {
+          MultiEngineEntry e = entries[k];
+          kinds[k] = !e.IsCeresEngine ? MultiEngineKind.External
+                   : (e.PlayerDef.EngineDef is GameEngineDefCeresMCGS ? MultiEngineKind.CeresMCGS : MultiEngineKind.CeresMCTS);
+        }
+
+        sumSolve = new double[n]; cntSolve = new int[n];
+        sumEPS = new double[n];   cntEPS = new int[n];
+        sumQ = new double[n];     cntQ = new int[n];
+        sumCV = new double[n];    cntCV = new int[n];
+        sumQDiff = new double[n]; cntQDiff = new int[n];
+        sumKLD = new double[n];   cntKLD = new int[n];
+        totNodes = new long[n];
+        totTime = new double[n];
+        totNNEvals = new long[n];
+        totTB = new long[n];
+        sumDepth = new double[n]; cntDepth = new int[n];
+        sumEnt = new double[n];   cntEnt = new int[n];
+      }
+
+      public void AddPosition(GameEngineSearchResult[] results, EPDEntry epd)
+      {
+        PositionsDone++;
+
+        Position position = epd.Position;
+        GameEngineSearchResult baseR = (baselineIndex >= 0 && baselineIndex < results.Length) ? results[baselineIndex] : null;
+
+        for (int k = 0; k < n; k++)
+        {
+          GameEngineSearchResult r = results[k];
+          if (r == null)
+          {
+            continue;
+          }
+
+          // Solve score (correctness 0..10), best move parsed uniformly from the UCI move string.
+          Move bm = default;
+          try
+          {
+            bm = Move.FromUCI(in position, r.MoveString);
+          }
+          catch
+          {
+            // Unparseable move (counts as not solved).
+          }
+          int score = bm.IsNull ? 0 : epd.CorrectnessScore(bm, 10);
+          sumSolve[k] += score; cntSolve[k]++;
+
+          // EPS (only counted when the engine reported a value).
+          if (r.EPS > 0)
+          {
+            sumEPS[k] += r.EPS; cntEPS[k]++;
+          }
+
+          // Root Q (best-move Q, populated by all engine types).
+          sumQ[k] += r.ScoreQ; cntQ[k]++;
+
+          // Correct-move visit fraction (requires per-move visit statistics).
+          double cv = CorrectMoveVisitFraction(r, epd);
+          if (!double.IsNaN(cv))
+          {
+            sumCV[k] += cv; cntCV[k]++;
+          }
+
+          // Totals / additional aggregates.
+          totNodes[k] += r.FinalN;
+          totTime[k] += r.TimingStats.ElapsedTimeSecs;
+          totNNEvals[k] += r.NumNNNodes;
+          totTB[k] += r.CountSearchContinuations > 0 ? 0 : r.CountTablebaseHits;
+          if (r.AvgDepth > 0)
+          {
+            sumDepth[k] += r.AvgDepth; cntDepth[k]++;
+          }
+          if (r.VisitEntropy > 0)
+          {
+            sumEnt[k] += r.VisitEntropy; cntEnt[k]++;
+          }
+
+          // Baseline-relative difference statistics (skipped for the baseline engine itself).
+          if (k != baselineIndex && baseR != null)
+          {
+            sumQDiff[k] += Math.Abs(r.ScoreQ - baseR.ScoreQ); cntQDiff[k]++;
+            if (r.VerboseMoveStats != null && baseR.VerboseMoveStats != null)
+            {
+              double kld = PolicySymmetricKLD(r.VerboseMoveStats, baseR.VerboseMoveStats);
+              if (!double.IsNaN(kld))
+              {
+                sumKLD[k] += kld; cntKLD[k]++;
+              }
+            }
+          }
+        }
+      }
+
+      public MultiEngineEngineResult[] Snapshot()
+      {
+        MultiEngineEngineResult[] outArr = new MultiEngineEngineResult[n];
+        for (int k = 0; k < n; k++)
+        {
+          outArr[k] = new MultiEngineEngineResult
+          {
+            ID = entries[k].ID,
+            IsBaseline = k == baselineIndex,
+            Kind = kinds[k],
+            SearchLimit = entries[k].Limit,
+            NumPositions = cntSolve[k],
+            AvgSolveScorePct = cntSolve[k] > 0 ? (float)(sumSolve[k] / cntSolve[k]) * 10f : float.NaN,
+            AvgEPS = cntEPS[k] > 0 ? (float)(sumEPS[k] / cntEPS[k]) : float.NaN,
+            AvgTimeSecs = cntSolve[k] > 0 ? (float)(totTime[k] / cntSolve[k]) : float.NaN,
+            AvgQ = cntQ[k] > 0 ? (float)(sumQ[k] / cntQ[k]) : float.NaN,
+            AvgAbsQDiffVsBaseline = (k == baselineIndex || cntQDiff[k] == 0) ? float.NaN : (float)(sumQDiff[k] / cntQDiff[k]),
+            AvgPolicyKLDVsBaseline = (k == baselineIndex || cntKLD[k] == 0) ? float.NaN : (float)(sumKLD[k] / cntKLD[k]),
+            AvgCorrectMoveVisitPct = cntCV[k] > 0 ? (float)(sumCV[k] / cntCV[k]) : float.NaN,
+            TotalNodes = totNodes[k],
+            TotalTimeSecs = (float)totTime[k],
+            TotalNNEvals = totNNEvals[k],
+            TotalTablebaseHits = totTB[k],
+            AvgDepth = cntDepth[k] > 0 ? (float)(sumDepth[k] / cntDepth[k]) : float.NaN,
+            AvgVisitEntropy = cntEnt[k] > 0 ? (float)(sumEnt[k] / cntEnt[k]) : float.NaN
+          };
+        }
+        return outArr;
+      }
+    }
+
+    #endregion
+
 
     private void Shutdown(ObjectPool<object> externalEnginePool)
     {
