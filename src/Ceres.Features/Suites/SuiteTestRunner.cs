@@ -36,6 +36,8 @@ using System.Collections.Concurrent;
 using Ceres.Base.Math;
 using Ceres.Chess.NNEvaluators.Internals;
 using System.Linq;
+using Ceres.MCGS.GameEngines;
+using Ceres.MCGS.Search.Params;
 
 #endregion
 
@@ -257,6 +259,60 @@ namespace Ceres.Features.Suites
 #endif
 
 
+    /// <summary>
+    /// If both Ceres engines are in-process MCGS engines, writes to the output any
+    /// differences in their ParamsSearch (including the nested ParamsSearchExecution)
+    /// and ParamsSelect. Nothing is written if the engines are not both MCGS engines
+    /// or if their parameters are identical.
+    /// </summary>
+    void DumpMCGSEngineParamsDifferences()
+    {
+      if (!Def.RunCeres2Engine)
+      {
+        return;
+      }
+
+      // The engine instances are created during Init (which has already run when this is
+      // called); peek at one warmed-up worker pair to inspect the effective parameters.
+      if (!EngineSets.TryPeek(out var engineSet))
+      {
+        return;
+      }
+
+      if (engineSet.Engine1 is not GameEngineCeresMCGSInProcess mcgs1
+       || engineSet.Engine2 is not GameEngineCeresMCGSInProcess mcgs2)
+      {
+        return;
+      }
+
+      string searchDiff = ObjUtils.FieldValuesDumpString<ParamsSearch>(mcgs1.SearchParams, mcgs2.SearchParams, true);
+      string executionDiff = ObjUtils.FieldValuesDumpString<ParamsSearchExecution>(mcgs1.SearchParams.Execution, mcgs2.SearchParams.Execution, true);
+      string selectDiff = ObjUtils.FieldValuesDumpString<ParamsSelect>(mcgs1.SelectParams, mcgs2.SelectParams, true);
+
+      // FieldValuesDumpString returns null for a section when there are no differences.
+      if (searchDiff == null && executionDiff == null && selectDiff == null)
+      {
+        return;
+      }
+
+      Def.Output.WriteLine();
+      Def.Output.WriteLine("MCGS1 (C1) vs MCGS2 (C2) parameter differences");
+      if (searchDiff != null)
+      {
+        Def.Output.WriteLine(searchDiff);
+      }
+      if (executionDiff != null)
+      {
+        Def.Output.WriteLine(executionDiff);
+      }
+      if (selectDiff != null)
+      {
+        Def.Output.WriteLine(selectDiff);
+      }
+      Def.Output.WriteLine();
+    }
+
+
     public SuiteTestResult Run(int numConcurrentSuiteThreads = 1,
                                bool outputDetail = true,
                                bool saveCacheWhenDone = true,
@@ -336,6 +392,11 @@ namespace Ceres.Features.Suites
       {
         Def.Output.WriteLine("EX = " + Def.ExternalEngineDef.EngineDef);
       }
+
+      // If both engines are in-process MCGS engines, dump any differences in their
+      // search/selection parameters as part of the header (so A/B parameter comparisons
+      // are self-documenting in the suite output).
+      DumpMCGSEngineParamsDifferences();
 
 #if NOT
       // To make up for the fact that LZ0 "cheats" by sometimes running over specified number of nodes
