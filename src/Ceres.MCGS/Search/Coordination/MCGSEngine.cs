@@ -89,6 +89,10 @@ public partial class MCGSEngine
 
   internal int numVisitsInFlight = 0;
 
+  // Evaluator metadata (constant for a search) used to bound batch sizes by network size and device count.
+  readonly int cachedNumDevicesInEvaluator;
+  readonly long cachedNetFileSizeBytes;
+
 
   /// <summary>
   /// Information aboug nodes above the search root node up to (but not including) the graph root.
@@ -140,6 +144,12 @@ public partial class MCGSEngine
                     GraphRootToSearchRootNodeInfo[] searchRootPathFromGraphRoot)
   {
     Manager = manager;
+
+    // Cache evaluator metadata (constant for the search) used to bound batch sizes.
+    NNEvaluator evaluator0 = Manager.NNEvaluator0;
+    cachedNumDevicesInEvaluator = evaluator0?.NumDevices ?? 1;
+    cachedNetFileSizeBytes = evaluator0?.Info?.NetworkFileSizeBytes ?? -1;
+
     Graph = graph;
     Graph.PTBMaxRepDrawFraction = manager.ParamsSearch.PseudoTranspositionBlendingMaxRepDrawFraction;
     Strategy = new MCGSStrategyPUCT(this);
@@ -477,7 +487,8 @@ public partial class MCGSEngine
     int targetBatchSize = OptimalBatchSizeCalculator.CalcOptimalBatchSize(numVisitsNeededRemaining, SearchRootNode.N,
                                                                           paramsSearch.Execution.DualOverlappedIterators,
                                                                           paramsSearch.Execution.MaxBatchSize, paramsSearch.BatchSizeMultiplier,
-                                                                          paramsSearch.EnableEarlySmallBatchSizes);
+                                                                          paramsSearch.EnableEarlySmallBatchSizes,
+                                                                          cachedNumDevicesInEvaluator, cachedNetFileSizeBytes);
 
     targetBatchSize = Math.Min(numVisitsNeededRemaining, targetBatchSize);
     targetBatchSize = Math.Min(targetBatchSize, Manager.MaxBatchSizeDueToPossibleNearTimeExhaustion);

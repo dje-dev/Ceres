@@ -201,7 +201,7 @@ public class NNEvaluatorONNX : NNEvaluator
   /// <summary>
   /// Miscellaneous information about the evaluator.
   /// </summary>
-  public override EvaluatorInfo Info => ONNXFileName == null ? null : new EvaluatorInfo(new ONNXNet(ONNXFileName).NumParams);
+  public override EvaluatorInfo Info => ONNXFileName == null ? null : new EvaluatorInfo(new ONNXNet(ONNXFileName).NumParams, FileSizeBytesOrZero(ONNXFileName));
 
 
 

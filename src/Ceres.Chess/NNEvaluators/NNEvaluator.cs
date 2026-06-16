@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -98,9 +99,15 @@ namespace Ceres.Chess.NNEvaluators
       /// </summary>
       public readonly long NumParameters;
 
-      public EvaluatorInfo(long numParameters)
+      /// <summary>
+      /// Size in bytes of the underlying network file (0 if unknown).
+      /// </summary>
+      public readonly long NetworkFileSizeBytes;
+
+      public EvaluatorInfo(long numParameters, long networkFileSizeBytes = 0)
       {
         NumParameters = numParameters;
+        NetworkFileSizeBytes = networkFileSizeBytes;
       }
     }
 
@@ -278,6 +285,18 @@ namespace Ceres.Chess.NNEvaluators
     /// Miscellaneous information about the evaluator.
     /// </summary>
     public virtual EvaluatorInfo Info => null;
+
+    /// <summary>
+    /// Number of distinct compute devices over which this evaluator's work is spread.
+    /// </summary>
+    public virtual int NumDevices => 1;
+
+    /// <summary>
+    /// Returns the size in bytes of the specified file,
+    /// or 0 if the path is null or the file does not exist.
+    /// </summary>
+    protected static long FileSizeBytesOrZero(string fileName)
+      => fileName != null && File.Exists(fileName) ? new FileInfo(fileName).Length : 0;
 
     /// <summary>
     /// If the raw neural network outputs should be retained.

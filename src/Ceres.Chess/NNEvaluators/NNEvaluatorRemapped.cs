@@ -81,6 +81,8 @@ namespace Ceres.Chess.NNEvaluators
 
     public override EvaluatorInfo Info => BaseEvaluator.Info;
 
+    public override int NumDevices => BaseEvaluator.NumDevices;
+
 
     protected override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {

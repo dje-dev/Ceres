@@ -109,6 +109,9 @@ namespace Ceres.Chess.NNEvaluators
 
     public override int MaxBatchSize => int.MaxValue;
 
+    public override int NumDevices => Evaluator.NumDevices;
+    public override EvaluatorInfo Info => Evaluator.Info;
+
     public override bool PolicyReturnedSameOrderMoveList => false; // batching disturbs move list order
     public override InputTypes InputsRequired => Evaluator.InputsRequired;
     public override void CalcStatistics(bool computeBreaks, float maxSeconds = 1)

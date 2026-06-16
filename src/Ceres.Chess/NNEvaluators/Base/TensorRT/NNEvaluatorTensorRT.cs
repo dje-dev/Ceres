@@ -225,6 +225,12 @@ public class NNEvaluatorTensorRT : NNEvaluator
   public override int MaxBatchSize => maxBatchSize;
 
   /// <inheritdoc/>
+  public override int NumDevices => GpuIDs.Length;
+
+  /// <inheritdoc/>
+  public override EvaluatorInfo Info => ONNXFileName == null ? null : new EvaluatorInfo(0, FileSizeBytesOrZero(ONNXFileName));
+
+  /// <inheritdoc/>
   public override int PaddedBatchCapacity(int numPositions)
   {
     if (pool == null || numPositions <= 0 || numPositions >= MaxBatchSize)

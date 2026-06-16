@@ -204,6 +204,11 @@ namespace Ceres.Chess.NNEvaluators.CUDA
     /// </summary>
     public override int MaxBatchSize => maxBatchSize;
 
+    /// <summary>
+    /// Miscellaneous information about the evaluator (network file size used to gate batch sizing).
+    /// </summary>
+    public override EvaluatorInfo Info => new EvaluatorInfo(0, FileSizeBytesOrZero(Evaluator?.Net?.FileName));
+
 
     #endregion
 

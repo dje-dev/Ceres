@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using System.Linq;
 using System.Threading.Tasks;
 
 #endregion
@@ -48,6 +49,19 @@ namespace Ceres.Chess.NNEvaluators
     /// Types of input(s) required by the evaluator.
     /// </summary>
     public override InputTypes InputsRequired => inputsRequired;
+
+
+    /// <summary>
+    /// Number of distinct compute devices (summed across the underlying evaluators).
+    /// </summary>
+    public override int NumDevices => Evaluators.Sum(e => e.NumDevices);
+
+
+    /// <summary>
+    /// Miscellaneous information about the evaluator.
+    /// The underlying evaluators run the same network, so report the first.
+    /// </summary>
+    public override EvaluatorInfo Info => Evaluators.Length > 0 ? Evaluators[0].Info : null;
 
 
     /// <summary>

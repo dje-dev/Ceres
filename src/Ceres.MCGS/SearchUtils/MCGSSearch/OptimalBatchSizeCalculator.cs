@@ -52,17 +52,31 @@ public static class OptimalBatchSizeCalculator
   /// <param name="maxBatchSize"></param>
   /// <param name="batchSizeMultiplier"></param>
   /// <param name="enableEarlySmallBatchSizes"></param>
+  /// <param name="numDevicesInEvaluator">Number of compute devices the evaluator spans (raises the cap by 128 per extra device).</param>
+  /// <param name="netFileSizeBytes">Size in bytes of the network file (&lt;= 0 if unknown); larger nets get a smaller cap.</param>
   /// <returns></returns>
   public static int CalcOptimalBatchSize(int estimatedTotalSearchNodes, int currentGraphSize,
                                          bool overlapInUse,
                                          int maxBatchSize, float batchSizeMultiplier,
-                                         bool enableEarlySmallBatchSizes)
+                                         bool enableEarlySmallBatchSizes,
+                                         int numDevicesInEvaluator, long netFileSizeBytes)
   {
     if (OverrideBatchSizeFunc is not null)
     {
       return OverrideBatchSizeFunc(currentGraphSize, maxBatchSize);
     }
 
+    // Cap maximum batch size based on network file size and device count.
+    // Try to keep batch size small (for better selection quality)
+    // but allow larger for smaller nets or more devices where this improves backend eps significantly
+    const long NET_FILE_SIZE_THRESHOLD_BIG = 100_000_000;
+    const int BATCH_SIZE_BIG = 768;
+    const int BATCH_SIZE_MAX_DEFAULT = 512;
+    const int BATCH_SIZE_INCREMENT_PER_DEVICE = 128;  
+    int baseMax = (netFileSizeBytes > 0 && netFileSizeBytes <= NET_FILE_SIZE_THRESHOLD_BIG) ? BATCH_SIZE_BIG : BATCH_SIZE_MAX_DEFAULT;
+    int deviceCount = numDevicesInEvaluator > 0 ? numDevicesInEvaluator : 1;
+    maxBatchSize = Math.Min(maxBatchSize, baseMax + BATCH_SIZE_INCREMENT_PER_DEVICE * (deviceCount - 1));
+    
     // Use batch size of 1 for extremely small searches.
     if (estimatedTotalSearchNodes < 10)
     {
