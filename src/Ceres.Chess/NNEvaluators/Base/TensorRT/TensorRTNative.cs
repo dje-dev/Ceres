@@ -307,6 +307,9 @@ internal static partial class TensorRTNative
       int useCudaGraphs, int useSpinWait, int deviceId,
       IntPtr* outHandles);
 
+  [LibraryImport(LibraryName, EntryPoint = "TRT_CloneContextSharingEngine")]
+  internal static partial int CloneContextSharingEngine(IntPtr referenceHandle, int deviceId, out IntPtr outHandle);
+
   // =========================================================================
   // Weight Refitting (for refittable engines)
   // =========================================================================

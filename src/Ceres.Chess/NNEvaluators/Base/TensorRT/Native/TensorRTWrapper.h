@@ -311,6 +311,15 @@ extern "C"
     int32_t useCudaGraphs, int32_t useSpinWait, int32_t deviceId,
     TRT_EngineHandle* outHandles);
 
+  // Create a new execution context that SHARES the already-deserialized engine owned by an
+  // existing context (referenceHandle), without re-deserializing or re-allocating the weights.
+  // The new context has its own IExecutionContext, streams, and GPU buffers (so it can be used
+  // concurrently with the reference) but references the same engine via a ref-counted owner.
+  // deviceId < 0 uses the reference's device. Writes the new handle to *outHandle.
+  // Returns 0 on success, negative on error.
+  TRT_API int32_t TRT_CloneContextSharingEngine(TRT_EngineHandle referenceHandle,
+    int32_t deviceId, TRT_EngineHandle* outHandle);
+
   // Check if this engine uses CUDA graphs for inference.
   // Returns 1 if enabled, 0 if disabled, -1 on error.
   TRT_API int32_t TRT_UsesCudaGraphs(TRT_EngineHandle handle);

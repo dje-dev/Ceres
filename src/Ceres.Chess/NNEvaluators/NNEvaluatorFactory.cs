@@ -238,6 +238,19 @@ namespace Ceres.Chess.NNEvaluators
     static readonly object onnxFileWriteLock = new();
 
 
+    /// <summary>
+    /// Resolves the reference evaluator (if any) to the single underlying evaluator for the given
+    /// device index, so a TensorRT-native overlap evaluator can share the reference's engine.
+    /// Mirrors the per-index unwrapping done for the CUDA path (handles NNEvaluatorSplit).
+    /// </summary>
+    static NNEvaluator ReferenceForDevice(NNEvaluator referenceEvaluator, int referenceEvaluatorIndex)
+    {
+      if (referenceEvaluator is NNEvaluatorSplit split)
+      {
+        return referenceEvaluatorIndex < split.Evaluators.Length ? split.Evaluators[referenceEvaluatorIndex] : null;
+      }
+      return referenceEvaluator;
+    }
 
 
     static NNEvaluator Singleton(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef,
@@ -318,7 +331,8 @@ namespace Ceres.Chess.NNEvaluators
           if (isTensorRTNative)
           {
             return NNEvaluatorTensorRT.BuildEvaluator(netDef, gpuIDs: [deviceDef.DeviceIndex], options,
-                                                      ONNXNetExecutor.NetTypeEnum.LC0, fullFN);
+                                                      ONNXNetExecutor.NetTypeEnum.LC0, fullFN,
+                                                      referenceEvaluator: ReferenceForDevice(referenceEvaluator, referenceEvaluatorIndex));
           }
           ret = new NNEvaluatorONNX(netDef.ShortID, fullFN, null, deviceDef.Type, deviceDef.DeviceIndex, useTRT: viaTRT,
                                             ONNXNetExecutor.NetTypeEnum.LC0, maxONNXBatchSize,
@@ -425,7 +439,8 @@ namespace Ceres.Chess.NNEvaluators
               throw new NotImplementedException("Ceres TensorRT Native evaluator does not yet support head overrides.");
             }
 
-            return NNEvaluatorTensorRT.BuildEvaluator(netDef, gpuIDs: [deviceDef.DeviceIndex], optionsCeres);
+            return NNEvaluatorTensorRT.BuildEvaluator(netDef, gpuIDs: [deviceDef.DeviceIndex], optionsCeres,
+                                                      referenceEvaluator: ReferenceForDevice(referenceEvaluator, referenceEvaluatorIndex));
           }
           else
           {

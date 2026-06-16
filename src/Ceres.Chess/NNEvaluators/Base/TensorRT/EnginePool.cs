@@ -276,7 +276,8 @@ public sealed class EnginePool : IDisposable
 
   public EnginePool(TensorRT trt, string onnxPath, int[] sizes, EnginePoolMode mode,
                     TensorRTBuildOptions options, int inputElementsPerPos, int outputElementsPerPos,
-                    int deviceId = 0, string cacheDir = "/tmp/tensorrt_cache")
+                    int deviceId = 0, string cacheDir = "/tmp/tensorrt_cache",
+                    EnginePool referencePool = null)
   {
     this.onnxPath = onnxPath;
     this.mode = mode;
@@ -294,7 +295,21 @@ public sealed class EnginePool : IDisposable
       System.IO.Directory.CreateDirectory(cacheDir);
     }
 
-    if (mode == EnginePoolMode.Range)
+    if (referencePool != null)
+    {
+      // Engine-sharing path: instead of deserializing/building engines again, clone each of the
+      // reference pool's contexts. Each clone shares the reference's already-deserialized
+      // ICudaEngine (weights, big VRAM) but gets its own execution context / streams / buffers,
+      // so this pool can run concurrently with the reference. Works for both Exact (one engine,
+      // N profiles) and Range (one engine per range) modes — we mirror the reference's engines
+      // and ranges exactly. The shared engine is ref-counted natively (see CloneSharingEngine).
+      for (int i = 0; i < referencePool.engines.Count; i++)
+      {
+        engines.Add(TensorRTEngine.CloneSharingEngine(referencePool.engines[i], deviceId));
+        ranges.Add(referencePool.ranges[i]);
+      }
+    }
+    else if (mode == EnginePoolMode.Range)
     {
       // sizes defines range boundaries: [1..sizes[0]], [sizes[0]+1..sizes[1]], etc.
       // e.g., sizes = {15, 127, 1024} means [1..15], [16..127], [128..1024]

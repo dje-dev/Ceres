@@ -52,6 +52,10 @@ public sealed class MultiGPUEnginePool : IDisposable
   private readonly bool useByteInputs;
   private bool disposed;
 
+  // True when this pool's engines are cloned from (and share the ICudaEngine of) a reference
+  // pool. In that case batch-size optimization is skipped (sizes are fixed by the shared engine).
+  private readonly bool isSharedPool;
+
   // Fields needed for rebuilding pools with optimized sizes
   private readonly string onnxPath;
   private readonly TensorRTBuildOptions buildOptions;
@@ -171,7 +175,8 @@ public sealed class MultiGPUEnginePool : IDisposable
   /// </summary>
   public MultiGPUEnginePool(TensorRT trt, string onnxPath, int[][] sizesPerGPU, EnginePoolMode mode,
                              TensorRTBuildOptions options, int inputElementsPerPos, int outputElementsPerPos,
-                             int[] deviceIds, int minBatchSizePerGPU, string cacheDir)
+                             int[] deviceIds, int minBatchSizePerGPU, string cacheDir,
+                             MultiGPUEnginePool referencePool = null)
   {
     this.trt = trt;
     this.onnxPath = onnxPath;
@@ -181,6 +186,18 @@ public sealed class MultiGPUEnginePool : IDisposable
     this.minBatchSizePerGPU = minBatchSizePerGPU;
     this.mode = mode;
     this.sizesPerGPU = sizesPerGPU;
+    isSharedPool = referencePool != null;
+
+    if (isSharedPool)
+    {
+      // Mirror the reference pool's FINAL per-GPU sizes (which reflect any batch-size optimization
+      // it performed) so this pool's scheduler/cost tables line up with the cloned engines.
+      this.sizesPerGPU = new int[referencePool.sizesPerGPU.Length][];
+      for (int i = 0; i < referencePool.sizesPerGPU.Length; i++)
+      {
+        this.sizesPerGPU[i] = (int[])referencePool.sizesPerGPU[i].Clone();
+      }
+    }
 
     // Load engines in parallel across GPUs when enabled, multi-GPU, and all device IDs are unique
     // (duplicate device IDs can occur for testing purposes and require sequential loading)
@@ -189,7 +206,19 @@ public sealed class MultiGPUEnginePool : IDisposable
                        && deviceIds.Length > 1
                        && !hasDuplicateDevices;
 
-    if (useParallel)
+    if (isSharedPool)
+    {
+      // Engine-sharing path: clone each GPU's pool from the corresponding reference pool. No
+      // deserialization or weight allocation — only new contexts/streams/buffers are created.
+      for (int i = 0; i < deviceIds.Length; i++)
+      {
+        EnginePool pool = new EnginePool(trt, onnxPath, (int[])this.sizesPerGPU[i].Clone(), mode, options,
+                                          inputElementsPerPos, outputElementsPerPos, deviceIds[i], cacheDir,
+                                          referencePool: referencePool.pools[i]);
+        pools.Add(pool);
+      }
+    }
+    else if (useParallel)
     {
       // Pre-allocate array for thread-safe parallel assignment
       EnginePool[] poolsArray = new EnginePool[deviceIds.Length];
@@ -569,8 +598,10 @@ public sealed class MultiGPUEnginePool : IDisposable
       pools[g].ExecutionTimes = executionTimesPerGPU[g];
     }
 
-    // Run batch size optimization if enabled
-    if (APPLY_BATCH_SIZE_OPTIMIZATION && mode == EnginePoolMode.Exact)
+    // Run batch size optimization if enabled. Skipped for shared pools: their engine sizes are
+    // fixed by the reference's already-built engines, and rebuilding would deserialize fresh
+    // engines and defeat the sharing.
+    if (APPLY_BATCH_SIZE_OPTIMIZATION && mode == EnginePoolMode.Exact && !isSharedPool)
     {
       int maxBatchSize = sizesPerGPU[0][^1] * numGPUs;
       BatchSizeOptimizer.OptimizationResult result = BatchSizeOptimizer.Optimize(sizesPerGPU[0], executionTimesPerGPU, numGPUs, 1024);

@@ -66,6 +66,14 @@ public class NNEvaluatorTensorRT : NNEvaluator
   /// </summary>
   public const bool PARALLEL_ENGINE_LOAD_ENABLED = false; // Needs more testing
 
+  /// <summary>
+  /// If true, a second (overlap) evaluator built with a compatible reference evaluator shares the
+  /// reference's already-deserialized ICudaEngine (weights) instead of deserializing/allocating
+  /// them again — cutting the overlap evaluator's startup cost and halving network weight VRAM.
+  /// Set false to revert to fully independent engines per evaluator.
+  /// </summary>
+  public const bool SHARE_REFERENCE_ENGINE_ENABLED = true;
+
 
   /// <summary>
   /// Path to the ONNX model file.
@@ -255,7 +263,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
                              int optimizationLevel = 3,
                              bool forceBF16 = false,
                              bool refittable = false,
-                             int fp32AllNormsOverride = -1)
+                             int fp32AllNormsOverride = -1,
+                             NNEvaluatorTensorRT referenceEvaluator = null)
   {
     if (!File.Exists(onnxFileName))
     {
@@ -350,7 +359,27 @@ public class NNEvaluatorTensorRT : NNEvaluator
     Console.WriteLine($"  Build options: FP16={options.UseFP16}, BF16={options.UseBF16}, FP32PostAttentionNorm={options.FP32PostAttentionNorm}, FP32Softmax={options.FP32Softmax}, FP32AllNorms={options.FP32AllNorms}, UseCUDAGraphs={options.UseCudaGraphs}");
 
     const int MIN_BATCH_SIZE_PER_GPU = 6;
-    pool = new MultiGPUEnginePool(trt, onnxFileName, effectiveSizesPerGPU, poolMode, options, 0, 0, GpuIDs, MIN_BATCH_SIZE_PER_GPU, cacheDir);
+
+    // If a compatible reference evaluator was supplied, share its already-deserialized engine(s)
+    // rather than deserializing/allocating the network weights again. Requires identical engine
+    // identity (same ONNX, GPUs, pool mode, batch sizes) and a non-refittable engine (refit would
+    // mutate the shared weights). Falls back to an independent build otherwise.
+    MultiGPUEnginePool referencePool = null;
+    if (SHARE_REFERENCE_ENGINE_ENABLED && referenceEvaluator != null && !refittable)
+    {
+      if (CanShareEngineWith(referenceEvaluator, onnxFileName, poolMode, batchSizes, GpuIDs))
+      {
+        referencePool = referenceEvaluator.pool;
+        Console.WriteLine("  Sharing engine weights from reference evaluator (no re-deserialize).");
+      }
+      else
+      {
+        Console.WriteLine("  NOTE: reference evaluator engine identity differs; building independent engine (no sharing).");
+      }
+    }
+
+    pool = new MultiGPUEnginePool(trt, onnxFileName, effectiveSizesPerGPU, poolMode, options, 0, 0, GpuIDs,
+                                  MIN_BATCH_SIZE_PER_GPU, cacheDir, referencePool: referencePool);
 
     // Query actual max batch size from pool AFTER construction (may differ if optimization rebuilt engines)
     largestEngineBatchSize = pool.MaxEngineBatchSize;
@@ -2385,11 +2414,29 @@ public class NNEvaluatorTensorRT : NNEvaluator
   }
 
 
+  /// <summary>
+  /// Returns whether a reference evaluator's already-built engine(s) are identical to what this
+  /// evaluator would build (same ONNX, GPUs, pool mode, and batch sizes) and can therefore be
+  /// safely shared. Build options are a deterministic function of the same definition, so engine
+  /// identity reduces to these cache-key inputs.
+  /// </summary>
+  static bool CanShareEngineWith(NNEvaluatorTensorRT reference, string onnxFileName,
+                                 EnginePoolMode poolMode, int[] batchSizes, int[] gpuIDs)
+  {
+    return reference?.pool != null
+        && string.Equals(reference.ONNXFileName, onnxFileName, StringComparison.Ordinal)
+        && reference.PoolMode == poolMode
+        && reference.GpuIDs.AsSpan().SequenceEqual(gpuIDs)
+        && reference.BatchSizes.AsSpan().SequenceEqual(batchSizes);
+  }
+
+
   public static NNEvaluatorTensorRT BuildEvaluator(NNEvaluatorNetDef netDef,
                                                      int[] gpuIDs,
                                                      NNEvaluatorOptions options,
                                                      ONNXNetExecutor.NetTypeEnum netType = ONNXNetExecutor.NetTypeEnum.TPG,
-                                                     string overrideFileName = null)
+                                                     string overrideFileName = null,
+                                                     NNEvaluator referenceEvaluator = null)
   {
     // Determine network file path
     string netFileName = overrideFileName ?? netDef.NetworkID;
@@ -2445,7 +2492,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                               optimizationLevel: options.OptimizationLevel,
                                               forceBF16: forceBF16,
                                               refittable: refittable,
-                                              fp32AllNormsOverride: fp32AllNorms);
+                                              fp32AllNormsOverride: fp32AllNorms,
+                                              referenceEvaluator: referenceEvaluator as NNEvaluatorTensorRT);
     trtNativeEngine.Options = options;
 
     EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework

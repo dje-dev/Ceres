@@ -164,6 +164,8 @@ namespace
     SharedEngine* sharedOwner = nullptr;  // Non-null when sharing engine via multi-profile
     int32_t batchSize = 0;
     int32_t deviceId = 0;  // GPU device ID
+    int32_t profileIndex = 0;  // Optimization profile this context is bound to (0 if single-profile)
+    bool useSpinWait = false;  // Retained so a shared-engine clone can reproduce this context's options
 
     std::vector<std::string> inputNames;
     std::vector<std::string> outputNames;
@@ -1283,6 +1285,8 @@ extern "C"
     ec->batchSize = batchSize;
     ec->deviceId = deviceId;
     ec->useCudaGraphs = useCudaGraphs;
+    ec->profileIndex = 0;
+    ec->useSpinWait = useSpinWait;
 
     cudaStreamCreate(&ec->streams[0]);
     cudaStreamCreate(&ec->streams[1]);
@@ -2868,6 +2872,8 @@ extern "C"
     ec->batchSize = batchSize;
     ec->deviceId = deviceId;
     ec->useCudaGraphs = useCudaGraphs;
+    ec->profileIndex = profileIndex;
+    ec->useSpinWait = useSpinWait;
 
     // Create streams first (needed for setOptimizationProfileAsync)
     for (int i = 0; i < 3; ++i)
@@ -2875,11 +2881,18 @@ extern "C"
       cudaError_t serr = cudaStreamCreate(&ec->streams[i]);
       if (serr != cudaSuccess)
       {
-        // Clean up already-created streams
+        // Clean up already-created streams, then the partial context. Detach the (shared) engine
+        // and owner first so ~EngineContext neither double-frees `context` nor touches the
+        // engine/refcount on this failure path (the caller owns refcount rollback).
         for (int j = 0; j < i; ++j)
         {
           cudaStreamDestroy(ec->streams[j]);
+          ec->streams[j] = nullptr;
         }
+        ec->stream = nullptr;
+        ec->context = nullptr;
+        ec->sharedOwner = nullptr;
+        ec->engine = nullptr;
         delete context;
         delete ec;
         return nullptr;
@@ -2892,6 +2905,10 @@ extern "C"
     {
       if (!context->setOptimizationProfileAsync(profileIndex, ec->stream))
       {
+        // Detach engine/owner so ~EngineContext does not touch the engine/refcount here
+        // (caller owns refcount rollback); the streams and context are real and freed by the dtor.
+        ec->sharedOwner = nullptr;
+        ec->engine = nullptr;
         delete ec;
         return nullptr;
       }
@@ -3351,6 +3368,86 @@ extern "C"
       }
       outHandles[p] = ec;
     }
+    return 0;
+  }
+
+
+  // Create a new EngineContext that SHARES the already-deserialized ICudaEngine owned by an
+  // existing context (referenceHandle), rather than deserializing/allocating the weights again.
+  // The clone gets its OWN IExecutionContext, streams, and GPU buffers (so it can run concurrently
+  // with the reference), but points at the same engine via the same ref-counted SharedEngine.
+  // Used so a second (overlap) evaluator can reuse the primary evaluator's engine weights.
+  // Returns 0 on success and writes the new handle to *outHandle; negative on error.
+  TRT_API int32_t TRT_CloneContextSharingEngine(TRT_EngineHandle referenceHandle,
+    int32_t deviceId, TRT_EngineHandle* outHandle)
+  {
+    std::lock_guard<std::mutex> lock(g_mutex);
+
+    if (!g_initialized)
+    {
+      SetError("TensorRT not initialized");
+      return -1;
+    }
+    if (!referenceHandle || !outHandle)
+    {
+      SetError("Invalid arguments for clone-context");
+      return -2;
+    }
+
+    auto* ref = static_cast<EngineContext*>(referenceHandle);
+    if (!ref->engine)
+    {
+      SetError("Reference handle has no engine to share");
+      return -3;
+    }
+
+    if (deviceId < 0)
+    {
+      deviceId = ref->deviceId;
+    }
+
+    // Reuse the reference's shared owner so the reference and all clones share one refcount.
+    // If the reference is a sole-owner (single-profile) context, promote it to ref-counted
+    // ownership first: count = 1 (the existing reference) + 1 (this clone, added below).
+    SharedEngine* shared = ref->sharedOwner;
+    bool promoted = false;
+    if (!shared)
+    {
+      shared = new SharedEngine(ref->engine, 1);
+      ref->sharedOwner = shared;
+      promoted = true;
+    }
+
+    // Reserve the clone's reference before creating it. InitializeEngineContextForProfile is
+    // refcount-neutral on failure, so on error we simply undo this reservation.
+    shared->refCount.fetch_add(1);
+
+    EngineContext* ec = InitializeEngineContextForProfile(ref->engine, shared,
+      ref->profileIndex, ref->batchSize, ref->useCudaGraphs, ref->useSpinWait, deviceId);
+    if (!ec)
+    {
+      shared->refCount.fetch_sub(1);
+      if (promoted)
+      {
+        // Revert the reference to sole-owner; do NOT delete the engine (reference still owns it).
+        ref->sharedOwner = nullptr;
+        delete shared;
+      }
+      SetError("Failed to initialize cloned execution context");
+      return -4;
+    }
+
+    *outHandle = ec;
+    g_lastError.clear();
+
+#if NOT
+    char msg[256];
+    snprintf(msg, sizeof(msg),
+      "[TensorRT] Sharing engine (cloned context, batch=%d, profile=%d) - no deserialize",
+      ref->batchSize, ref->profileIndex);
+    PrintGreen(msg);
+
+#endif
     return 0;
   }
 
