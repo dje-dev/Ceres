@@ -730,10 +730,10 @@ public record ParamsSelect
   [CeresOption(Name = "power-mean-n-exponent", Desc = "Exponent applied against N for node to determine coefficient used in power mean calculation of Q for child selection", Default = "0")]
   public float PowerMeanNExponent = 0f;
 
-  [CeresOption(Name = "fpu-type", Desc = "Type of first play urgency (non-root nodes)", Default = "Reduction")]
-  public FPUType FPUMode = FPUType.Reduction;
+  [CeresOption(Name = "fpu-type", Desc = "Type of first play urgency (non-root nodes)", Default = "PolicyImputedRPO")]
+  public FPUType FPUMode = FPUType.PolicyImputedRPO;
 
-  [CeresOption(Name = "fpu-type", Desc = "Type of first play urgency (root nodes)", Default = "Same")]
+  [CeresOption(Name = "fpu-type-at-root", Desc = "Type of first play urgency (root nodes)", Default = "Same")]
   public FPUType FPUModeAtRoot = FPUType.Same;
 
   [CeresOption(Name = "fpu-value", Desc = "FPU constant used at root node", Default = "0.44")]
