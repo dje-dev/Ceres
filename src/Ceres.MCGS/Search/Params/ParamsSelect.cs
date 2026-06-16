@@ -733,8 +733,8 @@ public record ParamsSelect
   [CeresOption(Name = "fpu-type", Desc = "Type of first play urgency (non-root nodes)", Default = "PolicyImputedRPO")]
   public FPUType FPUMode = FPUType.PolicyImputedRPO;
 
-  [CeresOption(Name = "fpu-type-at-root", Desc = "Type of first play urgency (root nodes)", Default = "Same")]
-  public FPUType FPUModeAtRoot = FPUType.Same;
+  [CeresOption(Name = "fpu-type-at-root", Desc = "Type of first play urgency (root nodes)", Default = "PolicyImputedRPO")]
+  public FPUType FPUModeAtRoot = FPUType.PolicyImputedRPO;
 
   [CeresOption(Name = "fpu-value", Desc = "FPU constant used at root node", Default = "0.44")]
   public float FPUValue = USE_ZZTUNE ? 0.33f : 0.98416f;
