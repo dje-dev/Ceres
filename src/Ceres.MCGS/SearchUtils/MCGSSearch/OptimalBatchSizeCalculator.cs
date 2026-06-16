@@ -49,15 +49,14 @@ public static class OptimalBatchSizeCalculator
   /// <param name="estimatedTotalSearchNodes"></param>
   /// <param name="currentGraphSize"></param>
   /// <param name="overlapInUse"></param>
-  /// <param name="dualSelectorsInUse"></param>
   /// <param name="maxBatchSize"></param>
   /// <param name="batchSizeMultiplier"></param>
-  /// <param name="paramsSearch"></param>
+  /// <param name="enableEarlySmallBatchSizes"></param>
   /// <returns></returns>
   public static int CalcOptimalBatchSize(int estimatedTotalSearchNodes, int currentGraphSize,
-                                           bool overlapInUse,
-                                           int maxBatchSize, float batchSizeMultiplier,
-                                           bool enableEarlySmallBatchSizes)
+                                         bool overlapInUse,
+                                         int maxBatchSize, float batchSizeMultiplier,
+                                         bool enableEarlySmallBatchSizes)
   {
     if (OverrideBatchSizeFunc is not null)
     {
@@ -101,7 +100,9 @@ public static class OptimalBatchSizeCalculator
 
     // Never allow batch size to be more than 10% of current number of nodes (or 20% for smaller trees)
     float MAX_FRACTION = currentGraphSize < 100 ? 0.2f : 0.1f; // was 0.10
-    value = (int)(batchSizeMultiplier * Math.Min(value, (int)(MAX_FRACTION * currentGraphSize)));
+
+    const float EXTRA_MULTPLIER = 1.2f; // made slightly more aggressive June 2026
+    value = (int)(batchSizeMultiplier * Math.Min(EXTRA_MULTPLIER * value, (int)(MAX_FRACTION * currentGraphSize)));
 
     return Math.Clamp(value, 1, maxBatchSize);    
   }

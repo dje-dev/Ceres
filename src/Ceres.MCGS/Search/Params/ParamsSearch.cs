@@ -275,8 +275,9 @@ public record ParamsSearch
   /// <summary>
   /// Threshold after which suboptimal visit choices (according to PUCT)
   /// are rejected as being too suboptimal.
+  /// Enabling allows somewhat more aggressive default batch sizing without quality loss.
   /// </summary>
-  public float? VisitSuboptimalityRejectThreshold = null;
+  public float? VisitSuboptimalityRejectThreshold = 0.10f;
 
   public enum MoveOrderingPhaseEnum
   {
