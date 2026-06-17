@@ -92,11 +92,14 @@ public record ParamsSelect
   public const float MinPolicyProbability = 0.004f;
 
   /// <summary>
-  /// Regularization coefficient on Boltzmann calibration of policy-based imputation values.
-  /// Higher values make the imputed Q values more closely track the policy (thus more exploration).
-  /// Maps to lambda in RegularizedPolicyOptimum.Solve when FPUMode is PolicyImputed or PolicyImputedRPO.
+  /// Temperature (lambda) of the policy->Q imputation in RegularizedPolicyOptimum.Solve
+  /// (fills Q for unvisited children = FPU, and the CB-GPUCT backup shrinkage prior).
+  /// Default forward-KL form:  q(a) = anchorQ + tau*(log mu_a - E_mu[log mu]).  Higher tau
+  /// spreads imputed Q further by policy (top-policy moves look better, tail moves worse),
+  /// sharpening the search toward the policy rather than broadening it; tau -> 0 gives a
+  /// flat FPU equal to anchorQ (parent Q).  Used when FPUMode is PolicyImputed or PolicyImputedRPO.
   /// </summary>
-  public float PolicyImputationTau = 0.10f;
+  public float PolicyImputationTau = 0.15f; // values less than 0.15 test as significantly inferior
 
 
   /// <summary>
