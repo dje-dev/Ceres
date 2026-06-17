@@ -89,7 +89,7 @@ public record ParamsSelect
   /// <summary>
   /// Minimum policy value for moves (as a fraction) which forces policy probabilities to be at least this level.
   /// </summary>
-  public const float MinPolicyProbability = 0.005f;
+  public const float MinPolicyProbability = 0.004f;
 
   /// <summary>
   /// Regularization coefficient on Boltzmann calibration of policy-based imputation values.
