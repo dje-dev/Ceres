@@ -104,7 +104,13 @@ public static class MCGSParamsFixed
   public const bool USE_PSEUDOTRANSPOSITION_MAX_N_NODE_ONLY = false;
 
   public const float SIBLING_POWER_SHRINK_SIBLING_N = 1;
-  public const float SIBLING_WT_MAX_FRACTION = 0.65f;
+
+  /// <summary>
+  ///  The fraction of weight used for sibling values when in 
+  ///  PositionAndHistory mode.
+  ///  Suite tests suggested values less than 0.65 are better, for example 0.4 or 0.5.
+  /// </summary>
+  public const float SIBLING_WT_MAX_FRACTION = 0.50f;
 
   public const float MOVE_ORDERING_MIN_RATIO_POLICY = 0.15f;
 
