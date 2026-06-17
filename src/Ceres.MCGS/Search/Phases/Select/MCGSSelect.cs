@@ -424,7 +424,6 @@ public class MCGSSelect
         }
         else
         {
-          // Tests confirm this reset very beneficial.
           parentNode.ResetQUsingSumWChildrenAndSelf(childStats.SumW, refreshSibling);
         }
       }

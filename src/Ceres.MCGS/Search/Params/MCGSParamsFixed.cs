@@ -79,6 +79,7 @@ public static class MCGSParamsFixed
   /// are used to compute and apply an updated Q value to the parent node.
   /// This propagates Q updates to other children (off the current visit path)
   /// that may have happened since the parent node was last visited.
+  /// Tests confirm this reset very beneficial. 
   /// </summary>
   public const bool RESET_Q_DURING_SELECT_PHASE_FROM_ALL_CHILDREN = true;
 
