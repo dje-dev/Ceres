@@ -39,6 +39,7 @@ using System.Linq;
 using Ceres.MCGS.GameEngines;
 using Ceres.MCGS.Search.Params;
 using Ceres.Chess.SearchResultVerboseMoveInfo;
+using Ceres.Chess.NNEvaluators.Defs;
 
 #endregion
 
@@ -548,7 +549,7 @@ namespace Ceres.Features.Suites
           GameEngineDefLC0 lc0EngineDef = Def.ExternalEngineDef.EngineDef as GameEngineDefLC0;
           bool forceDisableSmartPruning = lc0EngineDef.ForceDisableSmartPruning;
           const bool FILL_HISTORY = true;
-          Chess.NNEvaluators.Defs.NNEvaluatorDef engine1EvalDef = Def.Engine1Def.GetEvaluatorDef();
+          NNEvaluatorDef engine1EvalDef = lc0EngineDef.EvaluatorDef;
           makeExternalEngine = (int processorGroupID) =>
           {
             LC0Engine engine = LC0EngineConfigured.GetLC0Engine(null, null, engine1EvalDef,
