@@ -11,7 +11,10 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <DefineConstants>$(DefineConstants);ACTION_ENABLED</DefineConstants>
+    <!-- Toggle action-head support. Set to true to enable, false to disable.
+         Override per build with: dotnet build -p:ActionEnabled=true -->
+    <ActionEnabled Condition="'$(ActionEnabled)' == ''">false</ActionEnabled>
+    <DefineConstants Condition="'$(ActionEnabled)' == 'true'">$(DefineConstants);ACTION_ENABLED</DefineConstants>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">

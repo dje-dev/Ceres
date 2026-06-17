@@ -145,6 +145,7 @@ public static class MCGSPosGraphNodeDumper
     // Action V: read from the edge header (action data lives there, not on the edge struct).
     // Blank if NN evaluator doesn't expose action head, no parent edge, or value is NaN.
     float actionVDisplay = float.NaN;
+#if ACTION_ENABLED
     if (manager.NNEvaluator0.HasAction && hasParent && indexInParent >= 0)
     {
       Span<GEdgeHeaderStruct> headers = parentNode.EdgeHeadersSpan;
@@ -157,6 +158,7 @@ public static class MCGSPosGraphNodeDumper
         }
       }
     }
+#endif
 
     // SAN of the move leading into this node (blank for root).
     string san = node.IsSearchRoot || !hasParent || edge.IsNull

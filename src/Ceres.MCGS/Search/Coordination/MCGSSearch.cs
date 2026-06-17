@@ -356,6 +356,16 @@ As a workaround, EvaluatorSygyzy will just return as if no hit.
 
       bool hasAction = Manager.NNEvaluator0.HasAction;
 
+#if !ACTION_ENABLED
+      // Without ACTION_ENABLED the per-child action buffer is never populated, so ActionHead FPU
+      // would silently collapse to a flat constant. Fail loudly instead. Enable with -p:ActionEnabled=true.
+      if (Manager.ParamsSelect.FPUMode == ParamsSelect.FPUType.ActionHead
+       || Manager.ParamsSelect.FPUModeAtRoot == ParamsSelect.FPUType.ActionHead)
+      {
+        throw new Exception("FPUType.ActionHead (e.g. via UCI EnableActionHead) requires a build with ACTION_ENABLED (-p:ActionEnabled=true).");
+      }
+#endif
+
       if ((Manager.ParamsSelect.FPUMode == ParamsSelect.FPUType.ActionHead
         || Manager.ParamsSelect.FPUModeAtRoot == ParamsSelect.FPUType.ActionHead)
        && !hasAction)
