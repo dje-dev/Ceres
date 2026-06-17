@@ -239,6 +239,23 @@ namespace Ceres.Chess
 
 
     /// <summary>
+    /// Returns a new SearchLimit with the duration added to by a specified factor.
+    /// </summary>
+    /// <param name="left"></param>
+    /// <param name="addend"></param>
+    /// <returns></returns>
+    public static SearchLimit operator +(SearchLimit left, float addend)
+    {
+
+      return left with
+      {
+        Value = left.Value + addend,
+        ValueIncrement = left.ValueIncrement + (left.ValueIncrement/left.Value) * addend
+      };
+    }
+
+
+    /// <summary>
     /// Returns the maximum number of nodes possible for this search
     /// if this can be determined, otherwise null.
     /// </summary>
