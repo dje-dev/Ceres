@@ -64,7 +64,7 @@ public partial class MCGSBackup
   private readonly bool trackLeafValueVolatility;
 
 
-  const int MAX_BACKUP_THREADS = 24;
+  const int MAX_BACKUP_THREADS = 20;
 
   /// <summary>
   /// Constructor.
