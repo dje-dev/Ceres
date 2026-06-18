@@ -171,7 +171,9 @@ public static class VerboseMoveStatsFromMCGSNode
     stat.VisitCount = n;
     stat.P = isSearchRoot ? 100 : edge.P * 100.0f;
 
-    stat.D = node.NodeRef.DrawP;
+    // Searched aggregate draw probability (fresh from children; falls back to raw NN DrawP for
+    // unsearched nodes), consistent with the searched Q/WL reported in this same row.
+    stat.D = (float)node.ComputeDForDisplay();
     stat.WL = (node.IsSearchRoot && node.N == 0) ? node.V : (float)node.Q * multiplier;
     stat.Q = new EncodedEvalLogistic((float)node.Q * multiplier);
     stat.M = node.NodeRef.M;

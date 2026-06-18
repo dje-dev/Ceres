@@ -475,7 +475,9 @@ public class AnalysisGraphGenerator
     sb.AppendLine($"tooltip=\"{tooltip}]\"");
     float scoreCP = EncodedEvalLogistic.LogisticToCentipawn((float)node.Q);
     float posEvalCP = EncodedEvalLogistic.LogisticToCentipawn((float)node.V);
-    string wdlStr = $"{100 * node.W:F0}/{100 * node.D:F0}/{100 * node.L:F0})";
+    // D fresh from children (exact one level down), W/L derived from the correct Q.
+    double dDisp = node.ComputeDForDisplay();
+    string wdlStr = $"{100 * (node.Q + 1 - dDisp) / 2.0:F0}/{100 * dDisp:F0}/{100 * (1 - dDisp - node.Q) / 2.0:F0})";
 
     sb.Append($" fontsize=\"18\"");
 

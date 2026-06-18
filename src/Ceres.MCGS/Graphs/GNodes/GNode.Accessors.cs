@@ -342,6 +342,17 @@ public readonly partial struct GNode : IComparable<GNode>, IEquatable<GNode>
   }
 
   /// <summary>
+  /// Draw probability to use for display (UCI WDL, dumps, SVG).
+  ///
+  /// Returns the raw neural-network DrawP for an unsearched node (N &lt;= 1), otherwise the
+  /// exact-from-children aggregate (ComputeDFromChildren), which is correct one level down
+  /// regardless of any residual staleness in this node's stored D (e.g. from off-path
+  /// multi-parent visits). Pair with the always-correct Q to derive consistent W/L:
+  ///   W = (Q + 1 - D) / 2,  L = (1 - D - Q) / 2.
+  /// </summary>
+  public readonly double ComputeDForDisplay() => N <= 1 ? DrawP : ComputeDFromChildren();
+
+  /// <summary>
   /// Average win percentage.
   /// </summary>
   public readonly float W => (float)((Q + 1 - D) / 2.0);

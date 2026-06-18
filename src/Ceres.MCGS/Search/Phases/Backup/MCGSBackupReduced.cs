@@ -58,8 +58,10 @@ public partial class MCGSBackup
                                                              : default;
 
     // Per-visit repetition-draw fraction at the leaf, propagated into each path node's
-    // RepDrawFraction running average (mirroring D's plumbing: internal levels re-read the
-    // child node's CURRENT fraction rather than threading the leaf value).
+    // RepDrawFraction running average (additive: internal levels re-read the child node's
+    // CURRENT fraction and add it for the new visits, rather than threading the leaf value).
+    // NOTE: D used to be plumbed this same additive way; it is now delta-corrected on internal
+    //       edges (see STEP 4 below), so R no longer exactly mirrors D's update.
     //   - coalesce-mode draw by repetition: 1 (the visit itself is a repetition draw);
     //   - terminal drawn edge carrying the NDrawByRepetition kind sentinel
     //     (repetition/50-move draw): 1; history-free drawn terminals: 0;
@@ -85,6 +87,14 @@ public partial class MCGSBackup
     }
 
     bool haveProcessedLeaf = false;
+
+    // D of the node updated in the PREVIOUS loop iteration, captured BEFORE its update.
+    // Because the loop walks leaf->root, that node is the CHILD of the edge processed in the
+    // next iteration, so this value is the child's pre-update ("last pushed") D. It plays the
+    // role that the stored edge.QChild cache plays for Q's delta-correcting backup, but is
+    // reconstructed from the walk order instead of being stored on the edge (so no growth of
+    // the graph data structures). NaN until the first node is updated.
+    double childDBeforeBackup = double.NaN;
 
     // Leaf-value volatility tracking: thread the first two moments (sum and sum-of-squares) of the
     // leaf value backed up along this path up through the SAME accumulator rails that carry the
@@ -156,6 +166,11 @@ public partial class MCGSBackup
           double newEdgeW = visitEdge.N == 0 ? 0 : visitEdge.N * visitEdge.Q;
           double parentPerspectiveDeltaW = priorEdgeW - newEdgeW;
 
+          // Snapshot this node's D before it is updated below. The next (parent) iteration reads
+          // it as the pre-update child D for its delta-correcting D backup (this node is the
+          // child of the edge processed next). Captured before ANY mutation of parentNode.
+          double parentDBeforeUpdate = parentNode.D;
+
           if (!haveProcessedLeaf && visitEdge.N > 0 && visitEdge.Q <= -1)
           {
             if (!parentNode.CheckmateKnownToExistAmongChildren) // only do first time
@@ -166,25 +181,38 @@ public partial class MCGSBackup
           }
           else
           {
-            // Compute deltaD (and the analogous repetition-draw fraction deltaR)
-            // for the parent node backup. For the leaf edge these come from the
-            // initial backup value; for internal edges they are re-read from the
-            // child node's current values.
-            double childD;
+            // Compute the parent-node deltas for this edge's contribution. The repetition-draw
+            // fraction (deltaR) and the leaf edge keep the additive running-average plumbing; the
+            // D update for internal edges is delta-correcting (see below).
+            double newParentDeltaD;
             double childR;
             if (haveProcessedLeaf)
             {
               GNode childNode = visitEdge.ChildNode;
-              childD = childNode.D;
+              double childD = childNode.D;
               childR = childNode.RepDrawFraction;
+
+              // Delta-correcting D backup, mirroring the priorEdgeW/newEdgeW telescoping used for
+              // Q: re-credit ALL of this edge's visits at the child's CURRENT D (not just the new
+              // ones), so drift in the child's D since prior visits is healed. The child's
+              // pre-update D (childDBeforeBackup) stands in for the not-stored edge.QChild analog.
+              // The edge's draw-by-repetition mass is constant for a ChildEdge during backup and
+              // contributes +rep to both the old and new contribution, so it cancels in the delta.
+              //   contrib = (edge.N - edge.NDrawByRepetition) * child.D   (+ rep, cancels)
+              // Exact for tree structure; shared (multi-parent) edges are corrected only while
+              // on-path -- a bounded approximation (off-path parents are not updated here).
+              int edgeRep = visitEdge.NDrawByRepetition;
+              double childDOld = double.IsNaN(childDBeforeBackup) ? childD : childDBeforeBackup;
+              newParentDeltaD = ((visitEdge.N - edgeRep) * childD) - ((visitEdgeN - edgeRep) * childDOld);
             }
             else
             {
-              childD = initialBackupValue.D;
+              // Leaf edge: first push of this leaf's value (or a true childless leaf whose D is
+              // constant), so the additive form is already exact.
+              newParentDeltaD = initialBackupValue.D * numVisitsAccepted;
               childR = leafR;
             }
 
-            double newParentDeltaD = childD * numVisitsAccepted;
             double newParentDeltaR = childR * numVisitsAccepted;
 
             // Fold the batch of leaf values backed up through this node into its volatility
@@ -198,6 +226,10 @@ public partial class MCGSBackup
 
             strategy.BackupToNode(parentNode, numVisitsAccepted, parentPerspectiveDeltaW, newParentDeltaD, newParentDeltaR);
           }
+
+          // Carry this node's pre-update D to the next (parent) iteration, where this node is the
+          // child of the edge being backed up (set in both branches above, including proven-loss).
+          childDBeforeBackup = parentDBeforeUpdate;
         }
 
         // Ascend one ply: flip the leaf-sum sign so sV stays in the next edge's child perspective.

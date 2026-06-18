@@ -193,7 +193,11 @@ public static class MCGSPosGraphNodeDumper
     DumpWithColor((float)q, $"{q,W_Q:F3} ", -0.2f, 0.2f, writer);
 
     writer.Write($"{node.WinP,5:F2}/{node.DrawP,5:F2}/{node.LossP,5:F2} ");      // W_WDL = 17
-    writer.Write($"{node.W,5:F2}/{node.D,5:F2}/{node.L,5:F2} ");
+    // Tree W/D/L: D taken fresh from children (ComputeDForDisplay), W/L derived from the
+    // always-correct Q so the trio is internally consistent (sums to 1) and free of any
+    // running-average D staleness at this node.
+    double dDisp = node.ComputeDForDisplay();
+    writer.Write($"{(node.Q + 1 - dDisp) / 2.0,5:F2}/{dDisp,5:F2}/{(1 - dDisp - node.Q) / 2.0,5:F2} ");
 
     writer.Write($"{100 * node.UncertaintyValue,W_UNC:F0} ");
     writer.Write($"{100 * node.UncertaintyPolicy,W_UNC:F0} ");

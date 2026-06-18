@@ -161,14 +161,20 @@ public static class UCIInfoMCGS
     string strWDL = "";
     if (showWDL)
     {
-      // Note that win and loss inverted to reverse perspective.
-      // (except if only one node evaluated so we only have the root and not actual moves).
-      bool isRoot = bestMoveInfo.BestMoveEdge.IsNull;
-      // For root: use ComputeDFromChildren() for fresh D from immediate children.
-      // For non-root: use backed-up node.D (running average).
-      double displayD = isRoot ? bestMoveEdge.ParentNode.DrawP : bestMoveEdge.ParentNode.ComputeDFromChildren();
-      double displayW = isRoot ? bestMoveEdge.ParentNode.WinP : (bestMoveEdge.ParentNode.Q + 1 - displayD) / 2.0;
-      double displayL = isRoot ? bestMoveEdge.ParentNode.LossP : (1 - displayD - bestMoveEdge.ParentNode.Q) / 2.0;
+      // WDL is reported for the search root (bestMoveEdge.ParentNode), matching the score cp
+      // (which is the root-to-move value). D is taken fresh from the root's children via
+      // ComputeDForDisplay() (exact one level down, immune to running-average staleness) and
+      // W/L are derived from the always-correct root Q so that W + D + L == 1.
+      // The degenerate "no best move yet" case (only the root evaluated, no searched moves)
+      // falls back to the root's own raw NN WinP/DrawP/LossP.
+      bool noSearchedMove = bestMoveInfo.BestMoveEdge.IsNull;
+      double displayD = noSearchedMove ? bestMoveEdge.ParentNode.DrawP : bestMoveEdge.ParentNode.ComputeDForDisplay();
+      double displayW = noSearchedMove ? bestMoveEdge.ParentNode.WinP : (bestMoveEdge.ParentNode.Q + 1 - displayD) / 2.0;
+      double displayL = noSearchedMove ? bestMoveEdge.ParentNode.LossP : (1 - displayD - bestMoveEdge.ParentNode.Q) / 2.0;
+      // Clamp to [0,1] for the GUI: a proven win/loss can push Q slightly past +/-1, which would
+      // otherwise emit a malformed wdl (e.g. "1005 0 -5"). D is already in range.
+      displayW = Math.Clamp(displayW, 0.0, 1.0);
+      displayL = Math.Clamp(displayL, 0.0, 1.0);
       strWDL = $" wdl {Math.Round(displayW * 1000)} "
              + $"{Math.Round(displayD * 1000)} "
              + $"{Math.Round(displayL * 1000)}";
