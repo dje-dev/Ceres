@@ -2474,10 +2474,10 @@ public class NNEvaluatorTensorRT : NNEvaluator
     // Smaller batch sizes are used with multiple GPUs because each GPU processes a smaller sub-batch
     int[] batchSizes = gpuIDs.Length switch
     {
-      1           => [1, 16, 48, 72, 96, 120, 152, 184],
-      2           => [1, 16, 40, 64, 80, 104, 128, 152],
-      3 or 4 or 5 => [1, 16, 32, 48, 60, 72, 88, 104],
-      _           => [1, 16, 24, 32, 40, 48, 60, 72],
+      1           => [8, 32, 64, 96, 132, 168, 208, 224],
+      2           => [8, 24, 40, 56, 72, 88, 104, 120],
+      3 or 4 or 5 => [8, 20, 32, 48, 60, 72, 88, 104],
+      _           => [8, 16, 24, 32, 40, 48, 56, 64],
     };
 
     bool forceBF16 = options is NNEvaluatorOptionsCeres optionsCeres && optionsCeres.UseBF16;
