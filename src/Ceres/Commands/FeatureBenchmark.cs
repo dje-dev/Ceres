@@ -51,7 +51,7 @@ namespace Ceres.Commands
       string gpuCountStr = countGPU == 1 ? "" : $" ({countGPU})";
       Console.WriteLine($"CPU Score={cpuScore}, NPS={gpuSumNPS}{gpuCountStr} "
                       + $"using {CeresUserSettingsManager.Settings.DefaultNetworkSpecString} "
-                      + $"v{Ceres.Features.CeresVersion.VersionString} {GitInfo.VersionString}");
+                      + $"v{CeresVersion.VersionString} {GitInfo.VersionString}");
       Console.WriteLine();
     }
 
