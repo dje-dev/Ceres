@@ -121,6 +121,7 @@ namespace Ceres.MCTS.MTCSNodes
           MCTSFutilityPruningStatus.PrunedDueToFutility => 'F',
           MCTSFutilityPruningStatus.PrunedDueToTablebaseNotWinning => 'T',
           MCTSFutilityPruningStatus.PrunedDueToSearchMoves => 'S',
+          MCTSFutilityPruningStatus.NotPruned => ' '
         };
       }
 
