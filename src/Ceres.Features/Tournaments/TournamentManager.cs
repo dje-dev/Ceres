@@ -22,6 +22,7 @@ using System.Threading;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.UserSettings;
+using Ceres.Features.Tournaments.Streaming;
 #endregion
 
 namespace Ceres.Features.Tournaments
@@ -314,6 +315,14 @@ namespace Ceres.Features.Tournaments
       // If we are a worker process then run only a single game thread.
       int numConcurrent = queueManager != null && !queueManager.IsCoordinator ? 1 : NumConcurrent;
 
+      // Optionally start the live streaming publisher (default-on; see TournamentDef.EnableLiveStreaming),
+      // so any remote consumer (e.g. the EngineBattle GUI in REMOTE mode) can connect and watch games live.
+      if (Def.parentDef.EnableLiveStreaming && Def.parentDef.Observer == null)
+      {
+        Def.parentDef.Observer = new TournamentStreamPublisher(Def.parentDef.LiveStreamPort, numConcurrent);
+      }
+      Def.parentDef.Observer?.OnTournamentStart(DtoMappers.ToTournamentMeta(Def, numConcurrent));
+
       // First loop instantiats/warms up all the engines
       // (without concurrency due to potential CUDA synchronization conflicts).
       for (int i = 0; i < numConcurrent; i++)
@@ -363,6 +372,8 @@ namespace Ceres.Features.Tournaments
         thisTask.Start();
       }
       Task.WaitAll(tasks.ToArray());
+
+      Def.parentDef.Observer?.OnTournamentEnd();
 
       parentTest.DumpTournamentSummary(Def);
 

@@ -32,6 +32,7 @@ using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.MCTS.GameEngines;
 using Ceres.Base.Misc;
+using Ceres.Features.Tournaments.Streaming;
 
 #endregion
 
@@ -105,9 +106,17 @@ namespace Ceres.Features.Tournaments
 
     public TournamentGameRunner Run;
 
+    /// <summary>
+    /// Stable 0-based index identifying this game thread within the tournament (used to tag
+    /// live streaming events so subscribers can watch a specific concurrent game thread).
+    /// </summary>
+    public int ThreadIndex { get; private set; }
+
     public void RunGameTests(int runnerIndex, Func<int, int> getGamePairToProcess,
                              Action<TournamentGameInfo, TournamentGameInfo> doneGamePairCallback = null)
     {
+      ThreadIndex = runnerIndex;
+
       // Create a file name that will be common to all threads in tournament.
       string pgnFileName;
       if (Run.Engines.Length > 2)
@@ -437,6 +446,10 @@ namespace Ceres.Features.Tournaments
           shutDownRequested = perGameCallback(ParentStats);
         }
       }
+
+      // Notify any live-streaming observer that this game has finished (drives the per-thread
+      // end frame and the tournament-global result used for standings/crosstable).
+      Def.parentDef.Observer?.OnGameEnd(ThreadIndex, DtoMappers.ToGameEnd(thisResult));
 
       if (shutDownRequested)
       {
@@ -832,6 +845,11 @@ namespace Ceres.Features.Tournaments
         pgnWriter.WriteMove(MGMoveConverter.MGMoveFromPosAndMove(in move.Position, move.Move), in move.Position);
       }
 
+      // Notify any live-streaming observer that a new game has started on this thread.
+      Def.parentDef.Observer?.OnGameStart(ThreadIndex,
+          DtoMappers.ToGameStart(gameSequenceNum, openingIndex, engine1, engine2, engine2IsWhite,
+                                 searchLimitEngine1, searchLimitEngine2, startFEN, curPositionAndMoves, null));
+
       GameMoveConsoleInfo info = new GameMoveConsoleInfo();
 
       int plyCount = 1;
@@ -1210,6 +1228,12 @@ namespace Ceres.Features.Tournaments
           info.BlackShouldHaveForfeitedOnLimit = shouldHaveForfeited;
           info.BlackDepth = moveDepth;
         }
+
+        // Notify any live-streaming observer of this completed half-move.
+        Def.parentDef.Observer?.OnMove(ThreadIndex,
+            DtoMappers.ToMove(plyCount, isWhite, moveStr, newPosition.FinalPosition.FEN,
+                              moveScoreCentipawns, moveScoreQ, moveMAvg, moveDepth,
+                              engineMove, engineTime, thisMoveSearchLimit, newPosition.FinalPosition.PieceCount));
 
         if (showMoves)
         {

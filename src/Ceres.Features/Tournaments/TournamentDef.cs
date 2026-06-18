@@ -22,6 +22,7 @@ using Ceres.Base.Misc;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.Features.GameEngines;
+using Ceres.Features.Tournaments.Streaming;
 using Ceres.MCTS.GameEngines;
 
 #endregion
@@ -241,6 +242,28 @@ namespace Ceres.Features.Tournaments
     /// carry it (mirroring how ShouldShutDown is coordinated through parentDef).
     /// </summary>
     [NonSerialized] public Func<TournamentResultStats, bool> PerGameCallback;
+
+    /// <summary>
+    /// Optional, transport-agnostic observer that receives live tournament/game/move events.
+    /// Any consumer may attach (one example is the live streaming publisher used by the
+    /// EngineBattle GUI in REMOTE mode). Resolved via parentDef and null-checked at each call
+    /// site, exactly like PerGameCallback. When null there is zero behavioral change.
+    /// Marked NonSerialized because TournamentDef is deep-cloned per worker thread.
+    /// </summary>
+    [NonSerialized] public ITournamentObserver Observer;
+
+    /// <summary>
+    /// If true (the default), a live streaming TCP listener is started automatically when the
+    /// tournament runs, so any remote consumer can connect and watch games. Set false to
+    /// disable. NonSerialized (resolved via parentDef).
+    /// </summary>
+    [NonSerialized] public bool EnableLiveStreaming = true;
+
+    /// <summary>
+    /// TCP port on which the live streaming listener accepts subscriber connections.
+    /// NonSerialized (resolved via parentDef).
+    /// </summary>
+    [NonSerialized] public int LiveStreamPort = 7440;
 
     /// <summary>
     /// If this instance is the coordinator in a distributed tournament.
