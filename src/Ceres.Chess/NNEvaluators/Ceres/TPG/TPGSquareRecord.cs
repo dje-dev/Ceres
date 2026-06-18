@@ -286,7 +286,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
         if (emitPlySinceLastMovePerSquare)
         {
-          if (pliesSinceLastPieceMoveBySquare != null)
+          if (pliesSinceLastPieceMoveBySquare.IsEmpty)
           {
             pieceRecord.PlySinceLastMove.Value = TPGRecordEncoding.PliesSinceLastMoveEncoded(pliesSinceLastPieceMoveBySquare[squareNum]);
           }

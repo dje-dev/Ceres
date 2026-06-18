@@ -2471,7 +2471,7 @@ namespace Ceres.Chess.TBBackends.Fathom
         }
 
         scores[i] = (short)v;
-        if (results != null)
+        if (results.IsEmpty)
         {
           uint res = 0;
           if (success == 0)
@@ -2508,7 +2508,7 @@ namespace Ceres.Chess.TBBackends.Fathom
         }
       }
 
-      if (results != null)
+      if (results.IsEmpty)
       {
         results[j++] = TB_RESULT_FAILED;
       }
