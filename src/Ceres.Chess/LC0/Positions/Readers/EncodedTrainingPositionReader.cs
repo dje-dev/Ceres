@@ -115,7 +115,7 @@ namespace Ceres.Chess.EncodedPositions
 
       using (Stream stream = File.OpenRead(trainingTARFileName))
       {
-        IReader reader = TarReader.Open(stream);
+        IReader reader = TarReader.OpenReader(stream);
         while (reader.MoveToNextEntry())
         {
           if (reader.Entry.IsDirectory)
