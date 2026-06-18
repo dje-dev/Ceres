@@ -117,6 +117,21 @@ namespace Ceres.Features.Tournaments
     {
       ThreadIndex = runnerIndex;
 
+      // Verbose move-stat gathering (needed for per-move WDL and top-move/TopQ data) carries some
+      // overhead, so only enable it once a client is actually watching: register a callback that the
+      // streaming publisher invokes on the first client connection (and never, if no one connects).
+      // When streaming is disabled the Observer is null and this is a no-op (zero overhead).
+      Def.parentDef.Observer?.RegisterOnFirstClient(() =>
+      {
+        foreach (GameEngine engine in Run.Engines)
+        {
+          if (engine is GameEngineCeresInProcess ceresEngine)
+          {
+            ceresEngine.GatherVerboseMoveStats = true;
+          }
+        }
+      });
+
       // Create a file name that will be common to all threads in tournament.
       string pgnFileName;
       if (Run.Engines.Length > 2)

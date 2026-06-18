@@ -54,5 +54,13 @@ namespace Ceres.Features.Tournaments.Streaming
     /// Invoked once after all games have completed.
     /// </summary>
     void OnTournamentEnd();
+
+    /// <summary>
+    /// Registers a callback that enables any optional, higher-overhead data gathering needed only
+    /// while someone is actually watching (e.g. verbose move stats for WDL/top-move data). The
+    /// observer invokes it as soon as the first client connects, or immediately if a client is
+    /// already connected; if no client ever connects, the callback is never invoked (zero overhead).
+    /// </summary>
+    void RegisterOnFirstClient(System.Action onFirstClient);
   }
 }

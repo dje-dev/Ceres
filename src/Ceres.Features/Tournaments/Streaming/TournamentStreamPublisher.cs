@@ -52,6 +52,8 @@ namespace Ceres.Features.Tournaments.Streaming
     readonly Dictionary<int, ThreadLiveState> threads = new();
     readonly List<GameEndDTO> results = new();
     readonly Dictionary<Guid, StreamSubscriber> subscribers = new();
+    readonly List<Action> onFirstClientCallbacks = new();
+    bool anyClientConnected;
     TournamentMetaDTO meta;
     long globalSeq;
 
@@ -171,10 +173,29 @@ namespace Ceres.Features.Tournaments.Streaming
         StreamSubscriber sub = new(client, stream, scope, threadId, RemoveSubscriber);
 
         // Register and send the snapshot atomically with respect to live broadcasts.
+        Action[] firstClientCallbacks = null;
         lock (gate)
         {
           subscribers[sub.Id] = sub;
           SendSnapshotLocked(sub);
+
+          // First client to ever connect: capture any registered on-first-client callbacks to run
+          // (outside the lock). These enable optional higher-overhead gathering (e.g. verbose move
+          // stats) only once someone is actually watching.
+          if (!anyClientConnected)
+          {
+            anyClientConnected = true;
+            firstClientCallbacks = onFirstClientCallbacks.ToArray();
+            onFirstClientCallbacks.Clear();
+          }
+        }
+
+        if (firstClientCallbacks != null)
+        {
+          foreach (Action cb in firstClientCallbacks)
+          {
+            try { cb(); } catch { }
+          }
         }
       }
       catch
@@ -422,6 +443,31 @@ namespace Ceres.Features.Tournaments.Streaming
         }
       }
       catch { }
+    }
+
+
+    public void RegisterOnFirstClient(Action onFirstClient)
+    {
+      if (onFirstClient == null)
+      {
+        return;
+      }
+
+      bool runNow;
+      lock (gate)
+      {
+        // If a client is already connected, run immediately; otherwise defer until the first connects.
+        runNow = anyClientConnected;
+        if (!runNow)
+        {
+          onFirstClientCallbacks.Add(onFirstClient);
+        }
+      }
+
+      if (runNow)
+      {
+        try { onFirstClient(); } catch { }
+      }
     }
 
     #endregion
