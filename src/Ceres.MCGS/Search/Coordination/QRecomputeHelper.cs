@@ -128,4 +128,75 @@ internal static class QRecomputeHelper
       return node.Q;
     }
   }
+
+
+  /// <summary>
+  /// Recomputes and stores this node's draw probability D exactly from its children, using the same
+  /// aggregation rule as GNode.ComputeDFromChildren (keep the two in sync): each visited child edge
+  /// contributes its draw mass - child.D for ordinary visits, 1 for draw-by-repetition visits,
+  /// 1 for a drawn terminal edge or a child with a known available draw, 0 for a decisive terminal -
+  /// plus the node's own DrawP for its initial self-eval, divided by N.
+  ///
+  /// Mirrors <see cref="RecomputeNodeQ"/>'s snapshot contract: when <paramref name="snapshotOrEmpty"/>
+  /// is non-empty, child D is read from that snapshot (indexed by node index) for the parallel
+  /// full-graph sweep, where reading live child D would race in-place writes; when empty, child D is
+  /// read live (correct for single-threaded callers in the quiescent post-backup region). D is
+  /// display-only, so unlike Q this maintains no per-edge cache and clears no stale flag.
+  /// Intended to be called alongside RecomputeNodeQ on the same (eligible) nodes.
+  /// </summary>
+  /// <param name="node"></param>
+  /// <param name="snapshotOrEmpty">Snapshot of node D by index, or empty to read child D live.</param>
+  /// <returns>The newly stored D value.</returns>
+  internal static double RecomputeNodeD(GNode node, ReadOnlySpan<double> snapshotOrEmpty)
+  {
+    int n = node.N;
+    if (n <= 1)
+    {
+      // No (visited) children to aggregate: D is just the node's own NN draw probability.
+      double dSelf = node.DrawP;
+      node.NodeRef.D = dSelf;
+      return dSelf;
+    }
+
+    bool useSnapshot = !snapshotOrEmpty.IsEmpty;
+    int numExpanded = node.NumEdgesExpanded;
+
+    double dSum = node.DrawP; // self contribution (1 visit for initial eval)
+    for (int childIndex = 0; childIndex < numExpanded; childIndex++)
+    {
+      GEdge edge = node.ChildEdgeAtIndex(childIndex);
+      if (edge.N == 0)
+      {
+        continue;
+      }
+
+      if (edge.Type == GEdgeStruct.EdgeType.ChildEdge)
+      {
+        if (edge.ChildNodeIndex.IsNull)
+        {
+          continue;
+        }
+
+        if (edge.ChildNodeHasDrawKnownToExist)
+        {
+          dSum += 1.0 * edge.N;
+        }
+        else
+        {
+          double childD = useSnapshot ? snapshotOrEmpty[edge.ChildNodeIndex.Index] : edge.ChildNode.D;
+          int nNonRep = edge.N - edge.NDrawByRepetition;
+          dSum += childD * nNonRep + 1.0 * edge.NDrawByRepetition;
+        }
+      }
+      else if (edge.Type == GEdgeStruct.EdgeType.TerminalEdgeDrawn)
+      {
+        dSum += 1.0 * edge.N;
+      }
+      // TerminalEdgeDecisive: D = 0, no contribution.
+    }
+
+    double newD = dSum / n;
+    node.NodeRef.D = newD;
+    return newD;
+  }
 }

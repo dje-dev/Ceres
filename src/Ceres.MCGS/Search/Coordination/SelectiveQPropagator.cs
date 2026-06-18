@@ -276,6 +276,10 @@ public sealed class SelectiveQPropagator
       // IsStale; idempotent, so it never double-counts with the incremental/lazy paths.
       double newQ = QRecomputeHelper.RecomputeNodeQ(parent, ReadOnlySpan<double>.Empty, paramsSelect, cbgPUCTBackupActive);
 
+      // Keep the (display-only) draw probability D fresh alongside Q. Live reads are safe here:
+      // this pass runs in the quiescent post-backup region (no concurrent in-place D writes).
+      QRecomputeHelper.RecomputeNodeD(parent, ReadOnlySpan<double>.Empty);
+
       double absDelta = Math.Abs(newQ - oldQ);
       stats.Recomputes++;
       stats.SumAbsDelta += absDelta;

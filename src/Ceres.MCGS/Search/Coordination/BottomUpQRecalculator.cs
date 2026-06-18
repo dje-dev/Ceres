@@ -93,6 +93,13 @@ public sealed class BottomUpQRecalculator
   /// </summary>
   double[] qSnapshot = Array.Empty<double>();
 
+  /// <summary>
+  /// Companion snapshot of every node's draw probability D (indexed by node index), used the same
+  /// Jacobi way as qSnapshot so the parallel D recompute reads children's D race-free. Same
+  /// lifetime/threading guarantees as qSnapshot.
+  /// </summary>
+  double[] dSnapshot = Array.Empty<double>();
+
   // Shared aggregation state (static so it persists across the many short searches that
   // occur over a game/session, and so the 60 second window actually fills). All access is
   // serialized via statsLock.
@@ -188,18 +195,25 @@ public sealed class BottomUpQRecalculator
     {
       qSnapshot = new double[Math.Max(numTotalNodes, qSnapshot.Length * 2)];
     }
+    if (dSnapshot.Length < numTotalNodes)
+    {
+      dSnapshot = new double[Math.Max(numTotalNodes, dSnapshot.Length * 2)];
+    }
     double[] snapshot = qSnapshot;
+    double[] snapshotD = dSnapshot;
 
-    // Phase 1: snapshot every node's current Q (read-only -> race free). Child Q values are
-    // read exclusively from this snapshot during phase 2 so that the in-place writes to node
-    // Q below cannot race with concurrent reads. Valid node indices are [ROOT_NODE_INDEX,
+    // Phase 1: snapshot every node's current Q (and D) (read-only -> race free). Child Q/D values
+    // are read exclusively from these snapshots during phase 2 so that the in-place writes to node
+    // Q/D below cannot race with concurrent reads. Valid node indices are [ROOT_NODE_INDEX,
     // NumTotalNodes); index 0 is the null node.
     OrderablePartitioner<Tuple<int, int>> partitioner = Partitioner.Create(GraphStore.ROOT_NODE_INDEX, numTotalNodes);
     Parallel.ForEach(partitioner, range =>
     {
       for (int i = range.Item1; i < range.Item2; i++)
       {
-        snapshot[i] = graph[i].Q;
+        GNode node = graph[i];
+        snapshot[i] = node.Q;
+        snapshotD[i] = node.D;
       }
     });
 
@@ -224,6 +238,10 @@ public sealed class BottomUpQRecalculator
 
           double oldQ = node.Q;
           double newQ = QRecomputeHelper.RecomputeNodeQ(node, snapshot, paramsSelect, cbgPUCTBackupActive);
+
+          // Recompute the (display-only) draw probability D from the D snapshot, in tandem with Q.
+          // Delta stats below track Q only; D is maintained for free off the same sweep.
+          QRecomputeHelper.RecomputeNodeD(node, snapshotD);
 
           double delta = newQ - oldQ;
           double absDelta = Math.Abs(delta);

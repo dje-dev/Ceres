@@ -328,8 +328,17 @@ public readonly partial struct GNode : IComparable<GNode>, IEquatable<GNode>
       {
         if (edge.Type == GEdgeStruct.EdgeType.ChildEdge)
         {
-          int nNonRep = edge.N - edge.NDrawByRepetition;
-          dSum += edge.ChildNode.D * nNonRep + 1.0 * edge.NDrawByRepetition;
+          if (edge.ChildNodeHasDrawKnownToExist)
+          {
+            // Opponent has an available draw at this child, so its value mass was forced toward a
+            // draw (edge.Q -> 0 in backup); credit the whole edge as a draw (D = 1) to match.
+            dSum += 1.0 * edge.N;
+          }
+          else
+          {
+            int nNonRep = edge.N - edge.NDrawByRepetition;
+            dSum += edge.ChildNode.D * nNonRep + 1.0 * edge.NDrawByRepetition;
+          }
         }
         else if (edge.Type == GEdgeStruct.EdgeType.TerminalEdgeDrawn)
         {
