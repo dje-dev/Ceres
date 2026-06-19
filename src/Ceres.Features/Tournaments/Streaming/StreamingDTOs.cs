@@ -177,6 +177,7 @@ namespace Ceres.Features.Tournaments.Streaming
     public int Nps { get; set; }
     public int Eps { get; set; }
     public int Depth { get; set; }
+    public int SelDepth { get; set; }
 
     /// <summary>Estimated moves left (M head).</summary>
     public float MAvg { get; set; }

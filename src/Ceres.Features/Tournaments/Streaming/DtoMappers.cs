@@ -206,6 +206,11 @@ namespace Ceres.Features.Tournaments.Streaming
         timeLeftMs = (int)Math.Round(Math.Max(0, preMoveLimit.Value - engineTimeSec) * 1000);
       }
 
+      // Depth: some engines (e.g. MCGS) leave the integer Depth at 0 but populate the AvgDepth/MaxDepth
+      // float fields, so fall back to those. SelDepth shows the max depth where available.
+      int effDepth = depth > 0 ? depth : (engineMove != null ? (int)Math.Round(engineMove.AvgDepth) : 0);
+      int effSelDepth = (engineMove != null && engineMove.MaxDepth > 0) ? (int)Math.Round(engineMove.MaxDepth) : effDepth;
+
       return new MoveDTO
       {
         Type = "move",
@@ -220,7 +225,8 @@ namespace Ceres.Features.Tournaments.Streaming
         Nodes = engineMove?.FinalN ?? 0,
         Nps = engineMove?.NPS ?? 0,
         Eps = engineMove?.EPS ?? 0,
-        Depth = depth,
+        Depth = effDepth,
+        SelDepth = effSelDepth,
         MAvg = Fin(mAvg),
         PiecesLeft = piecesLeft,
         Instamove = (engineMove?.CountSearchContinuations ?? 0) > 0,
