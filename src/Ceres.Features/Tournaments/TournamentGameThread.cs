@@ -129,6 +129,10 @@ namespace Ceres.Features.Tournaments
           {
             ceresEngine.GatherVerboseMoveStats = true;
           }
+          else if (engine is Ceres.MCGS.GameEngines.GameEngineCeresMCGSInProcess mcgsEngine)
+          {
+            mcgsEngine.GatherVerboseMoveStats = true;
+          }
         }
       });
 
