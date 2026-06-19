@@ -345,6 +345,9 @@ namespace Ceres.Features.Tournaments.Streaming
         string line;
         lock (gate)
         {
+          // A new tournament beginning on a reused publisher must not retain the prior tournament's
+          // completed games, otherwise the global standings / game count accumulate across tournaments.
+          results.Clear();
           meta = m;
           line = Serialize(m);
           BroadcastLocked("global", -1, line);
