@@ -310,6 +310,21 @@ internal static partial class TensorRTNative
   [LibraryImport(LibraryName, EntryPoint = "TRT_CloneContextSharingEngine")]
   internal static partial int CloneContextSharingEngine(IntPtr referenceHandle, int deviceId, out IntPtr outHandle);
 
+  [LibraryImport(LibraryName, EntryPoint = "TRT_ReadMultiProfileBlobFromCache", StringMarshalling = StringMarshalling.Utf8)]
+  internal static unsafe partial int ReadMultiProfileBlobFromCache(string onnxPath,
+      int* batchSizes, int numProfiles,
+      ref TensorRTBuildOptions options, int deviceId,
+      string cacheDir, out IntPtr outBuffer, out long outSize);
+
+  [LibraryImport(LibraryName, EntryPoint = "TRT_DeserializeMultiProfileFromBuffer")]
+  internal static unsafe partial int DeserializeMultiProfileFromBuffer(IntPtr buffer, long bufferSize,
+      int* batchSizes, int numProfiles,
+      ref TensorRTBuildOptions options, int deviceId,
+      IntPtr* outHandles);
+
+  [LibraryImport(LibraryName, EntryPoint = "TRT_FreeBlob")]
+  internal static partial void FreeBlob(IntPtr buffer);
+
   // =========================================================================
   // Weight Refitting (for refittable engines)
   // =========================================================================

@@ -277,7 +277,8 @@ public sealed class EnginePool : IDisposable
   public EnginePool(TensorRT trt, string onnxPath, int[] sizes, EnginePoolMode mode,
                     TensorRTBuildOptions options, int inputElementsPerPos, int outputElementsPerPos,
                     int deviceId = 0, string cacheDir = "/tmp/tensorrt_cache",
-                    EnginePool referencePool = null)
+                    EnginePool referencePool = null,
+                    IntPtr sharedBlob = default, long sharedBlobSize = 0)
   {
     this.onnxPath = onnxPath;
     this.mode = mode;
@@ -343,6 +344,17 @@ public sealed class EnginePool : IDisposable
       {
         // Load pre-built engine file directly (bypasses ONNX parsing and cache)
         multiEngines = this.trt.LoadMultiProfileEngineFile(onnxPath, sizes, options, deviceId);
+      }
+      else if (sharedBlob != IntPtr.Zero)
+      {
+        // Parallel homogeneous multi-GPU load: deserialize this device's engine from a serialized
+        // blob already read once (by the group leader), instead of re-reading it from disk. Each
+        // device still gets its own deserialized ICudaEngine (weights cannot be shared across
+        // physical GPUs); this only avoids the duplicate disk read and the global-lock serialize.
+        // sizes here match the leader's (homogeneous GPUs => identical AdjustToSM result), so the
+        // profile order in the blob lines up with this device's profiles.
+        multiEngines = this.trt.DeserializeMultiProfileFromBuffer(
+          sharedBlob, sharedBlobSize, sizes, options, deviceId, onnxPath);
       }
       else
       {

@@ -311,6 +311,27 @@ extern "C"
     int32_t useCudaGraphs, int32_t useSpinWait, int32_t deviceId,
     TRT_EngineHandle* outHandles);
 
+  // Read the cached multi-profile serialized engine blob (.plan) for these parameters into a heap
+  // buffer WITHOUT deserializing. Uses the same arch-keyed cache filename as
+  // TRT_LoadONNXMultiProfileCached. Returns 0 + *outBuffer/*outSize on a valid cache hit (free via
+  // TRT_FreeBlob); returns 1 with *outBuffer null if absent/stale; negative on error.
+  TRT_API int32_t TRT_ReadMultiProfileBlobFromCache(const char* onnxPath,
+    const int32_t* batchSizes, int32_t numProfiles,
+    const TRT_BuildOptions* options, int32_t deviceId,
+    const char* cacheDir, char** outBuffer, int64_t* outSize);
+
+  // Deserialize an in-memory multi-profile engine blob onto deviceId and create N contexts.
+  // Does not touch disk and does not hold the global lock across the deserialize, so it is safe to
+  // call concurrently for distinct deviceIds (enables parallel homogeneous multi-GPU loads).
+  // outHandles must point to numProfiles slots. Returns 0 on success, negative on error.
+  TRT_API int32_t TRT_DeserializeMultiProfileFromBuffer(const char* buffer, int64_t bufferSize,
+    const int32_t* batchSizes, int32_t numProfiles,
+    const TRT_BuildOptions* options, int32_t deviceId,
+    TRT_EngineHandle* outHandles);
+
+  // Free a buffer returned by TRT_ReadMultiProfileBlobFromCache.
+  TRT_API void TRT_FreeBlob(char* buffer);
+
   // Create a new execution context that SHARES the already-deserialized engine owned by an
   // existing context (referenceHandle), without re-deserializing or re-allocating the weights.
   // The new context has its own IExecutionContext, streams, and GPU buffers (so it can be used

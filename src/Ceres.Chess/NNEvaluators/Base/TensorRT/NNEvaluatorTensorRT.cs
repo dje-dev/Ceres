@@ -62,9 +62,31 @@ public class NNEvaluatorTensorRT : NNEvaluator
   static readonly object nanLogLock = new();
 
   /// <summary>
-  /// If true, loads TensorRT engines in parallel across GPUs.
+  /// If true, loads TensorRT engines in parallel across GPUs (legacy path: each device independently
+  /// reads the cached .plan and deserializes; see also SHARED_BLOB_PARALLEL_LOAD_ENABLED).
   /// </summary>
-  public const bool PARALLEL_ENGINE_LOAD_ENABLED = false; // Needs more testing
+  public const bool PARALLEL_ENGINE_LOAD_ENABLED = true;
+
+  /// <summary>
+  /// If true, homogeneous multi-GPU loads (Exact mode, ONNX source) read each architecture group's
+  /// serialized engine blob ONCE and deserialize the group's remaining devices in parallel from that
+  /// in-memory blob. Each GPU still gets its own deserialized ICudaEngine (TensorRT weights are
+  /// device-local and cannot be shared across physical GPUs); this only removes the redundant
+  /// per-device disk read and the global-lock serialization of deserialization. The group leader is
+  /// built first so a cold cache builds and saves the .plan exactly once before any follower reads it.
+  /// Set false to revert to the per-device load path.
+  /// </summary>
+  public const bool SHARED_BLOB_PARALLEL_LOAD_ENABLED = true;
+
+  /// <summary>
+  /// If true, the per-GPU warmup / CUDA-graph-capture pass in MultiGPUEnginePool.Warmup runs
+  /// concurrently across GPUs instead of one device at a time. Each GPU uses its own EnginePool
+  /// (contexts/streams/buffers/device) — exactly as the production multi-GPU inference dispatch
+  /// already does — so concurrent warmup is safe. Note: per-GPU execution timings are then measured
+  /// under cross-GPU contention; for homogeneous GPUs the per-identical-GPU averaging keeps the
+  /// speed-normalized batch fractions ~uniform.
+  /// </summary>
+  public const bool PARALLEL_WARMUP_ENABLED = false;
 
   /// <summary>
   /// If true, a second (overlap) evaluator built with a compatible reference evaluator shares the

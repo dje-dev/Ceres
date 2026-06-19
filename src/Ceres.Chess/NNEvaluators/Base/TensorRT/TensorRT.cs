@@ -100,6 +100,38 @@ public sealed class TensorRT : IDisposable
 
 
   /// <summary>
+  /// Reads the cached multi-profile serialized engine blob for these parameters into a native
+  /// buffer without deserializing. Returns true on a valid cache hit; false if absent/stale.
+  /// Free the buffer via <see cref="FreeMultiProfileBlob"/>.
+  /// </summary>
+  public bool TryReadMultiProfileBlobFromCache(string onnxPath, int[] batchSizes,
+      TensorRTBuildOptions options, string cacheDir, int deviceId, out IntPtr blob, out long size)
+  {
+    return TensorRTEngine.TryReadMultiProfileBlobFromCache(onnxPath, batchSizes, options, deviceId, cacheDir, out blob, out size);
+  }
+
+
+  /// <summary>
+  /// Deserializes an in-memory multi-profile engine blob onto <paramref name="deviceId"/>,
+  /// returning one TensorRTEngine per batch size. Safe to call concurrently for distinct devices.
+  /// </summary>
+  public TensorRTEngine[] DeserializeMultiProfileFromBuffer(IntPtr blob, long size, int[] batchSizes,
+      TensorRTBuildOptions options, int deviceId, string sourcePath)
+  {
+    return TensorRTEngine.DeserializeMultiProfileFromBuffer(blob, size, batchSizes, options, deviceId, sourcePath);
+  }
+
+
+  /// <summary>
+  /// Frees a buffer returned by <see cref="TryReadMultiProfileBlobFromCache"/>.
+  /// </summary>
+  public void FreeMultiProfileBlob(IntPtr blob)
+  {
+    TensorRTEngine.FreeMultiProfileBlob(blob);
+  }
+
+
+  /// <summary>
   /// Load a pre-built multi-profile engine file (.engine) directly,
   /// bypassing ONNX parsing and cache validation.
   /// </summary>

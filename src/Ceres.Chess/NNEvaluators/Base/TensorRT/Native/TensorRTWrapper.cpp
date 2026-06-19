@@ -3558,7 +3558,12 @@ extern "C"
           {
             file.close();
 
-            std::lock_guard<std::mutex> lock(g_mutex);
+            // Lock-free deserialize: g_runtime is a single shared IRuntime created once in TRT_Init
+            // and never mutated; IRuntime::deserializeCudaEngine is thread-safe, and each concurrent
+            // call here targets a distinct deviceId (bound per-thread above) allocating only
+            // device-local resources. Dropping g_mutex here lets homogeneous multi-GPU loads
+            // deserialize in parallel rather than serializing on the global lock. Only the
+            // g_lastError accesses below are briefly locked.
             nvinfer1::ICudaEngine* engine = g_runtime->deserializeCudaEngine(buffer.data(), buffer.size());
             if (engine)
             {
@@ -3580,7 +3585,7 @@ extern "C"
                 PrintGreen(msg);
 
                 if (outWasCached) *outWasCached = 1;
-                g_lastError.clear();
+                { std::lock_guard<std::mutex> lk(g_mutex); g_lastError.clear(); }
                 return 0;
               }
               else
@@ -3639,6 +3644,163 @@ extern "C"
     }
 
     return 0;
+  }
+
+
+  // Read the cached multi-profile serialized engine (.plan) blob for the given parameters into a
+  // heap buffer, WITHOUT deserializing or creating any contexts. Uses the same arch-keyed cache
+  // filename as TRT_LoadONNXMultiProfileCached, so homogeneous GPUs resolve to the same file.
+  // On a valid, non-stale cache hit: returns 0 and sets *outBuffer (caller frees via TRT_FreeBlob)
+  // and *outSize. If there is no cache dir, the file is absent, or it is stale (ONNX newer):
+  // returns 1 with *outBuffer null (caller should route through the normal build path). Negative
+  // on error.
+  TRT_API int32_t TRT_ReadMultiProfileBlobFromCache(const char* onnxPath,
+    const int32_t* batchSizes, int32_t numProfiles,
+    const TRT_BuildOptions* options, int32_t deviceId,
+    const char* cacheDir, char** outBuffer, int64_t* outSize)
+  {
+    if (outBuffer) *outBuffer = nullptr;
+    if (outSize) *outSize = 0;
+
+    if (!onnxPath || !batchSizes || numProfiles <= 0 || !outBuffer || !outSize)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Invalid arguments for ReadMultiProfileBlobFromCache");
+      return -1;
+    }
+
+    if (!cacheDir || cacheDir[0] == '\0')
+    {
+      return 1;  // No cache dir: treat as not present
+    }
+
+    // Generate cache filename (arch-keyed: identical for homogeneous GPUs).
+    char* cacheFilename = TRT_GenerateMultiProfileCacheFilename(onnxPath, batchSizes, numProfiles, options, deviceId);
+    std::string cachePath = std::string(cacheDir) + "/" + cacheFilename;
+    TRT_FreeString(cacheFilename);
+
+    if (!FileExists(cachePath.c_str()))
+    {
+      return 1;  // Not present
+    }
+
+    // Stale if the ONNX source is newer than the cached engine.
+    struct stat onnxStat, cacheStat;
+    if (stat(onnxPath, &onnxStat) == 0 && stat(cachePath.c_str(), &cacheStat) == 0)
+    {
+      if (onnxStat.st_mtime > cacheStat.st_mtime)
+      {
+        return 1;  // Stale
+      }
+    }
+
+    std::ifstream file(cachePath, std::ios::binary | std::ios::ate);
+    if (!file.is_open())
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to open cached engine file: " + cachePath);
+      return -2;
+    }
+    std::streamsize size = file.tellg();
+    if (size <= 0)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Cached engine file empty: " + cachePath);
+      return -3;
+    }
+    file.seekg(0, std::ios::beg);
+
+    char* buf = static_cast<char*>(malloc(static_cast<size_t>(size)));
+    if (!buf)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Out of memory reading cached engine file");
+      return -4;
+    }
+    if (!file.read(buf, size))
+    {
+      free(buf);
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Short read of cached engine file: " + cachePath);
+      return -5;
+    }
+    file.close();
+
+    *outBuffer = buf;
+    *outSize = static_cast<int64_t>(size);
+    { std::lock_guard<std::mutex> lock(g_mutex); g_lastError.clear(); }
+    return 0;
+  }
+
+
+  // Deserialize an already-in-memory serialized multi-profile engine blob onto a specific device
+  // and create N execution contexts (one per profile). Does NOT touch disk and does NOT hold the
+  // global lock across the deserialize, so it is safe to call concurrently for distinct deviceIds
+  // (the keystone of parallel homogeneous multi-GPU loads). The blob must be the serialized engine
+  // for this device's architecture (caller guarantees homogeneity). Returns 0 on success; negative
+  // on error. On success, outHandles[0..numProfiles-1] receive the new contexts.
+  TRT_API int32_t TRT_DeserializeMultiProfileFromBuffer(const char* buffer, int64_t bufferSize,
+    const int32_t* batchSizes, int32_t numProfiles,
+    const TRT_BuildOptions* options, int32_t deviceId,
+    TRT_EngineHandle* outHandles)
+  {
+    if (!g_initialized)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("TensorRT not initialized");
+      return -1;
+    }
+    if (!buffer || bufferSize <= 0 || !batchSizes || numProfiles <= 0 || !outHandles)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Invalid arguments for DeserializeMultiProfileFromBuffer");
+      return -2;
+    }
+
+    TRT_BuildOptions defaultOpts;
+    TRT_InitBuildOptions(&defaultOpts);
+    const TRT_BuildOptions* opts = options ? options : &defaultOpts;
+
+    // Bind this thread to the target device (per-thread; no global lock needed).
+    if (deviceId < 0)
+    {
+      cudaGetDevice(&deviceId);
+    }
+    else if (!EnsureDevice(deviceId))
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to set CUDA device " + std::to_string(deviceId));
+      return -3;
+    }
+
+    // Lock-free deserialize (see rationale in TRT_LoadONNXMultiProfileCached).
+    nvinfer1::ICudaEngine* engine = g_runtime->deserializeCudaEngine(buffer, static_cast<size_t>(bufferSize));
+    if (!engine)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to deserialize multi-profile engine from buffer");
+      return -4;
+    }
+
+    int32_t result = CreateContextsFromEngine(engine, batchSizes, numProfiles,
+      opts->useCudaGraphs != 0, opts->useSpinWait != 0, deviceId, outHandles);
+    if (result != 0)
+    {
+      // CreateContextsFromEngine deletes the engine on failure.
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to create contexts from buffer-deserialized engine");
+      return -5;
+    }
+
+    { std::lock_guard<std::mutex> lock(g_mutex); g_lastError.clear(); }
+    return 0;
+  }
+
+
+  // Free a buffer returned by TRT_ReadMultiProfileBlobFromCache.
+  TRT_API void TRT_FreeBlob(char* buffer)
+  {
+    if (buffer) free(buffer);
   }
 
 

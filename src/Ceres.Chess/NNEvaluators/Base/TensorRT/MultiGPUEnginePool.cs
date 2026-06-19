@@ -206,6 +206,18 @@ public sealed class MultiGPUEnginePool : IDisposable
                        && deviceIds.Length > 1
                        && !hasDuplicateDevices;
 
+    // Shared-blob parallel load: for homogeneous multi-GPU (Exact mode, ONNX source) read each
+    // architecture group's serialized engine once and deserialize the rest of the group's devices
+    // in parallel from that in-memory blob (see LoadHomogeneousGroupsSharingBlob).
+    string srcExt = System.IO.Path.GetExtension(onnxPath).ToLowerInvariant();
+    bool isOnnxSource = srcExt != ".engine" && srcExt != ".plan";
+    bool useSharedBlobParallel = NNEvaluatorTensorRT.SHARED_BLOB_PARALLEL_LOAD_ENABLED
+                                 && !isSharedPool
+                                 && mode == EnginePoolMode.Exact
+                                 && isOnnxSource
+                                 && deviceIds.Length > 1
+                                 && !hasDuplicateDevices;
+
     if (isSharedPool)
     {
       // Engine-sharing path: clone each GPU's pool from the corresponding reference pool. No
@@ -217,6 +229,11 @@ public sealed class MultiGPUEnginePool : IDisposable
                                           referencePool: referencePool.pools[i]);
         pools.Add(pool);
       }
+    }
+    else if (useSharedBlobParallel)
+    {
+      LoadHomogeneousGroupsSharingBlob(trt, onnxPath, options, inputElementsPerPos, outputElementsPerPos,
+                                       deviceIds, cacheDir);
     }
     else if (useParallel)
     {
@@ -297,6 +314,97 @@ public sealed class MultiGPUEnginePool : IDisposable
     // Sync policy (spin vs block) is chosen per-sync from the per-GPU batch size in the
     // native layer's "auto" mode (default), so no pool-level promotion is needed here.
     Warmup();
+  }
+
+
+  /// <summary>
+  /// Loads engines for homogeneous-GPU groups by reading each group's serialized engine blob once
+  /// and deserializing the group's remaining devices in parallel from that in-memory blob. Each
+  /// device still receives its own deserialized ICudaEngine (TensorRT weights are device-local and
+  /// cannot be shared across physical GPUs); this only removes the redundant per-device disk read
+  /// and the global-lock serialization of deserialization. Group leaders are built first
+  /// (sequentially) so a cold cache builds and saves the .plan exactly once before any follower
+  /// reads it. A device whose blob could not be read falls back to the normal per-device load.
+  /// </summary>
+  private void LoadHomogeneousGroupsSharingBlob(TensorRT trt, string onnxPath, TensorRTBuildOptions options,
+                                                int inputElementsPerPos, int outputElementsPerPos,
+                                                int[] deviceIds, string cacheDir)
+  {
+    EnginePool[] poolsArray = new EnginePool[deviceIds.Length];
+
+    // Group device indices by architecture AND batch-size profile. The on-disk cache file is keyed
+    // by (architecture, batch sizes, build options); devices sharing a key share the same .plan, so
+    // the leader's blob is valid for its followers and the profile order lines up exactly.
+    Dictionary<string, List<int>> groups = new Dictionary<string, List<int>>();
+    for (int i = 0; i < deviceIds.Length; i++)
+    {
+      string archName = TensorRTNative.GetDeviceName(deviceIds[i]) ?? ("dev" + deviceIds[i]);
+      string key = archName + "|" + string.Join(",", sizesPerGPU[i]);
+      if (!groups.TryGetValue(key, out List<int> members))
+      {
+        members = new List<int>();
+        groups[key] = members;
+      }
+      members.Add(i);
+    }
+
+    // Build each group's leader first (sequentially) — reading or building+saving its .plan exactly
+    // once — then capture the leader's serialized blob for sharing with the group's followers.
+    List<(int index, IntPtr blob, long size)> followers = new List<(int index, IntPtr blob, long size)>();
+    List<IntPtr> blobsToFree = new List<IntPtr>();
+    foreach (List<int> members in groups.Values)
+    {
+      int leaderIdx = members[0];
+      poolsArray[leaderIdx] = new EnginePool(trt, onnxPath, (int[])sizesPerGPU[leaderIdx].Clone(), mode, options,
+                                             inputElementsPerPos, outputElementsPerPos, deviceIds[leaderIdx], cacheDir);
+      if (members.Count == 1)
+      {
+        continue;  // Singleton (heterogeneous) group — nothing to share.
+      }
+
+      // The cache filename's batch order matches EnginePool's internal descending sort, so sort a
+      // copy the same way before resolving the blob's cache filename.
+      int[] leaderSizes = (int[])sizesPerGPU[leaderIdx].Clone();
+      Array.Sort(leaderSizes);
+      Array.Reverse(leaderSizes);
+
+      bool haveBlob = trt.TryReadMultiProfileBlobFromCache(onnxPath, leaderSizes, options, cacheDir,
+                                                           deviceIds[leaderIdx], out IntPtr blob, out long size);
+      if (haveBlob)
+      {
+        blobsToFree.Add(blob);
+      }
+      else
+      {
+        // Blob unexpectedly unavailable (e.g. no cache dir); followers load independently (blob == 0).
+        Console.WriteLine("  NOTE: shared-blob multi-GPU load could not read leader engine blob; "
+                          + "followers will load independently.");
+      }
+
+      for (int m = 1; m < members.Count; m++)
+      {
+        followers.Add((members[m], blob, size));
+      }
+    }
+
+    // Deserialize all followers (across all groups) in parallel from their group's shared blob.
+    // A zero blob makes the EnginePool fall back to the normal cached path for that device.
+    Parallel.ForEach(followers, f =>
+    {
+      poolsArray[f.index] = new EnginePool(trt, onnxPath, (int[])sizesPerGPU[f.index].Clone(), mode, options,
+                                           inputElementsPerPos, outputElementsPerPos, deviceIds[f.index], cacheDir,
+                                           referencePool: null, sharedBlob: f.blob, sharedBlobSize: f.size);
+    });
+
+    foreach (IntPtr blob in blobsToFree)
+    {
+      trt.FreeMultiProfileBlob(blob);
+    }
+
+    for (int i = 0; i < deviceIds.Length; i++)
+    {
+      pools.Add(poolsArray[i]);
+    }
   }
 
 
@@ -480,7 +588,7 @@ public sealed class MultiGPUEnginePool : IDisposable
 
     executionTimesPerGPU = new float[numGPUs][];
 
-    for (int gpuIndex = 0; gpuIndex < numGPUs; gpuIndex++)
+    void WarmupGPU(int gpuIndex)
     {
       int[] gpuSizes = sizesPerGPU[gpuIndex];
       int numBatchSizes = gpuSizes.Length;
@@ -543,6 +651,23 @@ public sealed class MultiGPUEnginePool : IDisposable
       string sizesStr = string.Join(", ", sizesPerGPU[gpuIndex]);
       string timingsStr = string.Join(", ", executionTimesPerGPU[gpuIndex].Select(t => t.ToString("F1")));
       Console.WriteLine($"DEVICE {deviceIDs[gpuIndex]} sizes: [{sizesStr}] timings: [{timingsStr}] ms ({deviceNames[gpuIndex]})");
+    }
+
+    // Warm up (and trigger CUDA-graph capture for) the GPUs. When enabled, do this concurrently
+    // across GPUs instead of one device at a time — each GPU uses its own EnginePool
+    // (contexts/streams/buffers/device), so this is the same concurrency the production multi-GPU
+    // dispatch already relies on. Parallel.For has an implicit barrier, so all per-GPU timings are
+    // populated before the averaging/speed-fraction computation below runs.
+    if (NNEvaluatorTensorRT.PARALLEL_WARMUP_ENABLED && numGPUs > 1)
+    {
+      Parallel.For(0, numGPUs, WarmupGPU);
+    }
+    else
+    {
+      for (int gpuIndex = 0; gpuIndex < numGPUs; gpuIndex++)
+      {
+        WarmupGPU(gpuIndex);
+      }
     }
 
     // Average execution timings for identical GPU types to reduce measurement noise.
