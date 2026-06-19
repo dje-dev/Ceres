@@ -266,6 +266,15 @@ namespace Ceres.Features.Tournaments
     [NonSerialized] public int LiveStreamPort = 7440;
 
     /// <summary>
+    /// Steady-state interval (milliseconds) at which transient mid-search interim snapshots are
+    /// streamed while an engine is thinking, so the live viewer updates instead of freezing between
+    /// moves. The actual cadence is graduated around this value (faster at the start of a move,
+    /// easing off for very long thinks). Set to 0 to disable interim updates (only completed-move
+    /// frames are sent). NonSerialized (resolved via parentDef).
+    /// </summary>
+    [NonSerialized] public int LiveStreamInterimIntervalMs = 1000;
+
+    /// <summary>
     /// If this instance is the coordinator in a distributed tournament.
     /// </summary>
     public bool IsDistributedCoordinator = false;

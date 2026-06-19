@@ -51,6 +51,22 @@ namespace Ceres.Features.Tournaments.Streaming
     void OnGameEnd(int threadIndex, GameEndDTO end);
 
     /// <summary>
+    /// Invoked (throttled, e.g. ~1s) WHILE a move is still being searched on the given worker
+    /// thread, carrying a transient mid-search snapshot (current eval/stats/top moves). The board
+    /// has NOT advanced; the frame is superseded by the next interim and cleared by the eventual
+    /// OnMove. Implementations enqueue and return immediately.
+    /// </summary>
+    void OnInterim(int threadIndex, InterimDTO interim);
+
+    /// <summary>
+    /// Cheap gate the producer checks (at the throttled cadence) before doing any interim work:
+    /// returns true only when at least one consumer is actively watching the given thread, so the
+    /// (slightly costly) interim snapshot is built only when someone will see it. Returns false when
+    /// streaming is disabled or no thread-scoped subscriber is connected.
+    /// </summary>
+    bool WantsInterim(int threadIndex);
+
+    /// <summary>
     /// Invoked once after all games have completed.
     /// </summary>
     void OnTournamentEnd();

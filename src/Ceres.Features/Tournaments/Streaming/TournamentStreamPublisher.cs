@@ -254,6 +254,10 @@ namespace Ceres.Features.Tournaments.Streaming
           {
             sub.Enqueue(Serialize(m));
           }
+          if (ts.Interim != null && !ts.Finished)
+          {
+            sub.Enqueue(Serialize(ts.Interim));
+          }
           if (ts.LastEnd != null)
           {
             sub.Enqueue(Serialize(ts.LastEnd));
@@ -365,6 +369,7 @@ namespace Ceres.Features.Tournaments.Streaming
           dto.Seq = ++ts.Seq;
           ts.CurrentGame = dto;
           ts.Moves.Clear();
+          ts.Interim = null;
           ts.LastEnd = null;
           ts.Finished = false;
           BroadcastLocked("thread", threadIndex, Serialize(dto));
@@ -388,10 +393,52 @@ namespace Ceres.Features.Tournaments.Streaming
           dto.ThreadId = threadIndex;
           dto.Seq = ++ts.Seq;
           ts.Moves.Add(dto);
+          ts.Interim = null; // the completed move supersedes any pending interim snapshot
           BroadcastLocked("thread", threadIndex, Serialize(dto));
         }
       }
       catch { }
+    }
+
+
+    public void OnInterim(int threadIndex, InterimDTO dto)
+    {
+      if (!enabled || dto == null)
+      {
+        return;
+      }
+      try
+      {
+        lock (gate)
+        {
+          ThreadLiveState ts = GetThreadLocked(threadIndex);
+          dto.ThreadId = threadIndex;
+          dto.Seq = ++ts.Seq;
+          ts.Interim = dto; // transient: replaced by the next interim, cleared by the real move
+          BroadcastLocked("thread", threadIndex, Serialize(dto));
+        }
+      }
+      catch { }
+    }
+
+
+    public bool WantsInterim(int threadIndex)
+    {
+      if (!enabled)
+      {
+        return false;
+      }
+      lock (gate)
+      {
+        foreach (StreamSubscriber sub in subscribers.Values)
+        {
+          if (sub.Matches("thread", threadIndex))
+          {
+            return true;
+          }
+        }
+      }
+      return false;
     }
 
 
@@ -409,6 +456,7 @@ namespace Ceres.Features.Tournaments.Streaming
           dto.Type = "gameEnd";
           dto.ThreadId = threadIndex;
           dto.Seq = ++ts.Seq;
+          ts.Interim = null;
           ts.LastEnd = dto;
           ts.Finished = true;
           BroadcastLocked("thread", threadIndex, Serialize(dto));

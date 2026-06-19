@@ -194,6 +194,51 @@ namespace Ceres.Features.Tournaments.Streaming
   }
 
 
+  /// <summary>
+  /// type = "interim" (per thread). A transient mid-search progress snapshot emitted periodically
+  /// WHILE an engine is still thinking about its move (the board has NOT advanced). It is superseded
+  /// by the next interim frame and cleared when the real "move" frame arrives. Field names mirror
+  /// MoveDTO so a flat consumer can reuse the same deserialization target. Consumers map it to a live
+  /// engine-status + top-moves update and must NOT advance the board or the per-move charts.
+  /// </summary>
+  public sealed class InterimDTO : WireMsg
+  {
+    public int Ply { get; set; }
+
+    /// <summary>"w" or "b" (side currently thinking).</summary>
+    public string Side { get; set; }
+
+    /// <summary>Current best-move evaluation in CENTIPAWNS, mover's perspective (consumer divides by 100). Null if unavailable.</summary>
+    public int? EvalCp { get; set; }
+
+    /// <summary>Mate distance in plies (mover's perspective) if a forced mate is seen; null otherwise.</summary>
+    public int? Mate { get; set; }
+
+    /// <summary>Q value of the current best move in [-1, 1], mover's perspective.</summary>
+    public float ScoreQ { get; set; }
+
+    public long Nodes { get; set; }
+    public int Nps { get; set; }
+    public int Eps { get; set; }
+    public int Depth { get; set; }
+    public int SelDepth { get; set; }
+
+    /// <summary>Estimated moves left (M head).</summary>
+    public float MAvg { get; set; }
+
+    /// <summary>Elapsed search time so far for this move, milliseconds.</summary>
+    public int MoveTimeMs { get; set; }
+
+    /// <summary>Estimated clock remaining for the mover, milliseconds (0 if not time-based).</summary>
+    public int TimeLeftMs { get; set; }
+
+    public WdlDTO Wdl { get; set; }
+
+    /// <summary>Current top moves (TopQ), ordered best-first.</summary>
+    public List<TopMoveDTO> Top { get; set; }
+  }
+
+
   /// <summary>type = "gameEnd" (per thread) and "gameResult" (tournament-global). Same payload.</summary>
   public sealed class GameEndDTO : WireMsg
   {

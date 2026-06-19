@@ -43,6 +43,161 @@ namespace Ceres.Features.Tournaments.Streaming
     /// </summary>
     static float Fin(float x) => float.IsFinite(x) ? x : 0f;
 
+
+    /// <summary>Valid, non-"node" verbose move stats ordered best-first by visit count.</summary>
+    static List<VerboseMoveStat> OrderedValidStats(IEnumerable<VerboseMoveStat> stats)
+      => stats.Where(v => v != null && v.Valid && v.MoveString != "node")
+              .OrderByDescending(v => v.VisitCount)
+              .ToList();
+
+
+    /// <summary>Maps the (already ordered) top verbose move stats into TopQ DTOs.</summary>
+    static List<TopMoveDTO> BuildTopMoves(List<VerboseMoveStat> ordered)
+      => ordered.Take(MAX_TOP_MOVES)
+                .Select(v => new TopMoveDTO
+                {
+                  Lan = v.MoveString,
+                  N = v.VisitCount,
+                  P = Fin(v.P),
+                  Q = Fin((float)v.Q.LogisticValue),
+                  Wl = Fin(v.WL),
+                  D = Fin(v.D)
+                }).ToList();
+
+
+    /// <summary>Derives a win/draw/loss split (fractions) from a single verbose move stat.</summary>
+    static WdlDTO WdlFromStat(VerboseMoveStat v)
+    {
+      float win = (1f - v.D + v.WL) / 2f;
+      float loss = (1f - v.D - v.WL) / 2f;
+      return new WdlDTO { W = Fin(win), D = Fin(v.D), L = Fin(loss) };
+    }
+
+
+    /// <summary>
+    /// Builds a transient mid-search interim snapshot from the live search manager (MCTS or MCGS).
+    /// Returns null if the manager type is unrecognized (e.g. a UCI/external engine) or the search
+    /// has not yet produced any visits. Reads only; safe to call from the search progress callback.
+    /// Eval/Q are from the mover's (thinking side's) perspective, matching the move frame; the
+    /// consumer applies the white-perspective negation. Any failure yields null (the next tick retries).
+    /// </summary>
+    public static InterimDTO ToInterim(object managerContext, int ply, bool sideToMoveIsWhite)
+    {
+      try
+      {
+        if (managerContext is Ceres.MCTS.Iteration.MCTSManager mcts)
+        {
+          return ToInterimMCTS(mcts, ply, sideToMoveIsWhite);
+        }
+        if (managerContext is Ceres.MCGS.Search.Coordination.MCGSManager mcgs)
+        {
+          return ToInterimMCGS(mcgs, ply, sideToMoveIsWhite);
+        }
+      }
+      catch { }
+      return null;
+    }
+
+
+    static InterimDTO ToInterimMCTS(Ceres.MCTS.Iteration.MCTSManager m, int ply, bool isWhite)
+    {
+      var root = m.Root;
+      if (root.N == 0)
+      {
+        return null;
+      }
+
+      float qBest = root.BestMoveInfo(false).QOfBest;
+      int cp = (int)Math.Round(Ceres.Chess.LC0.Positions.EncodedEvalLogistic.WinLossToCentipawn(qBest));
+
+      float elapsedSec = (float)(DateTime.Now - m.StartTimeThisSearch).TotalSeconds;
+      long nodes = root.N;
+      int nps = elapsedSec > 0 ? (int)Math.Round(nodes / elapsedSec) : 0;
+      int depth = (int)Math.Round(m.Context.AvgDepth);
+
+      List<TopMoveDTO> top = null;
+      WdlDTO wdl = null;
+      try
+      {
+        List<VerboseMoveStat> ordered = OrderedValidStats(Ceres.MCTS.UCI.VerboseMoveStatsFromMCTSNode.BuildStats(root));
+        if (ordered.Count > 0)
+        {
+          top = BuildTopMoves(ordered);
+          wdl = WdlFromStat(ordered[0]);
+        }
+      }
+      catch { }
+
+      return new InterimDTO
+      {
+        Type = "interim",
+        Ply = ply,
+        Side = isWhite ? "w" : "b",
+        EvalCp = cp,
+        ScoreQ = Fin(qBest),
+        Nodes = nodes,
+        Nps = nps,
+        Eps = 0,
+        Depth = depth,
+        SelDepth = depth,
+        MAvg = Fin(root.MAvg),
+        MoveTimeMs = (int)Math.Round(elapsedSec * 1000),
+        Wdl = wdl,
+        Top = top
+      };
+    }
+
+
+    static InterimDTO ToInterimMCGS(Ceres.MCGS.Search.Coordination.MCGSManager m, int ply, bool isWhite)
+    {
+      long rootN = (long)m.RootNWhenSearchStarted + m.NumNodesVisitedThisSearch;
+      if (rootN <= 0)
+      {
+        return null;
+      }
+
+      // false = non-final best-move calc (a read-only mid-search query, like the live UCI info line).
+      var best = m.GetBestMove(out _, out _, out _, false);
+      float qBest = best.QOfBest;
+      int cp = (int)Math.Round(Ceres.Chess.LC0.Positions.EncodedEvalLogistic.WinLossToCentipawn(qBest));
+
+      float elapsedSec = (float)(DateTime.Now - m.StartTimeThisSearch).TotalSeconds;
+      int nodesThisSearch = m.NumNodesVisitedThisSearch;
+      int nps = elapsedSec > 0 ? (int)Math.Round(nodesThisSearch / elapsedSec) : 0;
+      int eps = elapsedSec > 0 ? (int)Math.Round(m.NumEvalsThisSearch / elapsedSec) : 0;
+
+      List<TopMoveDTO> top = null;
+      WdlDTO wdl = null;
+      try
+      {
+        List<VerboseMoveStat> ordered = OrderedValidStats(Ceres.MCGS.UCI.VerboseMoveStatsFromMCGSNode.BuildStats(m, best));
+        if (ordered.Count > 0)
+        {
+          top = BuildTopMoves(ordered);
+          wdl = WdlFromStat(ordered[0]);
+        }
+      }
+      catch { }
+
+      return new InterimDTO
+      {
+        Type = "interim",
+        Ply = ply,
+        Side = isWhite ? "w" : "b",
+        EvalCp = cp,
+        ScoreQ = Fin(qBest),
+        Nodes = rootN,
+        Nps = nps,
+        Eps = eps,
+        Depth = (int)Math.Round(m.AvgDepth),
+        SelDepth = m.MaxDepth,
+        MAvg = 0f,
+        MoveTimeMs = (int)Math.Round(elapsedSec * 1000),
+        Wdl = wdl,
+        Top = top
+      };
+    }
+
     public static TournamentMetaDTO ToTournamentMeta(TournamentDef def, int threadCount)
     {
       List<PlayerDTO> players = new();
@@ -176,26 +331,12 @@ namespace Ceres.Features.Tournaments.Streaming
       WdlDTO wdl = null;
       if (engineMove?.VerboseMoveStats != null && engineMove.VerboseMoveStats.Count > 0)
       {
-        IEnumerable<VerboseMoveStat> ordered = engineMove.VerboseMoveStats
-                                                         .Where(v => v != null && v.Valid && v.MoveString != "node")
-                                                         .OrderByDescending(v => v.VisitCount);
-        top = ordered.Take(MAX_TOP_MOVES)
-                     .Select(v => new TopMoveDTO
-                     {
-                       Lan = v.MoveString,
-                       N = v.VisitCount,
-                       P = Fin(v.P),
-                       Q = Fin((float)v.Q.LogisticValue),
-                       Wl = Fin(v.WL),
-                       D = Fin(v.D)
-                     }).ToList();
+        top = BuildTopMoves(OrderedValidStats(engineMove.VerboseMoveStats));
 
         VerboseMoveStat played = engineMove.VerboseMoveStats.FirstOrDefault(v => v != null && v.MoveString == moveStr);
         if (played != null)
         {
-          float win = (1f - played.D + played.WL) / 2f;
-          float loss = (1f - played.D - played.WL) / 2f;
-          wdl = new WdlDTO { W = Fin(win), D = Fin(played.D), L = Fin(loss) };
+          wdl = WdlFromStat(played);
         }
       }
 

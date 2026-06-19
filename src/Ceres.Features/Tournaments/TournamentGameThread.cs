@@ -1114,7 +1114,62 @@ namespace Ceres.Features.Tournaments
           _ => throw new Exception($"Internal error, unknown SearchLimit.LimitType {searchLimit.Type}")
         };
 
-        GameEngineSearchResult engineMove = engine.Search(curPositionAndMoves, thisMoveSearchLimit, gameMoveHistory);
+        // Build a throttled progress callback that streams transient interim (mid-search) snapshots
+        // to any live observer while the engine is still thinking, so the viewer's stats/eval/TopQ
+        // update ~1s instead of freezing until the move completes. Costs nothing when nobody streams
+        // (gated by a null observer, interval <= 0, and the cheap WantsInterim check).
+        ITournamentObserver interimObserver = Def.parentDef?.Observer;
+        int interimIntervalMs = Def.parentDef?.LiveStreamInterimIntervalMs ?? 0;
+        GameEngine.ProgressCallback progressCb = null;
+        if (interimObserver != null && interimIntervalMs > 0)
+        {
+          bool interimSideIsWhite = curPositionAndMoves.FinalPosition.MiscInfo.SideToMove == SideType.White;
+          int interimPly = plyCount;
+          DateTime interimSearchStart = DateTime.UtcNow;
+          DateTime interimLastEmit = DateTime.MinValue;
+          progressCb = (object ctx) =>
+          {
+            try
+            {
+              DateTime now = DateTime.UtcNow;
+              double elapsedSec = (now - interimSearchStart).TotalSeconds;
+              if (interimLastEmit == DateTime.MinValue)
+              {
+                // Quick first update so the panel populates shortly after the move begins.
+                if (elapsedSec * 1000.0 < Math.Min(300, interimIntervalMs))
+                {
+                  return;
+                }
+              }
+              else
+              {
+                // Graduated cadence: faster early, easing off for very long thinks.
+                double reqMs = elapsedSec < 5 ? interimIntervalMs * 0.5
+                             : elapsedSec < 30 ? interimIntervalMs
+                             : interimIntervalMs * 3.0;
+                if ((now - interimLastEmit).TotalMilliseconds < reqMs)
+                {
+                  return;
+                }
+              }
+
+              interimLastEmit = now;
+              if (!interimObserver.WantsInterim(ThreadIndex))
+              {
+                return;
+              }
+
+              InterimDTO interimDto = DtoMappers.ToInterim(ctx, interimPly, interimSideIsWhite);
+              if (interimDto != null)
+              {
+                interimObserver.OnInterim(ThreadIndex, interimDto);
+              }
+            }
+            catch { }
+          };
+        }
+
+        GameEngineSearchResult engineMove = engine.Search(curPositionAndMoves, thisMoveSearchLimit, gameMoveHistory, progressCb);
         float engineTime = (float)engineMove.TimingStats.ElapsedTimeSecs;
 
         // Check for time forfeit

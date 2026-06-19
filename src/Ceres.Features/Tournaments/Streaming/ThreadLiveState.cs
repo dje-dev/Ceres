@@ -33,6 +33,13 @@ namespace Ceres.Features.Tournaments.Streaming
     /// <summary>All move frames played in the current game (cleared on each new game).</summary>
     public readonly List<MoveDTO> Moves = new();
 
+    /// <summary>
+    /// The most recent transient mid-search interim frame (else null). Replaced by each new interim,
+    /// and cleared when the real move arrives, a new game starts, or the game ends. Sent to a
+    /// late-joining subscriber after the move history so a tab opened mid-think is immediately current.
+    /// </summary>
+    public InterimDTO Interim;
+
     /// <summary>The end frame of the current game once it has finished (else null).</summary>
     public GameEndDTO LastEnd;
 
