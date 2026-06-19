@@ -223,6 +223,50 @@ namespace Ceres.Chess.GameEngines
 
 
     /// <summary>
+    /// Returns the MultiPV result (ordered candidate moves with evaluations, plus the
+    /// best-move stabilization depth) reconstructed from the most recently completed search.
+    /// The engine should have been configured with the UCI option "MultiPV" &gt; 1
+    /// (e.g. via uciSetOptionCommands) for more than one line to be available.
+    /// </summary>
+    /// <param name="searchedPosition">The position that was searched (used to decode UCI moves).</param>
+    public MultiPVResult ParseLastMultiPV(Position searchedPosition)
+    {
+      return MultiPVResult.Parse(UCIRunner.LastInfoLineByMultiPV, UCIRunner.BestLineHistory, searchedPosition);
+    }
+
+
+    /// <summary>
+    /// Runs a search restricted to a given set of root moves (UCI "searchmoves"), at a nodes- or
+    /// seconds-per-move limit, and returns the parsed MultiPV result. Used by the suite builder to
+    /// evaluate the best ALTERNATIVE move (by excluding the engine's preferred move from the list),
+    /// which gives a full-strength margin without the pruning penalty of a MultiPV search.
+    /// </summary>
+    /// <param name="pos">Position to search.</param>
+    /// <param name="searchLimit">Nodes-per-move or seconds-per-move limit.</param>
+    /// <param name="searchMovesUCI">Root moves to consider (UCI long-algebraic, e.g. "e2e4").</param>
+    public MultiPVResult SearchRestricted(PositionWithHistory pos, SearchLimit searchLimit,
+                                          IReadOnlyList<string> searchMovesUCI)
+    {
+      if (searchMovesUCI == null || searchMovesUCI.Count == 0)
+      {
+        throw new ArgumentException("searchMovesUCI must be non-empty", nameof(searchMovesUCI));
+      }
+
+      string movesStr = string.Join(" ", searchMovesUCI);
+      string goCommand = searchLimit.Type switch
+      {
+        SearchLimitType.NodesPerMove => $"go nodes {(long)searchLimit.Value} searchmoves {movesStr}",
+        SearchLimitType.SecondsPerMove => $"go movetime {(int)(searchLimit.Value * 1000)} searchmoves {movesStr}",
+        _ => throw new NotSupportedException($"SearchRestricted supports NodesPerMove or SecondsPerMove (got {searchLimit.Type})")
+      };
+
+      UCIRunner.EvalPositionPrepare();
+      UCIRunner.EvalPosition(pos.GetFENAndMovesString(IsChess960), null, 0, goCommand);
+      return ParseLastMultiPV(pos.FinalPosition);
+    }
+
+
+    /// <summary>
     /// Executes any preparatory steps (that should not be counted in thinking time) before a search.
     /// </summary>
     protected override void DoSearchPrepare()

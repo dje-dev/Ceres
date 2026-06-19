@@ -147,6 +147,19 @@ namespace Ceres.Chess.ExternalPrograms.UCI
 
     public List<string> InfoStringDict0 = new List<string>();
 
+    /// <summary>
+    /// For each multipv index, the most recent (deepest) UCI search info line seen during the
+    /// current search. Populated whenever the engine emits lines with a principal variation and a
+    /// score (always for MultiPV &gt; 1, and also for MultiPV = 1). Cleared at the start of each search.
+    /// </summary>
+    public readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> LastInfoLineByMultiPV = new();
+
+    /// <summary>
+    /// Sequence of multipv-1 (best line) info lines seen during the current search, in arrival order.
+    /// Used to determine the depth at which the best move stabilized. Cleared at the start of each search.
+    /// </summary>
+    public readonly System.Collections.Concurrent.ConcurrentQueue<string> BestLineHistory = new();
+
     void DataRead(int id, string data)
     {
       double elapsedTime = (double)(Stopwatch.GetTimestamp() - startTime) / freq;
@@ -174,6 +187,18 @@ namespace Ceres.Chess.ExternalPrograms.UCI
         {
           lastSearchInfo = new UCISearchInfo(data, lastBestMove, InfoStringDict0);// id == 0 ? InfoStringDict0 : null);
           lastInfo = data;
+        }
+
+        // Capture per-multipv lines so a MultiPVResult can be reconstructed after the search
+        // (used by the suite builder oracle). Only lines that carry a scored principal variation.
+        if (data.Contains(" pv ") && data.Contains("score"))
+        {
+          int multiPVIndex = UCIInfoParse.ExtractMultiPVIndex(data);
+          LastInfoLineByMultiPV[multiPVIndex] = data;
+          if (multiPVIndex == 1)
+          {
+            BestLineHistory.Enqueue(data);
+          }
         }
       }
     }
@@ -319,6 +344,8 @@ namespace Ceres.Chess.ExternalPrograms.UCI
 
       lastBestMove = null;
       lastInfo = null;
+      LastInfoLineByMultiPV.Clear();
+      BestLineHistory.Clear();
 
       //      string posString = fenAndMovesString.Contains("startpos") ? fen
       string curPosCmd = "position ";
