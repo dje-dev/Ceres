@@ -257,6 +257,11 @@ namespace Ceres.Features.Suites
 
     List<float> solvedPct1MinusPct2Samples = new();
 
+    // Per-position graded-score difference (engine 1 minus engine 2), in 0-10 points.
+    // Accumulated only when a second engine is present; used to compute the headline
+    // solution-quality z-score (a paired-difference significance test over the suite).
+    List<float> scoreDiffSamples = new();
+
     float totalTimeOther = 0;
     float totalTimeCeres1 = 0;
     float totalTimeCeres2 = 0;
@@ -624,6 +629,16 @@ namespace Ceres.Features.Suites
       float avgEPS1 = numSearches > 0 ? (float)sumEPS1 / numSearches : 0;
       float avgEPS2 = numSearches > 0 ? (float)sumEPS2 / numSearches : 0;
 
+      // Graded solution-quality difference (engine 1 minus engine 2) and its significance.
+      float[] scoreDiffArr = scoreDiffSamples.ToArray();
+      float scoreDiffMean = scoreDiffArr.Length > 0 ? (float)StatUtils.Average(scoreDiffArr) : 0;
+      float scoreDiffSE = scoreDiffArr.Length > 1 ? (float)StatUtils.StdDev(scoreDiffArr) / MathF.Sqrt(scoreDiffArr.Length) : 0;
+
+      // Nodes-to-solution speed difference (difference in fraction of nodes when top move chosen).
+      float[] fasterArr = solvedPct1MinusPct2Samples.ToArray();
+      float fasterMean = fasterArr.Length > 0 ? (float)StatUtils.Average(fasterArr) : 0;
+      float fasterSE = fasterArr.Length > 1 ? (float)StatUtils.StdDev(fasterArr) / MathF.Sqrt(fasterArr.Length) : 0;
+
       return new SuiteTestResult(Def)
       {
         AvgScore1 = (float)accCeres1 / numSearches,
@@ -690,7 +705,18 @@ namespace Ceres.Features.Suites
         CountPolicyKLDPositions = countPolicyKLD,
         AvgEPS1 = avgEPS1,
         AvgEPS2 = avgEPS2,
-        RelativeEPSPct = avgEPS2 > 0 ? (avgEPS1 / avgEPS2 - 1.0f) * 100.0f : 0
+        RelativeEPSPct = avgEPS2 > 0 ? (avgEPS1 / avgEPS2 - 1.0f) * 100.0f : 0,
+
+        // Graded solution-quality difference (the headline decision statistic).
+        ScoreDiffMean = scoreDiffMean,
+        ScoreDiffStdErr = scoreDiffSE,
+        ScoreDiffNumSamples = scoreDiffArr.Length,
+        ScoreDiffZ = scoreDiffSE > 0 ? scoreDiffMean / scoreDiffSE : 0,
+
+        // Nodes-to-solution speed difference (negative favors engine 1).
+        NodesToFindFasterMean = fasterMean,
+        NodesToFindFasterStdErr = fasterSE,
+        NodesToFindFasterZ = fasterSE > 0 ? fasterMean / fasterSE : 0
       };
 
     }
@@ -1316,6 +1342,17 @@ namespace Ceres.Features.Suites
       float avgFaster = (float) StatUtils.Average(solvedPct1MinusPct2Samples);
       float stdFaster = (float)StatUtils.StdDev(solvedPct1MinusPct2Samples) / MathF.Sqrt(solvedPct1MinusPct2Samples.Count);
       Def.Output.WriteLine($"Ceres1 time required to solve vs. Ceres2 (%) {(100* avgFaster),5:F2} +/-{(100 * stdFaster),5:F2}");
+
+      if (Def.CeresEngine2Def != null && scoreDiffSamples.Count > 0)
+      {
+        // Headline decision statistic: paired graded-score difference (Ceres1 - Ceres2) over the suite.
+        // With weighted EPDs this is a continuous solution-quality signal; |z| >~ 2 is significant.
+        float sdMean = (float)StatUtils.Average(scoreDiffSamples);
+        float sdSE = scoreDiffSamples.Count > 1 ? (float)StatUtils.StdDev(scoreDiffSamples) / MathF.Sqrt(scoreDiffSamples.Count) : 0;
+        float sdZ = sdSE > 0 ? sdMean / sdSE : 0;
+        Def.Output.WriteLine();
+        Def.Output.WriteLine($"Graded solution-quality difference (Ceres1 - Ceres2, 0-10 pts) {sdMean,6:F3} +/-{sdSE,5:F3}  z= {sdZ,5:F2}  (n={scoreDiffSamples.Count})");
+      }
 
       if (Def.CeresEngine2Def != null)
       {
@@ -2105,6 +2142,14 @@ namespace Ceres.Features.Suites
       {
         accCeres1 += scoreCeres1;
         accCeres2 += scoreCeres2;
+
+        // Paired graded-score difference (only meaningful when a second engine is present).
+        // scoreCeres1/scoreCeres2 are graded (0-10) when the EPD carries weighted ScoredMoves,
+        // so this captures solution-quality differences continuously rather than just solved/unsolved.
+        if (search2 != null)
+        {
+          scoreDiffSamples.Add(scoreCeres1 - scoreCeres2);
+        }
 
         // Accumulate how many nodes were required to find one of the correct moves
         // (only in cases where both engines found correct move at some point).

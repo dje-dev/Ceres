@@ -157,6 +157,43 @@ namespace Ceres.Features.Suites
     /// <summary>Difference in average solve score (engine 1 minus engine 2).</summary>
     public float SolveScoreDifference => AvgScore1 - AvgScore2;
 
+    // --- Graded (regret-weighted) solution-quality comparison, engine 1 vs engine 2 ---
+
+    /// <summary>Mean per-position graded-score difference (engine 1 minus engine 2), in 0-10 points.
+    /// With weighted EPDs (ScoredMoves), this is a continuous solution-quality signal rather than binary solved/unsolved.</summary>
+    public float ScoreDiffMean;
+
+    /// <summary>Standard error of the mean graded-score difference.</summary>
+    public float ScoreDiffStdErr;
+
+    /// <summary>Number of positions contributing to the graded-score difference (both engines searched).</summary>
+    public int ScoreDiffNumSamples;
+
+    /// <summary>
+    /// Z-score of the mean graded-score difference (ScoreDiffMean / ScoreDiffStdErr). The headline
+    /// decision statistic: |z| greater than ~2 indicates engine 1 is statistically better (positive) or
+    /// worse (negative) than engine 2 at finding the oracle-preferred move across the suite.
+    /// </summary>
+    public float ScoreDiffZ;
+
+    /// <summary>Average graded regret for engine 1 (fraction of best-move credit forfeited; 0 = always best move).</summary>
+    public float AvgRegret1 => 1.0f - AvgScore1 / 10.0f;
+
+    /// <summary>Average graded regret for engine 2 (fraction of best-move credit forfeited; 0 = always best move).</summary>
+    public float AvgRegret2 => 1.0f - AvgScore2 / 10.0f;
+
+    // --- Nodes-to-solution speed comparison (engine 1 vs engine 2) ---
+
+    /// <summary>Mean per-position difference in fraction-of-nodes-when-top-move-chosen (engine 1 minus engine 2);
+    /// negative means engine 1 locked onto its move earlier (using a smaller fraction of its search) than engine 2.</summary>
+    public float NodesToFindFasterMean;
+
+    /// <summary>Standard error of <see cref="NodesToFindFasterMean"/>.</summary>
+    public float NodesToFindFasterStdErr;
+
+    /// <summary>Z-score of <see cref="NodesToFindFasterMean"/> (negative favors engine 1 finding its move faster).</summary>
+    public float NodesToFindFasterZ;
+
     public string SummaryLine
     {
       get
