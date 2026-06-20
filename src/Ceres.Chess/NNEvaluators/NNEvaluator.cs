@@ -359,6 +359,16 @@ namespace Ceres.Chess.NNEvaluators
 
     public long NumPositionsEvaluated { private set; get; }
 
+    /// <summary>
+    /// Optional tracker which accumulates the wall-clock time spent inside the
+    /// backend interop boundary ("backend time"). When non-null, evaluators that
+    /// support this instrumentation (currently NNEvaluatorTensorRT and NNEvaluatorCUDA) bracket
+    /// their native dispatch with EnterBackend/ExitBackend. A single instance is
+    /// typically shared across the evaluators of an NNEvaluatorSet so overlapping
+    /// backend calls are counted as a union rather than a sum.
+    /// </summary>
+    public BackendTimeTracker BackendTimeTracker { get; set; }
+
 
     /// <summary>
     /// Evaluates positions into internal buffers. 

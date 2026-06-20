@@ -303,6 +303,13 @@ namespace Ceres.Features.Suites
     long sumEPS1;
     long sumEPS2;
 
+    // Per-engine device backend ("in C++ interop") busy seconds and the matching search-loop
+    // elapsed seconds (denominator), accumulated only over moves where the metric is supported.
+    double sumBackendWait1;
+    double sumBackendWait2;
+    double sumBackendSearch1;
+    double sumBackendSearch2;
+
     // Number of positions in the test set actually run (after filtering/slicing).
     int numPositionsInRun;
 
@@ -650,6 +657,11 @@ namespace Ceres.Features.Suites
         TotalRuntimeLC0 = totalTimeOther,
         TotalRuntime1 = totalTimeCeres1,
         TotalRuntime2 = totalTimeCeres2,
+
+        TotalBackendWait1 = sumBackendWait1,
+        TotalBackendWait2 = sumBackendWait2,
+        TotalBackendSearch1 = sumBackendSearch1,
+        TotalBackendSearch2 = sumBackendSearch2,
 
         FinalQ1 = finalQ1.ToArray(),
         FinalQ2 = finalQ2?.ToArray(),
@@ -1136,6 +1148,8 @@ namespace Ceres.Features.Suites
       readonly long[] totTB;
       readonly double[] sumDepth; readonly int[] cntDepth;
       readonly double[] sumEnt;   readonly int[] cntEnt;
+      readonly double[] totBackendWait;   // device backend busy seconds (supported moves only)
+      readonly double[] totBackendSearch; // matching search-loop elapsed seconds (denominator)
 
       public MultiEngineAccumulator(List<MultiEngineEntry> entriesList, int baselineIndex)
       {
@@ -1163,6 +1177,8 @@ namespace Ceres.Features.Suites
         totTB = new long[n];
         sumDepth = new double[n]; cntDepth = new int[n];
         sumEnt = new double[n];   cntEnt = new int[n];
+        totBackendWait = new double[n];
+        totBackendSearch = new double[n];
       }
 
       public void AddPosition(GameEngineSearchResult[] results, EPDEntry epd)
@@ -1214,6 +1230,15 @@ namespace Ceres.Features.Suites
           totTime[k] += r.TimingStats.ElapsedTimeSecs;
           totNNEvals[k] += r.NumNNNodes;
           totTB[k] += r.CountSearchContinuations > 0 ? 0 : r.CountTablebaseHits;
+
+          // Device backend ("in C++ interop") busy time, accumulated only over moves where the
+          // metric is supported (NNEvaluatorTensorRT / NNEvaluatorCUDA), with the matching search-loop
+          // elapsed time as the denominator for the backend-busy fraction.
+          if (!double.IsNaN(r.TimeDeviceBackendWaitSeconds))
+          {
+            totBackendWait[k] += r.TimeDeviceBackendWaitSeconds;
+            totBackendSearch[k] += r.TimeElapsedTotalSeconds;
+          }
           if (r.AvgDepth > 0)
           {
             sumDepth[k] += r.AvgDepth; cntDepth[k]++;
@@ -1263,7 +1288,8 @@ namespace Ceres.Features.Suites
             TotalNNEvals = totNNEvals[k],
             TotalTablebaseHits = totTB[k],
             AvgDepth = cntDepth[k] > 0 ? (float)(sumDepth[k] / cntDepth[k]) : float.NaN,
-            AvgVisitEntropy = cntEnt[k] > 0 ? (float)(sumEnt[k] / cntEnt[k]) : float.NaN
+            AvgVisitEntropy = cntEnt[k] > 0 ? (float)(sumEnt[k] / cntEnt[k]) : float.NaN,
+            BackendBusyFraction = totBackendSearch[k] > 0 ? (float)(totBackendWait[k] / totBackendSearch[k]) : float.NaN
           };
         }
         return outArr;
@@ -1322,6 +1348,15 @@ namespace Ceres.Features.Suites
       if (Def.CeresEngine2Def != null)
       {
         Def.Output.WriteLine($"Avg Ceres2    pos/sec    {totalNodes2 / totalTimeCeres2,8:F2}");
+      }
+
+      Def.Output.WriteLine();
+      // Device backend busy fraction (time inside C++ interop / search-loop wall-clock; target 1.0).
+      // Only reported where supported (NNEvaluatorTensorRT / NNEvaluatorCUDA); otherwise shown as "-".
+      Def.Output.WriteLine($"Backend busy C1         {(sumBackendSearch1 > 0 ? (sumBackendWait1 / sumBackendSearch1).ToString("F3") : "-"),8}");
+      if (Def.CeresEngine2Def != null)
+      {
+        Def.Output.WriteLine($"Backend busy C2         {(sumBackendSearch2 > 0 ? (sumBackendWait2 / sumBackendSearch2).ToString("F3") : "-"),8}");
       }
 
       Def.Output.WriteLine();
@@ -1773,6 +1808,11 @@ namespace Ceres.Features.Suites
         sumEvalNumPos1 += evalNumPos1;
         sumTablebaseHits1 += search1.CountSearchContinuations > 0 ? 0 : search1.CountTablebaseHits;
         sumEPS1 += search1.EPS;
+        if (!double.IsNaN(search1.TimeDeviceBackendWaitSeconds))
+        {
+          sumBackendWait1 += search1.TimeDeviceBackendWaitSeconds;
+          sumBackendSearch1 += search1.TimeElapsedTotalSeconds;
+        }
 
         if (Def.RunCeres2Engine)
         {
@@ -1782,6 +1822,11 @@ namespace Ceres.Features.Suites
           sumEvalNumPos2 += evalNumPos2;
           sumTablebaseHits2 += search2.CountSearchContinuations > 0 ? 0 : search2.CountTablebaseHits;
           sumEPS2 += search2.EPS;
+          if (!double.IsNaN(search2.TimeDeviceBackendWaitSeconds))
+          {
+            sumBackendWait2 += search2.TimeDeviceBackendWaitSeconds;
+            sumBackendSearch2 += search2.TimeElapsedTotalSeconds;
+          }
         }
 
         // Correct-move-visit comparison: which engine placed a larger fraction of its visits on

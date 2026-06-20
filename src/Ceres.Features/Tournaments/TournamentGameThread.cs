@@ -880,6 +880,10 @@ namespace Ceres.Features.Tournaments
       long nodesEngine2Tot = 0;
       long evalsEngine1Tot = 0;
       long evalsEngine2Tot = 0;
+      double backendWaitEngine1Tot = 0;
+      double backendWaitEngine2Tot = 0;
+      double backendSearchEngine1Tot = 0;
+      double backendSearchEngine2Tot = 0;
       int movesEngine1 = 0;
       int movesEngine2 = 0;
       bool engine1ShouldHaveForfieted = false;
@@ -925,6 +929,10 @@ namespace Ceres.Features.Tournaments
           TotalNodesEngine2 = nodesEngine2Tot,
           TotalEvaluationsEngine1 = evalsEngine1Tot,
           TotalEvaluationsEngine2 = evalsEngine2Tot,
+          BackendWaitSecondsEngine1 = backendWaitEngine1Tot,
+          BackendWaitSecondsEngine2 = backendWaitEngine2Tot,
+          BackendSearchSecondsEngine1 = backendSearchEngine1Tot,
+          BackendSearchSecondsEngine2 = backendSearchEngine2Tot,
           NumMovesForcedDeterministic = numNodesForcedDeterministic,
           RemainingTimeEngine1 = RemainingTime(searchLimitEngine1, movesEngine1, timeEngine1Tot),
           RemainingTimeEngine2 = RemainingTime(searchLimitEngine2, movesEngine2, timeEngine2Tot),
@@ -1032,7 +1040,8 @@ namespace Ceres.Features.Tournaments
         {
           info = DoMove(engine2, engineCheckAgainstEngine2,
                         gameMoveHistory, searchLimitWithIncrementsEngine2, scoresEngine2,
-                        ref nodesEngine2Tot, ref visitsEngine2Tot, ref timeEngine2Tot, ref evalsEngine2Tot, ref numNodesForcedDeterministic);
+                        ref nodesEngine2Tot, ref visitsEngine2Tot, ref timeEngine2Tot, ref evalsEngine2Tot,
+                        ref backendWaitEngine2Tot, ref backendSearchEngine2Tot, ref numNodesForcedDeterministic);
           movesEngine2++;
 
           if (engine2IsWhite)
@@ -1050,7 +1059,8 @@ namespace Ceres.Features.Tournaments
         {
           info = DoMove(engine1, null,
                         gameMoveHistory, searchLimitWithIncrementsEngine1, scoresEngine1,
-                        ref nodesEngine1Tot, ref visitsEngine1Tot, ref timeEngine1Tot, ref evalsEngine1Tot, ref numNodesForcedDeterministic);
+                        ref nodesEngine1Tot, ref visitsEngine1Tot, ref timeEngine1Tot, ref evalsEngine1Tot,
+                        ref backendWaitEngine1Tot, ref backendSearchEngine1Tot, ref numNodesForcedDeterministic);
           movesEngine1++;
           if (engine2IsWhite)
           {
@@ -1092,6 +1102,7 @@ namespace Ceres.Features.Tournaments
                                  SearchLimit searchLimit, List<float> scoresCP,
                                  ref long totalNodesUsed, ref long totalVisitsUsed, ref float totalTimeUsed,
                                  ref long totalEvalsUsed,
+                                 ref double totalBackendWaitUsed, ref double totalBackendSearchUsed,
                                  ref int numNodesForcedDeterministic)
       {
         SearchLimit thisMoveSearchLimit = searchLimit.Type switch
@@ -1267,6 +1278,15 @@ namespace Ceres.Features.Tournaments
         if (engineMove.EPS > 0)
         {
           totalEvalsUsed += (long)MathF.Round(engineMove.EPS * engineTime);
+        }
+
+        // Accumulate device backend ("in C++ interop") busy time for this move (only where the
+        // backend supports the metric, i.e. NNEvaluatorTensorRT). The search-loop elapsed time is
+        // accumulated alongside as the matching denominator so the aggregate fraction is well-defined.
+        if (!double.IsNaN(engineMove.TimeDeviceBackendWaitSeconds))
+        {
+          totalBackendWaitUsed += engineMove.TimeDeviceBackendWaitSeconds;
+          totalBackendSearchUsed += engineMove.TimeElapsedTotalSeconds;
         }
         if (isWhite)
         {

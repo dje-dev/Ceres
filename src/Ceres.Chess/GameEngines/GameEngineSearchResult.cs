@@ -167,6 +167,25 @@ namespace Ceres.Chess.GameEngines
     /// </summary>
     public float VisitEntropy;
 
+    /// <summary>
+    /// Total wall-clock seconds elapsed for the search loop window (NaN if not measured).
+    /// </summary>
+    public double TimeElapsedTotalSeconds = double.NaN;
+
+    /// <summary>
+    /// Seconds during which at least one evaluator was executing inside the device backend
+    /// (C++ interop boundary). The ratio TimeDeviceBackendWaitSeconds/TimeElapsedTotalSeconds
+    /// approaches 1.0 as the search becomes GPU-bound. NaN if the backend does not support
+    /// this instrumentation (currently NNEvaluatorTensorRT and NNEvaluatorCUDA).
+    /// </summary>
+    public double TimeDeviceBackendWaitSeconds = double.NaN;
+
+    /// <summary>
+    /// Complement of TimeDeviceBackendWaitSeconds: seconds during which neither evaluator was
+    /// inside the backend (GPU idle / C# overhead). NaN if unsupported.
+    /// </summary>
+    public double TimeDeviceBackendIdleSeconds = double.NaN;
+
     #endregion
 
     public GameEngineSearchResult(string moveString, float scoreQ, float scoreCentipawns, float mAvg, 

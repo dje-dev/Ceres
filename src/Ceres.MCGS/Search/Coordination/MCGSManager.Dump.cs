@@ -249,7 +249,25 @@ public partial class MCGSManager
     writer.WriteLine($"SearchLimitInitial.Value    {SearchLimitInitial.Value,14:N2}");
     writer.WriteLine($"SearchLimit.FracExtensible  {SearchLimit.FractionExtensibleIfNeeded,14:N2}");
     writer.WriteLine($"FractionExtended            {FractionExtendedSoFar,14:F2}");
-    writer.WriteLine($"Elapsed Search Time         {(DateTime.Now - StartTimeThisSearch).TotalSeconds,14:F2}");
+
+    {
+      // Use the true captured search duration once the search has completed (TimeElapsedTotalSeconds),
+      // falling back to a live measurement only while a search is still in progress. This keeps the
+      // elapsed time and the backend-busy fraction consistent and free of any idle wall-clock that
+      // would otherwise accrue between the search finishing and this dump being requested.
+      bool searchCompleted = !double.IsNaN(TimeElapsedTotalSeconds);
+      double searchSecs = searchCompleted ? TimeElapsedTotalSeconds
+                                          : (DateTime.Now - StartTimeThisSearch).TotalSeconds;
+      writer.WriteLine($"Elapsed Search Time         {searchSecs,14:F2}");
+
+      // Device backend utilization: fraction of the search wall-clock during which at least one
+      // evaluator was inside the backend (C++ interop). Target is 1.0 (whole move GPU-bound).
+      var backendTracker = EvaluatorsSet?.BackendTimeTracker;
+      double backendBusy = (backendTracker?.EverUsed ?? false) ? backendTracker.BusySeconds : double.NaN;
+      double busyFrac = (!double.IsNaN(backendBusy) && searchSecs > 0) ? backendBusy / searchSecs : double.NaN;
+      writer.WriteLine($"Backend Busy Time           {backendBusy,14:F2}");
+      writer.WriteLine($"Backend Busy Fraction       {busyFrac,14:F3}");
+    }
 
     writer.WriteLine($"FractionSearchRemaining     {FractionSearchRemaining,14:F3}");
     writer.WriteLine($"Estimated NPS               {EstimatedNPS,14:N0}");

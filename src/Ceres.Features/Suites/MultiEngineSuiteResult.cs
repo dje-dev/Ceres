@@ -113,6 +113,13 @@ namespace Ceres.Features.Suites
     /// <summary>Average visit-distribution entropy (NaN if unavailable, e.g. MCTS / external).</summary>
     public float AvgVisitEntropy = float.NaN;
 
+    /// <summary>
+    /// Fraction of search-loop wall-clock during which the device backend ("in C++ interop") was
+    /// busy, aggregated across all positions where the metric is supported. Approaches 1.0 as
+    /// searches become GPU-bound. NaN if unsupported (NNEvaluatorTensorRT / NNEvaluatorCUDA report it).
+    /// </summary>
+    public float BackendBusyFraction = float.NaN;
+
     public override string ToString()
       => $"<MultiEngineEngineResult {ID}{(IsBaseline ? "*" : "")} {Kind} solve={AvgSolveScorePct:F1}% EPS={AvgEPS:N0} Q={AvgQ:F3}>";
   }

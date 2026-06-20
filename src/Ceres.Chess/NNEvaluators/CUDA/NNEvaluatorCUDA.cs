@@ -238,8 +238,20 @@ namespace Ceres.Chess.NNEvaluators.CUDA
         PrepareInputPositions(positions);
       }
 
-      // Actually do the NN evaluation
-      Evaluator.EvaluateNN(numPositions);
+      // Actually do the NN evaluation. Bracket the (blocking) GPU forward pass as "backend time"
+      // for utilization measurement; EvaluateNN runs the kernels and synchronizes the stream, so
+      // this interval is the device-busy time. The managed input encoding (PrepareInputPositions)
+      // above is intentionally outside the timed region.
+      BackendTimeTracker tracker = BackendTimeTracker;
+      tracker?.EnterBackend();
+      try
+      {
+        Evaluator.EvaluateNN(numPositions);
+      }
+      finally
+      {
+        tracker?.ExitBackend();
+      }
 
       NNEvaluatorStats.UpdateStatsForBatch(GPUID, numPositions);
     }

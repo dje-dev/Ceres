@@ -50,6 +50,9 @@ public record GameEngineSearchResultCeresMCGS : GameEngineSearchResult
 
   public GameEngineSearchResultsStats Stats;
 
+  // NOTE: TimeElapsedTotalSeconds / TimeDeviceBackendWaitSeconds / TimeDeviceBackendIdleSeconds
+  // are declared on the base GameEngineSearchResult (populated below from the manager).
+
 
   /// <summary>
   /// Constructor.
@@ -102,5 +105,8 @@ public record GameEngineSearchResultCeresMCGS : GameEngineSearchResult
     CountTablebaseHits = manager.CountTablebaseHits;
     CountSearchContinuations = search.CountSearchContinuations;
     VisitEntropy = manager.Engine.Graph.CalcAvgVisitEntropy();
+    TimeElapsedTotalSeconds = manager.TimeElapsedTotalSeconds;
+    TimeDeviceBackendWaitSeconds = manager.TimeDeviceBackendWaitSeconds;
+    TimeDeviceBackendIdleSeconds = manager.TimeDeviceBackendIdleSeconds;
   }
 }

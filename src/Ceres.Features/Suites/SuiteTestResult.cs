@@ -46,6 +46,19 @@ namespace Ceres.Features.Suites
     public float TotalRuntime1;
     public float TotalRuntime2;
 
+    // Device backend ("in C++ interop") busy seconds and matching search-loop elapsed seconds
+    // (denominator), summed only over moves where supported (NNEvaluatorTensorRT / NNEvaluatorCUDA).
+    public double TotalBackendWait1;
+    public double TotalBackendWait2;
+    public double TotalBackendSearch1;
+    public double TotalBackendSearch2;
+
+    /// <summary>Fraction of search-loop wall-clock the device backend was busy for engine 1 (NaN if unsupported).</summary>
+    public double BackendBusyFraction1 => TotalBackendSearch1 > 0 ? TotalBackendWait1 / TotalBackendSearch1 : double.NaN;
+
+    /// <summary>Fraction of search-loop wall-clock the device backend was busy for engine 2 (NaN if unsupported).</summary>
+    public double BackendBusyFraction2 => TotalBackendSearch2 > 0 ? TotalBackendWait2 / TotalBackendSearch2 : double.NaN;
+
     public float TotalNodesLC0;
     public float TotalNodes1;
     public float TotalNodes2;

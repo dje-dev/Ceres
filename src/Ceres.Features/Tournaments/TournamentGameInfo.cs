@@ -193,6 +193,29 @@ namespace Ceres.Features.Tournaments
     public float TotalTimeEngine2;
 
     /// <summary>
+    /// Total device backend ("in C++ interop") busy seconds for engine 1 (only over moves
+    /// where the metric is supported). Paired with BackendSearchSecondsEngine1 to form the
+    /// backend-busy fraction. Zero if unsupported.
+    /// </summary>
+    public double BackendWaitSecondsEngine1;
+
+    /// <summary>
+    /// Total device backend busy seconds for engine 2 (see BackendWaitSecondsEngine1).
+    /// </summary>
+    public double BackendWaitSecondsEngine2;
+
+    /// <summary>
+    /// Total search-loop elapsed seconds for engine 1 over moves where the backend-busy metric
+    /// is supported (denominator for the backend-busy fraction). Zero if unsupported.
+    /// </summary>
+    public double BackendSearchSecondsEngine1;
+
+    /// <summary>
+    /// Total search-loop elapsed seconds for engine 2 where the backend-busy metric is supported.
+    /// </summary>
+    public double BackendSearchSecondsEngine2;
+
+    /// <summary>
     /// Remaining time on clock left used by engine 1 in seconds.
     /// </summary>
     public float RemainingTimeEngine1;

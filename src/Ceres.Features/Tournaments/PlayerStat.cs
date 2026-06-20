@@ -72,6 +72,27 @@ namespace Ceres.Features.Tournaments
     public float PlayerTotalTime { get; set; }
 
     /// <summary>
+    /// Total device backend ("in C++ interop") busy seconds for player across all games,
+    /// summed only over moves where the metric is supported (NNEvaluatorTensorRT / NNEvaluatorCUDA).
+    /// </summary>
+    public double PlayerTotalBackendWaitSeconds { get; set; }
+
+    /// <summary>
+    /// Total search-loop elapsed seconds for player over the same supported moves
+    /// (denominator for the backend-busy fraction). Zero if the metric is unsupported.
+    /// </summary>
+    public double PlayerTotalBackendSearchSeconds { get; set; }
+
+    /// <summary>
+    /// Fraction of search-loop wall-clock during which the device backend was busy
+    /// (aggregated across all the player's supported moves). Approaches 1.0 as searches
+    /// become GPU-bound. NaN if the metric is unsupported for this player.
+    /// </summary>
+    public double BackendBusyFraction => PlayerTotalBackendSearchSeconds > 0
+                                       ? PlayerTotalBackendWaitSeconds / PlayerTotalBackendSearchSeconds
+                                       : double.NaN;
+
+    /// <summary>
     /// The median average for nodes per second within a specific range from median value - typically +/- 20% range for all moves in all games.
     /// </summary>
     public float MedianNPSAverage { get; set; }      

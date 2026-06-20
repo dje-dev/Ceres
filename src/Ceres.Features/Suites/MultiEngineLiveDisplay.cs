@@ -114,6 +114,7 @@ namespace Ceres.Features.Suites
         RowDef.Separator(),
         new RowDef { Label = "Search time (average sec)",      Selector = r => r.AvgTimeSecs,            Format = "0.00",   LowerIsBetter = true,  BaselineRelativeDelta = true, DeltaAsPercent = true, DeltaFormat = "+0.0%;-0.0%;0.0%" },
         new RowDef { Label = "Evaluation intensity (EPS)",     Selector = r => r.AvgEPS,                 Format = "N0",     LowerIsBetter = false, BaselineRelativeDelta = true, DeltaAsPercent = true, DeltaFormat = "+0.0%;-0.0%;0.0%" },
+        new RowDef { Label = "Backend busy fraction",          Selector = r => r.BackendBusyFraction,    Format = "0.000",  LowerIsBetter = false },
         RowDef.Separator(),
         new RowDef { Label = "Solve score",                    Selector = r => r.AvgSolveScorePct,       Format = "0.0",    LowerIsBetter = false },
         new RowDef { Label = "Solve correct move visits (3%)", Selector = r => r.AvgCorrectMoveVisitPct, Format = "0.0",    LowerIsBetter = false },

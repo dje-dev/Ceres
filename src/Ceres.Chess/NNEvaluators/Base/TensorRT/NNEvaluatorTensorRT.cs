@@ -1589,26 +1589,48 @@ public class NNEvaluatorTensorRT : NNEvaluator
     handlerBatch = batch;
     SubBatchOutputHandler handler = cachedHandler ??= OutputHandler;
 
-    if (NetType == ONNXNetExecutor.NetTypeEnum.LC0)
-    {
-      // LC0: convert the 112-plane input directly into the pinned input buffer via
-      // FillInputLC0 (no managed staging buffer + redundant copy). handlerBatch was set above.
-      // inputHalfBuffer is passed only as scratch for the rare multi-sub-batch fallback.
-      pool.ProcessWithHandlerDirect(numPos, cachedFillInputLC0 ??= FillInputLC0, handler, inputHalfBuffer);
-    }
-    else if (useByteInputs)
-    {
-      // TPG byte path
-      pool.ProcessBytesWithHandler(squareByteBuffer, numPos, handler);
-    }
-    else
+    // For the TPG half path, perform the byte->Half conversion BEFORE the timed
+    // backend region below so this managed (C#) work is not counted as backend time.
+    bool isTPGHalfPath = NetType != ONNXNetExecutor.NetTypeEnum.LC0 && !useByteInputs;
+    if (isTPGHalfPath)
     {
       // TPG half path: convert byte buffer to half buffer with /100 scaling
       int elemsToCopy = numPos * inputElementsPerPosition;
       Memory<byte> sourceBytes = new Memory<byte>(squareByteBuffer, 0, elemsToCopy);
       Memory<Half> targetHalfs = new Memory<Half>(inputHalfBuffer, 0, elemsToCopy);
       TPGConvertersToFlat.CopyAndDivideSIMD(sourceBytes, targetHalfs, 100.0f);
-      pool.ProcessWithHandler(inputHalfBuffer, numPos, handler);
+    }
+
+    // Bracket the pool dispatch (the full GPU round-trip: H2D copy + inference +
+    // D2H copy + stream sync) as "backend time" for utilization measurement.
+    // NOTE: for LC0-format nets the plane->Half conversion runs inside
+    // ProcessWithHandlerDirect (via FillInputLC0) and is therefore included here;
+    // TPG/Ceres nets convert outside this region (see above) so are unaffected.
+    BackendTimeTracker tracker = this.BackendTimeTracker;
+    tracker?.EnterBackend();
+    try
+    {
+      if (NetType == ONNXNetExecutor.NetTypeEnum.LC0)
+      {
+        // LC0: convert the 112-plane input directly into the pinned input buffer via
+        // FillInputLC0 (no managed staging buffer + redundant copy). handlerBatch was set above.
+        // inputHalfBuffer is passed only as scratch for the rare multi-sub-batch fallback.
+        pool.ProcessWithHandlerDirect(numPos, cachedFillInputLC0 ??= FillInputLC0, handler, inputHalfBuffer);
+      }
+      else if (useByteInputs)
+      {
+        // TPG byte path
+        pool.ProcessBytesWithHandler(squareByteBuffer, numPos, handler);
+      }
+      else
+      {
+        // TPG half path (input already converted into inputHalfBuffer above)
+        pool.ProcessWithHandler(inputHalfBuffer, numPos, handler);
+      }
+    }
+    finally
+    {
+      tracker?.ExitBackend();
     }
 
     // Apply value head blending into separate buffers if FractionValueHead2 is specified

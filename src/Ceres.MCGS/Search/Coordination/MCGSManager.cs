@@ -220,6 +220,31 @@ public partial class MCGSManager : IDisposable
   /// </summary>
   public int NumEvalsThisSearch;
 
+  /// <summary>
+  /// True wall-clock seconds of the last search: from when the search method was first
+  /// invoked (StartTimeThisSearch) until the move was actually decided (end of DoSearch).
+  /// This is captured at search completion (NOT recomputed live), so it is not inflated by
+  /// any idle time before a later dump command. NaN until a search has completed.
+  /// </summary>
+  public double TimeElapsedTotalSeconds = double.NaN;
+
+  /// <summary>
+  /// Cumulative wall-clock seconds during the last search in which at least one of
+  /// the evaluators (Evaluator0/Evaluator1) was executing inside the backend
+  /// (C++ interop boundary). The ratio TimeDeviceBackendWaitSeconds/TimeElapsedTotalSeconds
+  /// approaches 1.0 as the whole move becomes GPU-bound (i.e. C# overhead approaches 0).
+  /// Reported as NaN when the backend does not support this instrumentation
+  /// (currently NNEvaluatorTensorRT and NNEvaluatorCUDA).
+  /// </summary>
+  public double TimeDeviceBackendWaitSeconds = double.NaN;
+
+  /// <summary>
+  /// Complement of TimeDeviceBackendWaitSeconds: cumulative seconds during the last
+  /// search in which NEITHER evaluator was inside the backend (GPU idle / C# overhead).
+  /// NaN when unsupported.
+  /// </summary>
+  public double TimeDeviceBackendIdleSeconds = double.NaN;
+
 
   public ManagerGameLimitInputs LastGameLimitInputs;
   public ManagerGameLimitOutputs LastGameLimitOutputs;
@@ -492,6 +517,10 @@ public partial class MCGSManager : IDisposable
     manager.RootNWhenSearchStarted = manager.Engine.SearchRootNode.N;
     manager.NumEvalsThisSearch = 0;
 
+    // Reset the backend-time tracker once at the true start of the search so backend-busy time
+    // accumulates across all passes (including any extension passes) over the whole move.
+    manager.EvaluatorsSet?.BackendTimeTracker?.Reset();
+
     PositionWithHistory priorMoves = manager.Engine.Graph.Store.NodesStore.PositionHistory;
 
     // Make sure not already checkmate/stalemate
@@ -640,6 +669,18 @@ public partial class MCGSManager : IDisposable
 
       numSearches++;
     } while (shouldExtendSearch);
+
+    // Capture the true search duration and device-backend utilization at the actual end of the
+    // search (after best-move selection across all passes). Measured here rather than live so the
+    // values reflect begin->end of the real search and are not inflated by idle wall-clock before
+    // a later dump command. The denominator is this whole-search time, so the busy fraction
+    // accounts for any C# overhead outside the GPU-bound inner loop as well.
+    manager.TimeElapsedTotalSeconds = (DateTime.Now - manager.StartTimeThisSearch).TotalSeconds;
+    var backendTracker = manager.EvaluatorsSet?.BackendTimeTracker;
+    manager.TimeDeviceBackendWaitSeconds = (backendTracker?.EverUsed ?? false) ? backendTracker.BusySeconds : double.NaN;
+    manager.TimeDeviceBackendIdleSeconds = double.IsNaN(manager.TimeDeviceBackendWaitSeconds)
+                                         ? double.NaN
+                                         : Math.Max(0, manager.TimeElapsedTotalSeconds - manager.TimeDeviceBackendWaitSeconds);
 
     if (shouldStopAfterTwoNodesDueToOnlyOneLegalMove)
     {

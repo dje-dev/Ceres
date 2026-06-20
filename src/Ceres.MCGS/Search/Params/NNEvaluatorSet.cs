@@ -51,6 +51,15 @@ public partial class NNEvaluatorSet : IDisposable
   /// </summary>
   public readonly NNEvaluatorDef EvaluatorDefSecondary;
 
+  /// <summary>
+  /// Tracker accumulating wall-clock backend ("inside C++ interop") time, shared by
+  /// Evaluator0 and the overlapped Evaluator1 so that concurrent backend calls are
+  /// counted as a union rather than a sum. Read after a search to compute the
+  /// GPU-utilization metrics. Currently only populated when the underlying
+  /// evaluator is NNEvaluatorTensorRT; EvaluatorSecondary is intentionally excluded.
+  /// </summary>
+  public readonly BackendTimeTracker BackendTimeTracker = new();
+
   #region Internal data
 
   [NonSerialized]
@@ -176,7 +185,11 @@ public partial class NNEvaluatorSet : IDisposable
       {
         lock (makeEvaluator0Lock)
         {
-          evaluator0 ??= NNEvaluatorFactory.BuildEvaluator(EvaluatorDef, null);
+          if (evaluator0 == null)
+          {
+            evaluator0 = NNEvaluatorFactory.BuildEvaluator(EvaluatorDef, null);
+            evaluator0.BackendTimeTracker = BackendTimeTracker;
+          }
         }
       }
 
@@ -207,6 +220,7 @@ public partial class NNEvaluatorSet : IDisposable
             // from which the already loaded network weights can be reused.
             Debug.Assert(Evaluator0 != null);
             evaluator1 = NNEvaluatorFactory.BuildEvaluator(EvaluatorDef, Evaluator0);
+            evaluator1.BackendTimeTracker = BackendTimeTracker;
           }
         }
       }
