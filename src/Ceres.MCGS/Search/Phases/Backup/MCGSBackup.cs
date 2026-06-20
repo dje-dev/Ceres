@@ -20,6 +20,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
 using Ceres.Base.Misc;
 using Ceres.MCGS.Graphs.GEdgeHeaders;
@@ -91,7 +92,7 @@ public partial class MCGSBackup
   /// <param name="paths"></param>
   /// <param name="strategy"></param>
   /// <param name="iterator"></param>
-  internal void BackupAllSingleReduction(ConcurrentQueue<MCGSPath> paths,
+  internal void BackupAllSingleReduction(ListBounded<MCGSPath> paths,
                                          MCGSSelectBackupStrategyBase strategy,
                                          MCGSIterator iterator)
   {
@@ -118,7 +119,7 @@ public partial class MCGSBackup
   /// <param name="paths"></param>
   /// <param name="strategy"></param>
   /// <param name="iterator"></param>
-  internal void BackupAllParallelReduction(ConcurrentQueue<MCGSPath> paths,
+  internal void BackupAllParallelReduction(ListBounded<MCGSPath> paths,
                                            MCGSSelectBackupStrategyBase strategy,
                                            MCGSIterator iterator)
   {

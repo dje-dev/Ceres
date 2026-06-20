@@ -51,7 +51,7 @@ public partial class MCGSBackup
   /// <summary>
   /// Prepares collection of MCGSPath paths to begin backup from their leaves.
   /// </summary>
-  internal void PreparePathsForBackup(ConcurrentQueue<MCGSPath> paths)
+  internal void PreparePathsForBackup(ListBounded<MCGSPath> paths)
   {
     const int PATHS_PER_THREAD = 32;
 

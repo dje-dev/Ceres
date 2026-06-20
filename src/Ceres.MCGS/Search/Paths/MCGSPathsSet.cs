@@ -35,8 +35,14 @@ public partial class MCGSPathsSet : IDisposable
 
   /// <summary>
   /// The set of paths to be processed.
+  ///
+  /// A preallocated ListBounded (rather than a ConcurrentQueue) so the per-batch Reset
+  /// reuses the same backing array instead of orphaning the queue's internal segments to
+  /// the GC every batch. Filled lock-free during parallel select via AddConcurrent (all
+  /// readers run only after the select-phase worker-pool barrier). Sized to the path pool
+  /// capacity (maxBatchSize + 5; see MCGSIterator.paths), which hard-bounds the path count.
   /// </summary>
-  public readonly ConcurrentQueue<MCGSPath> Paths;
+  public readonly ListBounded<MCGSPath> Paths;
 
   /// <summary>
   /// Total number of paths processed (including aborted).
@@ -118,7 +124,8 @@ public partial class MCGSPathsSet : IDisposable
   public MCGSPathsSet(MCGSIterator parentIterator, int maxBatchSize)
   {
     ParentIterator = parentIterator;
-    Paths = new ConcurrentQueue<MCGSPath>();
+    // Sized to match the iterator's path pool (maxBatchSize + 5), which caps the number of paths.
+    Paths = new ListBounded<MCGSPath>(maxBatchSize + 5);
     NNPaths = new ListBounded<MCGSPath>(maxBatchSize);
  }
 
@@ -161,7 +168,8 @@ public partial class MCGSPathsSet : IDisposable
       }
     }
 
-    Paths.Enqueue(path);
+    // Lock-free add (same barrier rules as NNPaths above); preallocated so no per-batch GC churn.
+    Paths.AddConcurrent(path);
   }
 
 
@@ -171,7 +179,10 @@ public partial class MCGSPathsSet : IDisposable
   /// </summary>
   public void Reset()
   {
-    Paths.Clear();
+    // Clear(false): just resets the count (keeps the backing array); stale references beyond
+    // the new length are never read (all access is bounded by Count) and stay alive via the
+    // iterator's path pool anyway, so zeroing would be wasted work.
+    Paths.Clear(false);
     NNPaths.Clear();
     NNEvalSlotLimit = int.MaxValue;
     PendingDroppedVisits.Clear();

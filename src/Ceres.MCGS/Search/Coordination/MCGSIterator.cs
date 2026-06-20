@@ -121,6 +121,19 @@ public class MCGSIterator : IDisposable
 
   internal int numAllocatedPaths = 0;
 
+  /// <summary>
+  /// Per-iterator pool of MGMoveList snapshots, reused across batches to avoid the per-new-node
+  /// allocation of an MGMoveList (and its MGMove[]) when retaining a generated move list for a
+  /// newly created node (see AllocatedMoveListSnapshot / MCGSSelect.DoNewlyCreatedNode). Sized
+  /// to the path pool capacity (a snapshot is taken at most once per allocated path) and reset
+  /// each batch alongside numAllocatedPaths. The snapshots are consumed during the same batch's
+  /// NN evaluation and are no longer referenced after that batch's backup, so reusing them at the
+  /// next batch's reset is safe.
+  /// </summary>
+  readonly MGMoveList[] moveListSnapshotPool;
+
+  internal int numMoveListSnapshotsAllocated = 0;
+
   const bool ENABLE_LOGGING = false;
   private static readonly TextWriter iteratorLogWriter
     = ENABLE_LOGGING ? TextWriter.Synchronized(new StreamWriter(@"c:\temp\iterator_log.txt", append: true) { AutoFlush = false })
@@ -158,7 +171,32 @@ public class MCGSIterator : IDisposable
     
   }
 
-  internal void ResetPaths() => numAllocatedPaths = 0;
+  /// <summary>
+  /// Returns a pooled MGMoveList holding an exactly-usable copy of the given source moves,
+  /// reused across batches to avoid allocating a fresh MGMoveList (and MGMove[]) per newly
+  /// created node. Lock-free (Interlocked slot reservation), mirroring AllocatedPath; safe for
+  /// the parallel select workers. The pool is reset each batch in ResetPaths.
+  /// </summary>
+  internal MGMoveList AllocatedMoveListSnapshot(MGMoveList source)
+  {
+    int index = Interlocked.Increment(ref numMoveListSnapshotsAllocated) - 1;
+
+    MGMoveList list = moveListSnapshotPool[index];
+    if (list == null)
+    {
+      list = moveListSnapshotPool[index] = new MGMoveList(source.NumMovesUsed);
+    }
+
+    // Copy reuses the backing array when large enough (else grows it once and keeps it pooled).
+    list.Copy(source);
+    return list;
+  }
+
+  internal void ResetPaths()
+  {
+    numAllocatedPaths = 0;
+    numMoveListSnapshotsAllocated = 0;
+  }
 
 
   /// <summary>
@@ -179,6 +217,7 @@ public class MCGSIterator : IDisposable
     int maxBatchSize = Engine.Manager.ParamsSearch.Execution.MaxBatchSize;
     PathsSet = new(this, maxBatchSize);
     paths = new MCGSPath[maxBatchSize + 5];
+    moveListSnapshotPool = new MGMoveList[maxBatchSize + 5];
 
     pathVisitPool = new ArraySegmentPool<MCGSPathVisit>();
   }
@@ -457,7 +496,7 @@ public class MCGSIterator : IDisposable
       Engine.Graph.DumpNodesStructure();
       for (int i = 0; i < PathsSet.Paths.Count; i++)
       {
-        PathsSet.Paths.ToArray()[i].DumpAllVisits();
+        PathsSet.Paths[i].DumpAllVisits();
       }
 
       Engine.Graph.Validate(false);
@@ -645,21 +684,12 @@ public class MCGSIterator : IDisposable
     // The PathsSet is fully constructed (and its leaves evaluated) but not yet backed up.
     preBackupCallback?.Invoke(PathsSet);
 
-    // Snapshot the completed paths: the multi-threaded reduction backup (used once the root N
-    // exceeds its threshold) consumes (dequeues) PathsSet.Paths, which would otherwise leave
-    // nothing for the post-backup callback or for building the per-rollout result records below.
+    // Snapshot the completed paths for building the per-rollout result records below (and for the
+    // post-backup callback). Backup does not modify PathsSet.Paths (the parallel reduction copies
+    // into its own buffer), so this is a stable handle rather than a drain guard.
     MCGSPath[] completedPaths = PathsSet.Paths.ToArray();
 
     RunBackupPhase();
-
-    // Restore the queue if the backup drained it (multi-threaded reduction mode).
-    if (PathsSet.Paths.IsEmpty)
-    {
-      foreach (MCGSPath completedPath in completedPaths)
-      {
-        PathsSet.Paths.Enqueue(completedPath);
-      }
-    }
 
     postBackupCallback?.Invoke(PathsSet);
 

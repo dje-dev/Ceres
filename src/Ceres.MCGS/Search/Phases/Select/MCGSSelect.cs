@@ -1494,9 +1494,11 @@ public class MCGSSelect
                                      bool isDrawByRepetitionInCoalesceMode)
   {
     // childMoves arrives as the shared thread-local scratch but is retained below (assigned
-    // into the path visit's MovesList, later read by NN batch assembly). Make the exactly-sized
-    // copy immediately - this also frees the scratch for reuse by TranspositionAutoExtension.
-    childMoves = new MGMoveList(childMoves);
+    // into the path visit's MovesList, later read by NN batch assembly). Make the copy immediately
+    // - this also frees the scratch for reuse by TranspositionAutoExtension. The copy is taken from
+    // a per-iterator pool (reused across batches) to avoid a per-new-node MGMoveList/MGMove[]
+    // allocation; the snapshot is consumed within this batch and not referenced after its backup.
+    childMoves = pathsSet.ParentIterator.AllocatedMoveListSnapshot(childMoves);
 
     Debug.Assert(!(isDrawByRepetitionInCoalesceMode && childNode.Terminal.IsTerminal()));
 
