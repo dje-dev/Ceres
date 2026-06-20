@@ -261,15 +261,15 @@ public record ParamsSearch
   //   3.0 --> -42 Elo
   //   5.0 --> -50 Elo
   //  20.0 --> -52 Elo
-  public float TranspositionStopMinSupportRatioPositionAndHistoryMode = 3f;
+  public float TranspositionStopMinSupportRatioPositionAndHistoryMode = 4f;
 
 
   /// <summary>
   /// MinSupportRatio when running in Position mode.
-  /// Because visits are coalesced across all transposition paths,
-  /// the expectation for subgraph size is typically higher than with PositionAndHistory mode.
+  /// Note that the setting of RedescentStochasticProbability (if nonzero) will also
+  /// impact the frequency of descent stopping on transposition nodes.
   /// </summary>
-  public float TranspositionStopMinSupportRatioPositionMode = 4f;
+  public float TranspositionStopMinSupportRatioPositionMode = 3f;
 
 
   /// <summary>
@@ -283,12 +283,12 @@ public record ParamsSearch
   ///       (parent N &lt; <see cref="MCGSParamsFixed.REDESCENT_STOCHASTIC_FORCE_BELOW_PARENT_N"/>),
   ///       a warmup that guarantees some genuine deepening before the transposition-stop
   ///       short-circuit is permitted to apply.
-  /// At the default of 0 the transposition-stop logic is completely unchanged (a single predictable
+  /// At 0 the transposition-stop logic is completely unchanged (a single predictable
   /// branch is the only added cost on the hot path; the RNG is sampled only when the mode is active).
   /// Intended as an exploration knob to counteract over-reliance on cached transposition values
   /// (which can leave deep lines under-resolved when many parents share a heavily visited subgraph).
   /// </summary>
-  public float RedescentStochasticProbability = 0;
+  public float RedescentStochasticProbability = 0.3f;
 
 
   /// <summary>

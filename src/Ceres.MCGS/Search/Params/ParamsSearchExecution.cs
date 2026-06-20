@@ -90,11 +90,14 @@ public record ParamsSearchExecution
   /// <summary>
   /// When DualOverlappedIterators is true the two iterators' NN evaluations run concurrently on the
   /// GPU and can therefore complete (and back up) out of selection order ("crossing"). If false
-  /// (the default), backups are forced to occur in batch-selection order: the batch selected first
-  /// backs up first. A later batch waits (before taking the select/backup exclusion lock) until all
-  /// earlier batches have backed up. Cost is small (the wait largely hides behind the other iterator's GPU eval).
+  /// backups are forced to occur in batch-selection order: the batch selected first backs up first. 
+  /// A later batch waits (before taking the select/backup exclusion lock) until all earliser batches
+  /// have backed up. Cost is small (the wait largely hides behind the other iterator's GPU eval).
+  /// If true, a significant fraction (e.g. 10%) of batches can end up out-of-order for large slow nets
+  /// where both iterators can race thru select and backup phases to end up both in the evaluation phase.
+  /// Theoretically it seems best to disallow out-of-order, but matches consistenly slowed up to +15 Elo of allowed.
   /// </summary>
-  public bool AllowOutOfOrderBatches = false;
+  public bool AllowOutOfOrderBatches = true;
 
   /// <summary>
   /// Optional additional hard limit on size of gathered batch 
