@@ -1142,6 +1142,10 @@ namespace Ceres.Features.Suites
       readonly double[] sumCV;    readonly int[] cntCV;
       readonly double[] sumQDiff; readonly int[] cntQDiff;
       readonly double[] sumKLD;   readonly int[] cntKLD;
+      // Paired graded solution-quality difference vs the baseline (this engine minus baseline, 0-10
+      // graded points). Running sum and sum-of-squares per engine let Snapshot() compute the
+      // per-column z-score (mean / standard-error) without retaining the full per-position samples.
+      readonly double[] sumScoreDiff; readonly double[] sumScoreDiffSq; readonly int[] cntScoreDiff;
       readonly long[] totNodes;
       readonly double[] totTime;
       readonly long[] totNNEvals;
@@ -1171,6 +1175,7 @@ namespace Ceres.Features.Suites
         sumCV = new double[n];    cntCV = new int[n];
         sumQDiff = new double[n]; cntQDiff = new int[n];
         sumKLD = new double[n];   cntKLD = new int[n];
+        sumScoreDiff = new double[n]; sumScoreDiffSq = new double[n]; cntScoreDiff = new int[n];
         totNodes = new long[n];
         totTime = new double[n];
         totNNEvals = new long[n];
@@ -1187,6 +1192,26 @@ namespace Ceres.Features.Suites
 
         Position position = epd.Position;
         GameEngineSearchResult baseR = (baselineIndex >= 0 && baselineIndex < results.Length) ? results[baselineIndex] : null;
+
+        // Baseline's graded solve score (0..10) for this position, computed once so each engine's
+        // paired solution-quality difference (engine minus baseline) can be accumulated below
+        // regardless of engine ordering within the loop.
+        int baselineScore = 0;
+        bool haveBaselineScore = false;
+        if (baseR != null)
+        {
+          Move baseBM = default;
+          try
+          {
+            baseBM = Move.FromUCI(in position, baseR.MoveString);
+          }
+          catch
+          {
+            // Unparseable move (counts as not solved).
+          }
+          baselineScore = baseBM.IsNull ? 0 : epd.CorrectnessScore(baseBM, 10);
+          haveBaselineScore = true;
+        }
 
         for (int k = 0; k < n; k++)
         {
@@ -1251,6 +1276,15 @@ namespace Ceres.Features.Suites
           // Baseline-relative difference statistics (skipped for the baseline engine itself).
           if (k != baselineIndex && baseR != null)
           {
+            // Paired graded solution-quality difference (this engine minus baseline, 0-10 points).
+            if (haveBaselineScore)
+            {
+              double scoreDiff = score - baselineScore;
+              sumScoreDiff[k] += scoreDiff;
+              sumScoreDiffSq[k] += scoreDiff * scoreDiff;
+              cntScoreDiff[k]++;
+            }
+
             sumQDiff[k] += Math.Abs(r.ScoreQ - baseR.ScoreQ); cntQDiff[k]++;
             if (r.VerboseMoveStats != null && baseR.VerboseMoveStats != null)
             {
@@ -1269,6 +1303,20 @@ namespace Ceres.Features.Suites
         MultiEngineEngineResult[] outArr = new MultiEngineEngineResult[n];
         for (int k = 0; k < n; k++)
         {
+          // Per-column z-score of the paired graded solution-quality difference vs the baseline.
+          // Uses population standard deviation (/cnt) divided by sqrt(cnt) for the standard error,
+          // matching the headline two-engine statistic (StatUtils.StdDev / sqrt(n)).
+          float gradedScoreDiffZ = float.NaN;
+          if (k != baselineIndex && cntScoreDiff[k] > 1)
+          {
+            double cnt = cntScoreDiff[k];
+            double mean = sumScoreDiff[k] / cnt;
+            double ss = sumScoreDiffSq[k] - sumScoreDiff[k] * sumScoreDiff[k] / cnt;
+            double sd = ss > 0 ? Math.Sqrt(ss / cnt) : 0;
+            double se = sd / Math.Sqrt(cnt);
+            gradedScoreDiffZ = se > 0 ? (float)(mean / se) : 0f;
+          }
+
           outArr[k] = new MultiEngineEngineResult
           {
             ID = entries[k].ID,
@@ -1282,6 +1330,7 @@ namespace Ceres.Features.Suites
             AvgQ = cntQ[k] > 0 ? (float)(sumQ[k] / cntQ[k]) : float.NaN,
             AvgAbsQDiffVsBaseline = (k == baselineIndex || cntQDiff[k] == 0) ? float.NaN : (float)(sumQDiff[k] / cntQDiff[k]),
             AvgPolicyKLDVsBaseline = (k == baselineIndex || cntKLD[k] == 0) ? float.NaN : (float)(sumKLD[k] / cntKLD[k]),
+            GradedScoreDiffZVsBaseline = gradedScoreDiffZ,
             AvgCorrectMoveVisitPct = cntCV[k] > 0 ? (float)(sumCV[k] / cntCV[k]) : float.NaN,
             TotalNodes = totNodes[k],
             TotalTimeSecs = (float)totTime[k],
