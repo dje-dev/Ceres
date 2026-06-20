@@ -88,6 +88,15 @@ public record ParamsSearchExecution
   public bool DualEvaluators = true;
 
   /// <summary>
+  /// When DualOverlappedIterators is true the two iterators' NN evaluations run concurrently on the
+  /// GPU and can therefore complete (and back up) out of selection order ("crossing"). If false
+  /// (the default), backups are forced to occur in batch-selection order: the batch selected first
+  /// backs up first. A later batch waits (before taking the select/backup exclusion lock) until all
+  /// earlier batches have backed up. Cost is small (the wait largely hides behind the other iterator's GPU eval).
+  /// </summary>
+  public bool AllowOutOfOrderBatches = false;
+
+  /// <summary>
   /// Optional additional hard limit on size of gathered batch 
   /// of nodes (not all of which are necessarily destined for neural network evaluation).
   /// </summary>
@@ -137,7 +146,7 @@ public record ParamsSearchExecution
   /// Note that this value may be adjusted downward somewhat
   /// dynamically at runtime if graph size is very large.
   /// </summary>
-  public int SelectOperationParallelThresholdNumVisits = 22;
+  public int SelectOperationParallelThresholdNumVisits = 28;
 
  /// <summary>
   /// If the initialization of policies in tree nodes (after retrieval from NN)

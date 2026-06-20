@@ -23,12 +23,14 @@ using Ceres.Base.Misc;
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
+using Ceres.Chess.NNEvaluators;
 using Ceres.MCGS.GameEngines;
 using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Managers;
 using Ceres.MCGS.Managers.Limits;
 using Ceres.MCGS.Search;
+using Ceres.MCGS.Search.Phases;
 using Ceres.MCGS.Utils;
 
 
@@ -262,11 +264,14 @@ public partial class MCGSManager
 
       // Device backend utilization: fraction of the search wall-clock during which at least one
       // evaluator was inside the backend (C++ interop). Target is 1.0 (whole move GPU-bound).
-      var backendTracker = EvaluatorsSet?.BackendTimeTracker;
+      BackendTimeTracker backendTracker = EvaluatorsSet?.BackendTimeTracker;
       double backendBusy = (backendTracker?.EverUsed ?? false) ? backendTracker.BusySeconds : double.NaN;
       double busyFrac = (!double.IsNaN(backendBusy) && searchSecs > 0) ? backendBusy / searchSecs : double.NaN;
       writer.WriteLine($"Backend Busy Time           {backendBusy,14:F2}");
       writer.WriteLine($"Backend Busy Fraction       {busyFrac,14:F3}");
+      writer.WriteLine($"Phase Timing                {MCGSIterator.PhaseTimingSummary()}");
+      PhaseCoordinator coord = Engine.Coordinator;
+      writer.WriteLine($"Backup Out-Of-Order         {coord.BackupOutOfOrderFraction,14:F4}  ({coord.BackupOutOfOrderCount:N0} of {coord.BackupTotalCount:N0} backups; inorderEnforced={coord.EnforceInOrderBackup})");
     }
 
     writer.WriteLine($"FractionSearchRemaining     {FractionSearchRemaining,14:F3}");

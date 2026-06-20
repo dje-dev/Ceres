@@ -31,9 +31,155 @@ internal sealed class PhaseCoordinator
 {
   const bool DEBUG_OUTPUT = false;
 
-  public const bool ENABLE_CONCURRENT_EVALUATE_WITH_BACKUP_SELECT = true; 
+  public const bool ENABLE_CONCURRENT_EVALUATE_WITH_BACKUP_SELECT = true;
 
   public const bool LAST_EVALUATE_MUST_FINISH_BEFORE_NEXT_BACKUP_STARTS = false;
+
+  /// <summary>
+  /// If true, backups are forced to occur in batch-selection order ("no crossing"): the batch
+  /// selected first (lowest batch index) backs up first. Batches advance a shared turn counter
+  /// so that a later batch waits (before acquiring the select/backup exclusion lock) until all
+  /// earlier batches have completed (or skipped) their backup. Batch indices are contiguous per
+  /// search (Engine.nextBatchID, reset at each search start alongside ResetBackupOrder()).
+  /// Set from ParamsSearchExecution.AllowOutOfOrderBatches (inverse) in the MCGSEngine constructor.
+  /// </summary>
+  public bool EnforceInOrderBackup = true;
+
+  readonly object backupOrderLock = new();
+  int nextBackupTurn;
+
+  /// <summary>Resets the in-order-backup turn counter. Call at the start of each search.</summary>
+  public void ResetBackupOrder()
+  {
+    lock (backupOrderLock)
+    {
+      nextBackupTurn = 0;
+      Monitor.PulseAll(backupOrderLock);
+    }
+  }
+
+  /// <summary>
+  /// Blocks until it is batchIndex's turn to back up (i.e. all earlier batches have finished or
+  /// skipped their backup). Must be called BEFORE acquiring the select/backup exclusion lock so a
+  /// later batch never holds that lock while waiting on an earlier batch that needs it.
+  /// </summary>
+  public void EnterBackupOrder(int batchIndex)
+  {
+    if (!EnforceInOrderBackup)
+    {
+      return;
+    }
+    lock (backupOrderLock)
+    {
+      while (nextBackupTurn != batchIndex)
+      {
+        Monitor.Wait(backupOrderLock);
+      }
+    }
+  }
+
+  /// <summary>Advances the backup turn past batchIndex, releasing the next batch in order.</summary>
+  public void ExitBackupOrder(int batchIndex)
+  {
+    if (!EnforceInOrderBackup)
+    {
+      return;
+    }
+    lock (backupOrderLock)
+    {
+      nextBackupTurn = batchIndex + 1;
+      Monitor.PulseAll(backupOrderLock);
+    }
+  }
+
+
+  // ---- Always-on instrumentation: fraction of backups that occur out of selection order ----
+  // (a "crossing" = a batch backs up while an earlier-selected batch has not yet done so). This is
+  // measured regardless of EnforceInOrderBackup: with it on the fraction is ~0 (by construction);
+  // with it off this reveals how much crossing naturally occurs (i.e. what enforcement prevents).
+  readonly object orderStatsLock = new();
+  int statsNextInOrder;
+  readonly System.Collections.Generic.HashSet<int> statsCompletedAhead = new();
+  long statsTotalBackups;
+  long statsOutOfOrderBackups;
+
+  public void ResetBackupOrderStats()
+  {
+    lock (orderStatsLock)
+    {
+      statsNextInOrder = 0;
+      statsCompletedAhead.Clear();
+      statsTotalBackups = 0;
+      statsOutOfOrderBackups = 0;
+    }
+  }
+
+  /// <summary>
+  /// Records that batchIndex has reached the backup stage (didBackup=true for a real backup,
+  /// false for a 0-path batch that performs no backup but still occupies a slot in the order).
+  /// Counts a real backup as out-of-order if any earlier-indexed batch has not yet reached here.
+  /// </summary>
+  public void RecordBackupOrder(int batchIndex, bool didBackup)
+  {
+    lock (orderStatsLock)
+    {
+      bool inOrder = batchIndex == statsNextInOrder;
+      if (inOrder)
+      {
+        statsNextInOrder++;
+        while (statsCompletedAhead.Remove(statsNextInOrder))
+        {
+          statsNextInOrder++;
+        }
+      }
+      else
+      {
+        statsCompletedAhead.Add(batchIndex);
+      }
+
+      if (didBackup)
+      {
+        statsTotalBackups++;
+        if (!inOrder)
+        {
+          statsOutOfOrderBackups++;
+        }
+      }
+    }
+  }
+
+  public long BackupTotalCount
+  {
+    get
+    {
+      lock (orderStatsLock)
+      {
+        return statsTotalBackups;
+      }
+    }
+  }
+
+  public long BackupOutOfOrderCount
+  {
+    get
+    {
+      lock (orderStatsLock)
+      {
+        return statsOutOfOrderBackups;
+      }
+    }
+  }
+
+  public double BackupOutOfOrderFraction
+  {
+    get
+    {
+      lock (orderStatsLock)
+      {
+        return statsTotalBackups > 0 ? (double)statsOutOfOrderBackups / statsTotalBackups : 0;
+      }
+    }
+  }
 
   /// <summary>
   /// Lock object for mutual exclusion between Select and Backup phases.
@@ -73,9 +219,29 @@ internal sealed class PhaseCoordinator
   }
 
 
-  private void Enter()
+  // Instrumentation: time spent blocked acquiring the select/backup exclusion lock.
+  internal static long ExclWaitSelectTicks;
+  internal static long ExclWaitBackupTicks;
+
+  internal static void ResetExclWait()
   {
+    ExclWaitSelectTicks = 0;
+    ExclWaitBackupTicks = 0;
+  }
+
+  private void Enter(bool isBackup = false)
+  {
+    long t0 = Stopwatch.GetTimestamp();
     selectOrBackupExclusionLock.Enter();
+    long waited = Stopwatch.GetTimestamp() - t0;
+    if (isBackup)
+    {
+      Interlocked.Add(ref ExclWaitBackupTicks, waited);
+    }
+    else
+    {
+      Interlocked.Add(ref ExclWaitSelectTicks, waited);
+    }
     Interlocked.Increment(ref NumActive);
   }
 
@@ -184,6 +350,10 @@ internal sealed class PhaseCoordinator
   /// </summary>
   public void EnterBackup(int iteratorID, int batchIndex)
   {
+    // Enforce in-order backup BEFORE taking the exclusion lock (avoids holding it while waiting
+    // on an earlier batch which itself needs the exclusion lock to back up).
+    EnterBackupOrder(batchIndex);
+
     if (LAST_EVALUATE_MUST_FINISH_BEFORE_NEXT_BACKUP_STARTS)
     {
       // Wait for all evaluations of batches j < batchIndex to complete sequentially
@@ -198,8 +368,12 @@ internal sealed class PhaseCoordinator
     }
 
     // Enter mutual exclusion with Select
-    Enter();
-    DebugWriteLn("EnteredBackup iterator:" + iteratorID + "  batch:" + batchIndex); 
+    Enter(isBackup: true);
+    // Record backup order under the exclusion lock (so the observed order is exactly the serialized
+    // backup order). With EnforceInOrderBackup this will be in-order; otherwise it measures the
+    // natural crossing rate.
+    RecordBackupOrder(batchIndex, didBackup: true);
+    DebugWriteLn("EnteredBackup iterator:" + iteratorID + "  batch:" + batchIndex);
   }
 
 
@@ -211,5 +385,6 @@ internal sealed class PhaseCoordinator
   {
     DebugWriteLn("ExitingBackup iterator:" + iteratorID + "  batch:" + batchIndex);
     Exit();
+    ExitBackupOrder(batchIndex);
   }
 }

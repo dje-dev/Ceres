@@ -520,6 +520,13 @@ public partial class MCGSManager : IDisposable
     // Reset the backend-time tracker once at the true start of the search so backend-busy time
     // accumulates across all passes (including any extension passes) over the whole move.
     manager.EvaluatorsSet?.BackendTimeTracker?.Reset();
+    Ceres.MCGS.Search.Coordination.MCGSIterator.ResetPhaseTiming();
+
+    // Reset the per-batch ID sequence and the in-order-backup turn so batch indices remain
+    // contiguous from 0 within each search (required by EnforceInOrderBackup).
+    manager.Engine.nextBatchID = 0;
+    manager.Engine.Coordinator.ResetBackupOrder();
+    manager.Engine.Coordinator.ResetBackupOrderStats();
 
     PositionWithHistory priorMoves = manager.Engine.Graph.Store.NodesStore.PositionHistory;
 

@@ -231,6 +231,9 @@ public partial class MCGSEngine
       EvaluatorLock = new LockTimed(false);
     }
 
+    // Configure in-order ("no crossing") backup enforcement from the search parameters.
+    Coordinator.EnforceInOrderBackup = !Manager.ParamsSearch.Execution.AllowOutOfOrderBatches;
+
     evaluatorPrecomputed = new SelectTerminatorPrefetched();
 
     ComputeSearchRootPlySinceLastMove();

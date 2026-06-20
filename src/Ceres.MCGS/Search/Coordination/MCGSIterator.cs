@@ -316,6 +316,82 @@ public class MCGSIterator : IDisposable
   static bool haveWarnedTooManyRetries = false;
   static bool haveWarned = false;
 
+  // Per-phase wall-clock instrumentation (Stopwatch ticks), summed across both iterators and all
+  // batches of the search. Each phase total includes the time waiting on the phase-coordinator
+  // exclusion lock. Also tracks the per-phase max and a duration histogram for the CPU phases
+  // (select/backup) so the residual-idle question can distinguish mean cost vs tail (worst-case).
+  internal static long PhaseTicksSelect;
+  internal static long PhaseTicksEval;
+  internal static long PhaseTicksBackup;
+  internal static long PhaseBatchCount;
+  internal static long PhaseMaxSelectTicks;
+  internal static long PhaseMaxBackupTicks;
+  static readonly double[] PHASE_BUCKET_MS = { 0.25, 0.5, 1, 2, 4, 8, double.PositiveInfinity };
+  static readonly long[] PhaseHistSelect = new long[PHASE_BUCKET_MS.Length];
+  static readonly long[] PhaseHistBackup = new long[PHASE_BUCKET_MS.Length];
+
+  internal static void ResetPhaseTiming()
+  {
+    PhaseTicksSelect = 0;
+    PhaseTicksEval = 0;
+    PhaseTicksBackup = 0;
+    PhaseBatchCount = 0;
+    PhaseMaxSelectTicks = 0;
+    PhaseMaxBackupTicks = 0;
+    System.Array.Clear(PhaseHistSelect);
+    System.Array.Clear(PhaseHistBackup);
+    Ceres.MCGS.Search.Phases.PhaseCoordinator.ResetExclWait();
+  }
+
+  static void RecordPhaseHist(long ticks, long[] hist, ref long maxField)
+  {
+    long cur;
+    while ((cur = System.Threading.Volatile.Read(ref maxField)) < ticks
+        && System.Threading.Interlocked.CompareExchange(ref maxField, ticks, cur) != cur)
+    {
+    }
+
+    double ms = ticks * 1000.0 / Stopwatch.Frequency;
+    for (int b = 0; b < PHASE_BUCKET_MS.Length; b++)
+    {
+      if (ms <= PHASE_BUCKET_MS[b])
+      {
+        System.Threading.Interlocked.Increment(ref hist[b]);
+        break;
+      }
+    }
+  }
+
+  static string HistString(long[] hist)
+  {
+    var sb = new System.Text.StringBuilder();
+    for (int b = 0; b < PHASE_BUCKET_MS.Length; b++)
+    {
+      string hi = double.IsInfinity(PHASE_BUCKET_MS[b]) ? "inf" : PHASE_BUCKET_MS[b].ToString("0.##");
+      sb.Append($"<={hi}:{hist[b]} ");
+    }
+    return sb.ToString().TrimEnd();
+  }
+
+  internal static string PhaseTimingSummary()
+  {
+    long n = System.Threading.Volatile.Read(ref PhaseBatchCount);
+    if (n == 0)
+    {
+      return "(no batches)";
+    }
+
+    double f = Stopwatch.Frequency;
+    double sel = PhaseTicksSelect * 1000.0 / f, ev = PhaseTicksEval * 1000.0 / f, bk = PhaseTicksBackup * 1000.0 / f;
+    double waitSel = Ceres.MCGS.Search.Phases.PhaseCoordinator.ExclWaitSelectTicks * 1000.0 / f;
+    double waitBak = Ceres.MCGS.Search.Phases.PhaseCoordinator.ExclWaitBackupTicks * 1000.0 / f;
+    double maxSel = PhaseMaxSelectTicks * 1000.0 / f, maxBak = PhaseMaxBackupTicks * 1000.0 / f;
+    return $"batches={n:N0} per-batch[ms] select={sel / n:F3} eval={ev / n:F3} backup={bk / n:F3} "
+         + $"exclWait(sel/bak)={waitSel / n:F3}/{waitBak / n:F3} max(sel/bak)={maxSel:F2}/{maxBak:F2}ms"
+         + $"\n                            selectHist[ms] {HistString(PhaseHistSelect)}"
+         + $"\n                            backupHist[ms] {HistString(PhaseHistBackup)}";
+  }
+
 
   internal void RunOnce(int batchSize, int hardMaxRootN)
   {
@@ -341,6 +417,7 @@ public class MCGSIterator : IDisposable
    BackupMode = Engine.Backup.BackupModeToUse();
 
     // STEP1 : Descend graph selecting children to build paths.
+    long tsPhase = Stopwatch.GetTimestamp();
     Engine.Coordinator.EnterSelect(IteratorID, thisBatchID);
     LogWrite(() => $"Start select batch {batchSequenceNum}");
 
@@ -352,14 +429,23 @@ public class MCGSIterator : IDisposable
 
     LogWrite(() => $"End select batch {batchSequenceNum} with {PathsSet.Paths.Count} paths");
     Engine.Coordinator.ExitSelect(IteratorID, thisBatchID);
+    long tsAfterSelect = Stopwatch.GetTimestamp();
+    long selectTicks = tsAfterSelect - tsPhase;
+    Interlocked.Add(ref PhaseTicksSelect, selectTicks);
+    RecordPhaseHist(selectTicks, PhaseHistSelect, ref PhaseMaxSelectTicks);
 
 
     if (PathsSet.Paths.Count == 0)
     {
       // No paths to evaluate/backup, but any visits dropped during select still need
       // their deferred ledger backout applied (otherwise their edge in-flight counts
-      // and ancestor visit counters would leak).
+      // and ancestor visit counters would leak). This batch performs no backup, but it must
+      // still pass through the in-order-backup gate so the turn counter stays contiguous (and
+      // the ledger backout is ordered consistently with the surrounding backups).
+      Engine.Coordinator.EnterBackupOrder(thisBatchID);
+      Engine.Coordinator.RecordBackupOrder(thisBatchID, didBackup: false);
       ApplyPendingDroppedVisits();
+      Engine.Coordinator.ExitBackupOrder(thisBatchID);
       return;
     }
 
@@ -392,6 +478,8 @@ public class MCGSIterator : IDisposable
     {
       EvaluatorNN.RetrieveDeferredResults();
     }
+    long tsAfterEval = Stopwatch.GetTimestamp();
+    Interlocked.Add(ref PhaseTicksEval, tsAfterEval - tsAfterSelect);
 
     // STEP3: Backup the selected visits.
     Engine.Coordinator.EnterBackup(IteratorID, thisBatchID);
@@ -480,6 +568,10 @@ public class MCGSIterator : IDisposable
 
     LogWrite(() => $"End backup with mode {BackupMode}");
     Engine.Coordinator.ExitBackup(IteratorID, thisBatchID);
+    long backupTicks = Stopwatch.GetTimestamp() - tsAfterEval;
+    Interlocked.Add(ref PhaseTicksBackup, backupTicks);
+    RecordPhaseHist(backupTicks, PhaseHistBackup, ref PhaseMaxBackupTicks);
+    Interlocked.Increment(ref PhaseBatchCount);
 
     LogFlush();
 
@@ -533,8 +625,12 @@ public class MCGSIterator : IDisposable
 
     if (PathsSet.Paths.Count == 0)
     {
-      // Apply any deferred ledger backouts for visits dropped during select.
+      // Apply any deferred ledger backouts for visits dropped during select. Still pass through
+      // the in-order-backup gate so the turn counter stays contiguous (no stall).
+      Engine.Coordinator.EnterBackupOrder(thisBatchID);
+      Engine.Coordinator.RecordBackupOrder(thisBatchID, didBackup: false);
       ApplyPendingDroppedVisits();
+      Engine.Coordinator.ExitBackupOrder(thisBatchID);
       return new List<(NodeIndex node, int depthBelow, int terminalKind, double leafQFromStart, NodeIndex[] sequence)>(0);
     }
 
@@ -1042,7 +1138,9 @@ public class MCGSIterator : IDisposable
   /// </summary>
   void RunNNEvaluationPhase(bool deferRetrieveResults)
   {
-    // Perform the batched evaluation.
+    // Perform the batched evaluation. EvaluatorLock is non-null only when a single evaluator is
+    // shared by the two overlapped iterators (DualEvaluators=false); with distinct evaluators the
+    // two GPU evaluations are allowed to run concurrently (the lock is null).
     if (PathsSet.NNPaths.Count > 0)
     {
       using (Engine.EvaluatorLock?.Acquire())
