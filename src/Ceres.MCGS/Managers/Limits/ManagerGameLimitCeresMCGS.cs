@@ -31,9 +31,9 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
 {
   public readonly float Aggressiveness;
 
-  const int EARLY_SMOOTHING_WINDOW_MOVES = 25;
   const int EARLY_SMOOTHING_MAX_ADJUSTS = 3;
   const float EARLY_SMOOTHING_BOOST = 1.3f;
+
 
   /// <summary>
   /// Returns target minimum fraction of initial move nodes in early game.
@@ -46,13 +46,30 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
   static float EarlySmoothingBaselineFracForBaselineN(int baselineN)
     => baselineN switch
     {
-      < 10_000 => 0, // disabled
-      < 100_000 => 0.25f,
-      < 1_000_000 => 0.30f,
+      < 50_000 => 0, // disabled
+      < 150_000 => 0.20f,
+      < 500_000 => 0.25f,
+      < 2_000_000 => 0.30f,
       < 5_000_000 => 0.35f,
       _ => 0.40f
     };
 
+
+  /// <summary>
+  /// Returns the number of moves in the early game smoothing window, 
+  /// as a function of the baselineN.
+  /// </summary>
+  /// <param name="baselineN"></param>
+  /// <returns></returns>
+  static int EarlySmoothingWindowMoves(int baselineN)
+    => baselineN switch
+    {
+      < 150_000 => 12,
+      < 500_000 => 15,
+      < 2_000_000 => 19,
+      < 5_000_000 => 22,
+      _ => 25
+    };
 
   // Per-game state for GameLimitEarlySmoothing. Reset on IsFirstMoveOfGame == true,
   // so the manager can be safely reused across multiple games in self-play tournaments.
@@ -126,7 +143,10 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
     // Spend 2.5x time first move of game (definitely no graph reuse available)
     float factorFirstMove = inputs.IsFirstMoveOfGame ? 2.5f : 1.0f;
 
-    // Make a divisor which is between about 13 and 18
+    bool isLowAbsoluteTimeRemaining = inputs.TargetLimitType == SearchLimitType.SecondsPerMove
+                                   && inputs.RemainingFixedSelf <= 60;
+
+    // Make a divisor which is between about 10 and 12
     // and a increasing function of the piece count.
     // Note that this is a relatively small number because
     //  - some moves will not do any search at all (due to instamoves), and
@@ -134,7 +154,7 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
     //  - thinking time is deliberately somewhat frontloaded because 
     //    its value as a deferred asset must be discounted by the possibility
     //    that it might never be gainfully used (if a loss comes first).
-    float baseDivisor = 10f + MathF.Pow(inputs.StartPos.PieceCount, 0.5f);
+    float baseDivisor = (isLowAbsoluteTimeRemaining ? 12f : 10f) + MathF.Pow(inputs.StartPos.PieceCount, 0.5f);
 
     if (inputs.IncrementSelf > 0)
     {
@@ -240,7 +260,7 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
       int recordedN = inputs.PriorMoveStats[^2].FinalN;
 
       earlySmoothingBaselineN = recordedN;
-      earlySmoothingMovesRemaining = EARLY_SMOOTHING_WINDOW_MOVES;
+      earlySmoothingMovesRemaining = EarlySmoothingWindowMoves(earlySmoothingBaselineN);
       earlySmoothingRecordPending = false;
     }
   }
@@ -314,15 +334,16 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
     if (inputs.IncrementSelf > 0)
     {
       float numIncrementsAvailableTime = remainingExcludingIncrement / inputs.IncrementSelf;
+      bool isLowTimeIncrement = inputs.TargetLimitType == SearchLimitType.SecondsPerMove && inputs.IncrementSelf < 0.5f;
 
       // Possibly use a lower fraction of the increment if little left in reserve.
       fractionOfIncrementToUse = numIncrementsAvailableTime switch
       {
         < 0.0f => 0.05f, // possibly already in technical forfeit!
-        < 1.0f => 0.50f,
-        < 2.0f => 0.90f,
-        < 3.0f => 0.96f, // if at least 2 increments are available we don't need to hold much back
-        _ => 0.99f,
+        < 1.0f => isLowTimeIncrement ? 0.30f : 0.50f,
+        < 2.0f => isLowTimeIncrement ? 0.75f : 0.90f,
+        < 3.0f => isLowTimeIncrement ? 0.90f : 0.95f, // if at least 2 increments are available we don't need to hold much back
+        _ => 0.98f,
       };
     }
 
@@ -358,11 +379,12 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
 
         ConsoleColor savedColor = Console.ForegroundColor;
         Console.ForegroundColor = ConsoleColor.Yellow;
+        int earlySmoothingMoves = EarlySmoothingWindowMoves(earlySmoothingBaselineN);
         Console.WriteLine($"\r\n[GameLimitEarlySmoothing] boost x{EARLY_SMOOTHING_BOOST:F2}  "
                         + $"RootN={inputs.RootN} < {earlySmothingBaselineFrac:F2}*baseline({earlySmoothingBaselineN})"
                         + $"={earlySmothingBaselineFrac * earlySmoothingBaselineN:F0}  "
                         + $"adj {earlySmoothingAdjustsApplied}/{EARLY_SMOOTHING_MAX_ADJUSTS}  "
-                        + $"window {EARLY_SMOOTHING_WINDOW_MOVES - earlySmoothingMovesRemaining}/{EARLY_SMOOTHING_WINDOW_MOVES}");
+                        + $"window {earlySmoothingMoves - earlySmoothingMovesRemaining}/{earlySmoothingMoves}");
         Console.ForegroundColor = savedColor;
       }
     }
