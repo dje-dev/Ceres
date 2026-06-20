@@ -892,6 +892,9 @@ public class MCGSSelect
     // Optionally scale the redescent multiplier per transposed child by that child's leaf value
     // volatility (applied within IsTranspositionSufficientN, where the child node is in hand).
     bool scaleRedescentByChildVolatility = paramsSearch.RedescentScaleByVolatility && paramsSearch.TrackLeafValueVolatility;
+
+    // Stochastic/warmup redescent override probability (0 = disabled; see IsTranspositionSufficientN).
+    float redescentStochasticProbability = paramsSearch.RedescentStochasticProbability;
     bool parallelEnabled = paramsSearch.Execution.SelectOperationParallelThresholdNumVisits < int.MaxValue;
     int THRESHOLD_PARALLEL = ParallelThresholdToUse;
 
@@ -983,6 +986,7 @@ public class MCGSSelect
                              numVisitsToAssign, childVisitCounts, childIndex,
                              ref childPosInfo, graphEnabled,
                              transpositionStopMinSupportRatio, scaleRedescentByChildVolatility,
+                             redescentStochasticProbability,
                              numVisitsRemaining, canLaunchParallel, ref deferredSubPaths);
       }
       else // not expanded
@@ -994,6 +998,7 @@ public class MCGSSelect
                                ref childPosInfo, childVisitCounts, numVisitsToAssign,
                                numVisitsRemaining, minRepetitionCountForDraw,
                                graphEnabled, transpositionStopMinSupportRatio, scaleRedescentByChildVolatility,
+                               redescentStochasticProbability,
                                canLaunchParallel, ref deferredSubPaths, ref expansionBlocked);
 
         if (expansionBlocked)
@@ -1174,6 +1179,7 @@ public class MCGSSelect
                                     ref ChildPositionInfo childPosInfo,
                                     bool graphEnabled, float transpositionStopMinSupportRatio,
                                     bool scaleRedescentByChildVolatility,
+                                    float redescentStochasticProbability,
                                     int numVisitsRemaining, bool canLaunchParallel,
                                     ref ListBounded<DeferredSubPath> deferredSubPaths)
   {
@@ -1222,7 +1228,8 @@ public class MCGSSelect
     }
     else if (IsTranspositionSufficientN(graphEnabled, transpositionStopMinSupportRatio,
                                         childEdge.NInFlightForIterator(iterator.IteratorID), childEdge.N, childNode,
-                                        iterator.DisableTranspositionSufficiencyStop, scaleRedescentByChildVolatility))
+                                        iterator.DisableTranspositionSufficiencyStop, scaleRedescentByChildVolatility,
+                                        redescentStochasticProbability, parentNode.N))
     {
       // Already expanded, connects to a transposition node with already sufficient N, stop descent.
       //  Revisit transposition node with sufficient visits --> extract evaluation, end descent.
@@ -1281,6 +1288,7 @@ public class MCGSSelect
                                       int numVisitsRemaining, int minRepetitionCountForDraw,
                                       bool graphEnabled, float transpositionStopMinSupportRatio,
                                       bool scaleRedescentByChildVolatility,
+                                      float redescentStochasticProbability,
                                       bool canLaunchParallel,
                                       ref ListBounded<DeferredSubPath> deferredSubPaths,
                                       ref bool expansionBlocked)
@@ -1312,6 +1320,7 @@ public class MCGSSelect
                                  childPosInfo.isDrawByRepetitionInCoalesceMode, numVisitsRemaining,
                                  graphEnabled, transpositionStopMinSupportRatio,
                                  scaleRedescentByChildVolatility,
+                                 redescentStochasticProbability,
                                  canLaunchParallel, ref deferredSubPaths, ref expansionBlocked);
   }
 
@@ -1370,6 +1379,7 @@ public class MCGSSelect
                                             int numVisitsRemaining, bool graphEnabled,
                                             float transpositionStopMinSupportRatio,
                                             bool scaleRedescentByChildVolatility,
+                                            float redescentStochasticProbability,
                                             bool canLaunchParallel,
                                             ref ListBounded<DeferredSubPath> deferredSubPaths,
                                             ref bool expansionBlocked)
@@ -1466,7 +1476,8 @@ public class MCGSSelect
       bool handled = DoTranspositionLink(iterator, path, pathsSet, childEdge, childNode,
                                          ref childPosInfo, childVisitCounts, childIndex,
                                          numVisitsThisChild, numVisitsRemaining, graphEnabled,
-                                         transpositionStopMinSupportRatio, scaleRedescentByChildVolatility);
+                                         transpositionStopMinSupportRatio, scaleRedescentByChildVolatility,
+                                         redescentStochasticProbability);
 
       if (!handled)
       {
@@ -1591,7 +1602,8 @@ public class MCGSSelect
                                    Span<short> childVisitCounts, int childIndex,
                                    int numVisitsThisChild, int numVisitsRemaining,
                                    bool graphEnabled, float transpositionStopMinSupportRatio,
-                                   bool scaleRedescentByChildVolatility)
+                                   bool scaleRedescentByChildVolatility,
+                                   float redescentStochasticProbability)
   {
     GNodeStruct.UpdateEdgeNInFlightForIterator(childEdge, path.IteratorID, numVisitsThisChild);
 
@@ -1615,7 +1627,8 @@ public class MCGSSelect
     else if (IsTranspositionSufficientN(graphEnabled, transpositionStopMinSupportRatio,
                                         childEdge.NInFlightForIterator(iterator.IteratorID),
                                         childEdge.N, childNode, iterator.DisableTranspositionSufficiencyStop,
-                                        scaleRedescentByChildVolatility))
+                                        scaleRedescentByChildVolatility,
+                                        redescentStochasticProbability, childEdge.ParentNode.N))
     {
       // Sufficient visit transposition node --> create edge, extract evaluation, end descent.
       // It must have nonzero visits and thus be able to satisfy our needs without going deeper
@@ -1759,13 +1772,36 @@ public class MCGSSelect
   static bool IsTranspositionSufficientN(bool graphEnabled, float transpositionStopMinSupportRatio,
                                          int numVisitsTotalThisIterator, int edgeN, GNode childNode,
                                          bool disableTranspositionSufficiencyStop,
-                                         bool scaleRedescentByChildVolatility)
+                                         bool scaleRedescentByChildVolatility,
+                                         float redescentStochasticProbability, int parentN)
   {
     if (disableTranspositionSufficiencyStop)
     {
       // Inner-node deep rollouts bypass the sufficiency stop so descent continues through
       // well-visited transposition nodes to a true frontier leaf or terminal.
       return false;
+    }
+
+    // Stochastic / warmup redescent (ParamsSearch.RedescentStochasticProbability mode).
+    // When enabled (probability > 0) treat the transposition node as NOT yet sufficient -
+    // i.e. force descent to continue ("redescend") - in two cases:
+    //   (2) deterministically while the parent is still sparsely visited (a warmup that
+    //       guarantees freshly created nodes get some genuine deepening), and
+    //   (1) otherwise with the configured probability, sending occasional visits deeper
+    //       even through nodes that would normally short-circuit to their cached value.
+    // The default of 0 skips this entirely (only the predictable > 0 branch is paid), and
+    // the RNG is sampled only once the cheap parentN warmup test has been passed.
+    if (redescentStochasticProbability > 0)
+    {
+      if (parentN < MCGSParamsFixed.REDESCENT_STOCHASTIC_FORCE_BELOW_PARENT_N)
+      {
+        return false;
+      }
+
+      if (Random.Shared.NextSingle() < redescentStochasticProbability)
+      {
+        return false;
+      }
     }
 
     if (graphEnabled)

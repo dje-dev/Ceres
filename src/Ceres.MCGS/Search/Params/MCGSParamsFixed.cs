@@ -138,6 +138,16 @@ public static class MCGSParamsFixed
   public const bool REDESCENT_MUTIPLIER_ADJUST = true;
 
 
+  /// <summary>
+  /// When stochastic redescent mode is enabled (ParamsSearch.RedescentStochasticProbability > 0),
+  /// descent through a transposition node is forced (never short-circuited to the cached subtree
+  /// value) while the parent node has fewer than this many visits. This warmup guarantees that
+  /// freshly created / barely-explored nodes receive some genuine deepening before the
+  /// transposition-stop short-circuit (IsTranspositionSufficientN) is permitted to apply.
+  /// </summary>
+  public const int REDESCENT_STOCHASTIC_FORCE_BELOW_PARENT_N = 5;
+
+
   // In tests, perhaps especially as N gets larger (e.g. 10000+), numbers less than 0.7 are better (e.g. 0.6 or 0.5)
   public const float RPO_VISIT_COUNT_SHRINK_POWER = 0.6f;//  e.g. 0.5, smaller powers lead to less severe pull toward prior policy
   public const bool RPO_USE_WEIGHTING = false;  // N.B. not yet fully implemented, e.g. in the RPO optimization algorithm

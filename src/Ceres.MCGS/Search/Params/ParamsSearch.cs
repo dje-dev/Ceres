@@ -273,6 +273,25 @@ public record ParamsSearch
 
 
   /// <summary>
+  /// Stochastic redescent mode (default 0, disabled). When set to a fractional value in (0, 1],
+  /// the decision of whether to stop descent at an already sufficiently visited transposition node
+  /// (see <see cref="MCGSSelect"/> IsTranspositionSufficientN) is augmented so that descent is
+  /// instead FORCED to continue ("redescend") in two additional cases:
+  ///   (1) with this fractional probability, unconditionally - sending occasional visits deeper
+  ///       even through nodes that would otherwise short-circuit to their cached subtree value; and
+  ///   (2) always while the parent node is still sparsely visited
+  ///       (parent N &lt; <see cref="MCGSParamsFixed.REDESCENT_STOCHASTIC_FORCE_BELOW_PARENT_N"/>),
+  ///       a warmup that guarantees some genuine deepening before the transposition-stop
+  ///       short-circuit is permitted to apply.
+  /// At the default of 0 the transposition-stop logic is completely unchanged (a single predictable
+  /// branch is the only added cost on the hot path; the RNG is sampled only when the mode is active).
+  /// Intended as an exploration knob to counteract over-reliance on cached transposition values
+  /// (which can leave deep lines under-resolved when many parents share a heavily visited subgraph).
+  /// </summary>
+  public float RedescentStochasticProbability = 0;
+
+
+  /// <summary>
   /// Threshold after which suboptimal visit choices (according to PUCT)
   /// are rejected as being too suboptimal.
   /// Enabling allows somewhat more aggressive default batch sizing without quality loss.
@@ -726,6 +745,11 @@ public record ParamsSearch
     if (RedescentScaleByVolatility && !TrackLeafValueVolatility)
     {
       throw new Exception("TrackLeafValueVolatility must be set to true when RedescentScaleByVolatility is true");
+    }
+
+    if (RedescentStochasticProbability < 0 || RedescentStochasticProbability > 1)
+    {
+      throw new Exception("RedescentStochasticProbability must be in the range [0, 1].");
     }
 
     if (OffPathBackupNumAdditionalLevelsToPropagate > 1
