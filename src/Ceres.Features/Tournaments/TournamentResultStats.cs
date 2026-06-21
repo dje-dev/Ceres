@@ -105,7 +105,7 @@ namespace Ceres.Features.Tournaments
       TextWriter writer = def.Logger;
       string referenceId = def.ReferenceEngineId;
 
-      int maxWidth = 155;
+      int maxWidth = 168;
       PrintLine(writer, maxWidth - 1);
       List<(string, int)> header = new List<(string, int)>
         { ("Player",25), ("Elo", 8), ("+/-",5), ("CFS(%)", 8),
@@ -174,7 +174,8 @@ namespace Ceres.Features.Tournaments
       string epsAvg = player.PlayerTotalEvaluations > 0 && time > 0
                     ? (player.PlayerTotalEvaluations / time).ToString("N0") + " " : "-";
       // Fraction of search-loop wall-clock the device backend was busy (target 1.0); "-" if unsupported.
-      string gpuBusy = double.IsNaN(player.BackendBusyFraction) ? "-" : player.BackendBusyFraction.ToString("F3") + " ";
+      // Append the trailing space in both cases so the placeholder right-aligns like the numeric values.
+      string gpuBusy = (double.IsNaN(player.BackendBusyFraction) ? "-" : player.BackendBusyFraction.ToString("F3")) + " ";
 
       List<(string, int)> rowItems = new()
       {
@@ -655,10 +656,12 @@ namespace Ceres.Features.Tournaments
       int numberOfColumns = columns.Count();
       string row = "|";
 
+      // Right-align the trailing numeric columns (Nodes, NPS-avg, EPS-avg, NPS-med, GPU-busy);
+      // center-align the leading descriptive columns.
       for (int i = 0; i < numberOfColumns; i++)
       {
         var (txt, width) = columns[i];
-        if (i > numberOfColumns - 5)
+        if (i > numberOfColumns - 6)
           row += AlignRight(txt, width) + "|";
         else
           row += AlignCentre(txt, width) + "|";
