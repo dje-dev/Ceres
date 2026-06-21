@@ -38,6 +38,20 @@ using Ceres.MCGS.Utils;
 
 namespace Ceres.MCGS.Search.Coordination;
 
+/// <summary>
+/// Selects which section(s) of DumpFullInfo output are emitted. Used (for example) by the live
+/// TCEC monitor to continuously update only one section at a time.
+/// </summary>
+[Flags]
+public enum DumpFullInfoSections
+{
+  None = 0,
+  Info = 1,
+  Moves = 2,
+  PrincipalVariation = 4,
+  All = Info | Moves | PrincipalVariation
+}
+
 public partial class MCGSManager
 {
   /// <summary>
@@ -70,7 +84,8 @@ public partial class MCGSManager
   public void DumpFullInfo(BestMoveInfoMCGS bestMoveInfo,
                            GNode searchRootNode,
                            ManagerGameLimitInputs limitInputs,
-                           TextWriter writer, string description)
+                           TextWriter writer, string description,
+                           DumpFullInfoSections sections = DumpFullInfoSections.All)
   {
     try
     {
@@ -79,6 +94,8 @@ public partial class MCGSManager
       searchRootNode = searchRootNode.IsNull ? searchRootNode : Engine.SearchRootNode;
       writer ??= Console.Out;
 
+      if ((sections & DumpFullInfoSections.Info) != 0)
+      {
       int moveIndex = searchRootNode.Graph.Store.HistoryHashes.PriorPositionsMG.Length;
 
       writer.WriteLine();
@@ -165,13 +182,19 @@ public partial class MCGSManager
       writer.WriteLine("\r\nLIMITS MANAGER DECISION");
       limitInputs?.Dump(writer);
       DumpTimeInfo(writer, searchRootNode);
+      }
 
-      // TODO: next block
-      writer.WriteLine();
-      DumpNodeEdges(0, Engine.SearchRootNode, writer);
+      if ((sections & DumpFullInfoSections.Moves) != 0)
+      {
+        writer.WriteLine();
+        DumpNodeEdges(0, Engine.SearchRootNode, writer);
+      }
 
-      writer.WriteLine();
-      MCGSPosGraphNodeDumper.DumpPV(this, searchRootNode, true, writer);
+      if ((sections & DumpFullInfoSections.PrincipalVariation) != 0)
+      {
+        writer.WriteLine();
+        MCGSPosGraphNodeDumper.DumpPV(this, searchRootNode, true, writer);
+      }
     }
     catch (Exception e)
     {

@@ -95,6 +95,15 @@ public partial class UCIManagerMCGS
   /// </summary>
   public GameEngineCeresMCGSInProcess CeresEngine;
 
+  /// <summary>
+  /// Optional handler for the custom "tcec" command, which launches the live TCEC
+  /// broadcast monitor (continuous analysis that auto-follows the live game). The
+  /// implementation lives in Ceres.Features (which references Ceres.MCGS), so it is
+  /// injected here by the host (DispatchCommands) rather than referenced directly to
+  /// avoid a circular project dependency. Invoked with the initialized engine instance.
+  /// </summary>
+  public Action<GameEngineCeresMCGSInProcess> TCECMonitorHandler;
+
   GameEngineSearchResultCeresMCGS lastSearchResult;
 
   /// <summary>
@@ -387,6 +396,7 @@ public partial class UCIManagerMCGS
           UCIWriteLine("graph [1-10]    - invokes graph feature to show the principal variations from last search (requires configuration), e.g. graph 7");
           UCIWriteLine("gamecomp        - invokes the game comparison feature to graph the divergence points in one or more games (requires configuration)");
           UCIWriteLine("plyviz          - generates HTML visualization of PlyBin distributions for current position");
+          UCIWriteLine("tcec            - live-analyze the current TCEC broadcast game, auto-following each new move (q/Esc to return)");
           UCIWriteLine("");
           break;
 
@@ -810,6 +820,23 @@ public partial class UCIManagerMCGS
 
         case "waitdone": // custom verb used for test driver
           taskSearchCurrentlyExecuting?.Wait();
+          break;
+
+        case "tcec":
+          // Launch the live TCEC broadcast monitor (implementation injected by the host
+          // via TCECMonitorHandler). Runs synchronously and returns here when the user
+          // quits (q/Esc), resuming normal UCI command processing.
+          if (InitializeEngineIfNeeded())
+          {
+            if (TCECMonitorHandler != null)
+            {
+              TCECMonitorHandler(CeresEngine);
+            }
+            else
+            {
+              UCIWriteLine("info string TCEC monitor handler not registered");
+            }
+          }
           break;
 
         default:

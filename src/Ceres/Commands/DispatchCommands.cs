@@ -321,6 +321,10 @@ namespace Ceres.Commands
           backendBenchMCGS,
           searchBenchmarkAction);
 
+        // Inject the live TCEC monitor handler (lives in Ceres.Features, which references
+        // Ceres.MCGS, so it cannot be referenced from inside the MCGS UCI manager directly).
+        ux.TCECMonitorHandler = engine => Ceres.Features.TCEC.TCECMonitor.Run(engine);
+
         Console.WriteLine();
         Console.WriteLine("Entering UCI command processing mode (MCGS v2).");
         ux.PlayUCI();
