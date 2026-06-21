@@ -143,18 +143,23 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
     // Spend 2.5x time first move of game (definitely no graph reuse available)
     float factorFirstMove = inputs.IsFirstMoveOfGame ? 2.5f : 1.0f;
 
-    bool isLowAbsoluteTimeRemaining = inputs.TargetLimitType == SearchLimitType.SecondsPerMove
-                                   && inputs.RemainingFixedSelf <= 60;
+    // Make a divisor which is between about 10 and 12.
+    // The actual time usage is highly sensitive to this value.
+    float startDivisor = (inputs.TargetLimitType, inputs.RemainingFixedSelf) switch
+    {
+      (SearchLimitType.SecondsPerMove, <= 60) => 12f,
+      (SearchLimitType.SecondsPerMove, <= 180) => 11f,
+      _ => 10f,
+    };
 
-    // Make a divisor which is between about 10 and 12
-    // and a increasing function of the piece count.
+    // Now make also an increasing function of the piece count.
     // Note that this is a relatively small number because
     //  - some moves will not do any search at all (due to instamoves), and
     //  - many moves will not actually run the full search duration (due to smart pruning)
     //  - thinking time is deliberately somewhat frontloaded because 
     //    its value as a deferred asset must be discounted by the possibility
     //    that it might never be gainfully used (if a loss comes first).
-    float baseDivisor = (isLowAbsoluteTimeRemaining ? 12f : 10f) + MathF.Pow(inputs.StartPos.PieceCount, 0.5f);
+    float baseDivisor = startDivisor + MathF.Pow(inputs.StartPos.PieceCount, 0.5f);
 
     if (inputs.IncrementSelf > 0)
     {
