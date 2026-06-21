@@ -94,6 +94,11 @@ namespace Ceres.Chess.GameEngines
     volatile bool inSearch = false;
 
     /// <summary>
+    /// If the engine is currently executing a search (i.e. inside a Search call).
+    /// </summary>
+    public bool IsSearching => inSearch;
+
+    /// <summary>
     /// Runs a search, calling DoSearch and adjusting the cumulative search time
     /// </summary>
     /// <param name="curPositionAndMoves"></param>

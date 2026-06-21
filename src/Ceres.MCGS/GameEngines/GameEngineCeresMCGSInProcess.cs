@@ -92,6 +92,26 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   public GameEngineSearchResultCeresMCGS LastSearchResult { get; private set; }
 
   /// <summary>
+  /// Set asynchronously (via RequestDumpInfo) to request that this engine dump its current search
+  /// diagnostics to the console. Consumed and cleared at the next safe quiescent point during the
+  /// running search, or at search end if the search finishes first.
+  /// </summary>
+  volatile bool dumpInfoRequested;
+
+  /// <summary>
+  /// Caller-supplied label identifying what requested the pending dump (forwarded as the dump
+  /// description and shown in its header, exactly like the "UCI"/"AUTO" descriptions). Set by
+  /// RequestDumpInfo before the request flag, so the consuming thread observes it.
+  /// </summary>
+  string dumpInfoDescription = "DUMP-INFO";
+
+  /// <summary>
+  /// Serializes diagnostic dumps so concurrent engines (multi-threaded tournaments) do not
+  /// interleave their output on the console.
+  /// </summary>
+  static readonly object dumpConsoleLock = new();
+
+  /// <summary>
   /// Optional name of file to which detailed log information 
   /// will be written after each move.
   /// </summary>
@@ -364,6 +384,15 @@ public class GameEngineCeresMCGSInProcess : GameEngine
 
     void InnerCallback(MCGSManager manager)
     {
+      // Honor any pending diagnostics-dump request. This callback fires at a quiescent point
+      // (holding the backup lock with no other iterator in its select/backup phase), so reading
+      // the graph and dumping here is safe.
+      if (dumpInfoRequested)
+      {
+        dumpInfoRequested = false;
+        DumpDiagnosticsWithHeader(manager, liveMidSearch: true);
+      }
+
       // Check for possible externally enqueued command.
       (string command, string options) = InterprocessCommandManager.TryDequeuePendingCommand();
       if (command != default)
@@ -426,6 +455,14 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     // Retain the most recent search result so diagnostics can be dumped post-hoc (e.g. blunder analysis).
     LastSearchResult = result;
 
+    // If a diagnostics dump was requested but the search completed before the next quiescent
+    // callback could fire (e.g. a very short search), honor it now against the just-completed search.
+    if (dumpInfoRequested)
+    {
+      dumpInfoRequested = false;
+      DumpDiagnosticsWithHeader(Search.Manager, liveMidSearch: false);
+    }
+
     // If configured, always emit the full search info dump after every completed search. This lives
     // at the GameEngine level (below UCI) so it happens for ALL callers -- UCI, tournaments, suites,
     // and direct programmatic searches -- exactly as if the "dump-info" command had been issued.
@@ -474,6 +511,68 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     }
 
     return result;
+  }
+
+
+  /// <summary>
+  /// Requests that this engine asynchronously dump its current search diagnostics to the console.
+  /// The dump is emitted at the next safe quiescent point during the running search (typically
+  /// within ~0.5s), or at the end of the current search if it finishes sooner. Safe to call from
+  /// another thread. The description identifies the requester (e.g. "UCI", "AUTO") and appears in
+  /// the dump header; the engine itself is agnostic to who or what triggered the request.
+  /// </summary>
+  public void RequestDumpInfo(string description = "DUMP-INFO")
+  {
+    dumpInfoDescription = description;
+    dumpInfoRequested = true;
+  }
+
+
+  /// <summary>
+  /// Emits a yellow header (identifying this engine and the current move) followed by the full
+  /// search diagnostics dump. When liveMidSearch is true the dump reflects the in-progress search
+  /// (so it must only be called at a quiescent point where reading the graph is safe); otherwise
+  /// it dumps the most recently completed search. Output is serialized across engines via
+  /// dumpConsoleLock, and the whole operation is guarded so a dump failure cannot disrupt search.
+  /// </summary>
+  void DumpDiagnosticsWithHeader(MCGSManager manager, bool liveMidSearch)
+  {
+    string description = dumpInfoDescription;
+    try
+    {
+      lock (dumpConsoleLock)
+      {
+        int moveNum;
+        try
+        {
+          int priorPlies = manager.Engine.SearchRootNode.Graph.Store.HistoryHashes.PriorPositionsMG.Length;
+          moveNum = 1 + priorPlies / 2;
+        }
+        catch
+        {
+          moveNum = 0;
+        }
+
+        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+          $"===== {description}  engine={ID}  move={moveNum} =====");
+
+        string phase = liveMidSearch ? " (in-search)" : " (search end)";
+        if (liveMidSearch)
+        {
+          // Non-final, read-only best-move peek (we are not finalizing a move, just reporting).
+          BestMoveInfoMCGS bestMoveInfo = manager.GetBestMove(out _, out _, out _, isFinalBestMoveCalc: false);
+          manager.DumpFullInfo(bestMoveInfo, manager.Engine.SearchRootNode, default, Console.Out, description + phase);
+        }
+        else if (LastSearchResult?.Search?.Manager != null)
+        {
+          LastSearchResult.Search.Manager.DumpFullInfo(LastSearchResult, Console.Out, description + phase);
+        }
+      }
+    }
+    catch (Exception e)
+    {
+      Console.WriteLine("Search diagnostics dump failed: " + e.Message);
+    }
   }
 
 

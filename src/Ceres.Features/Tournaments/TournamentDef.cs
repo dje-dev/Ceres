@@ -232,6 +232,15 @@ namespace Ceres.Features.Tournaments
     public bool ShouldShutDown = false;
 
     /// <summary>
+    /// Optional controller coordinating a cooperative pause/resume of the tournament's worker
+    /// threads (driven by the Ctrl-P console command). Non-null only for local interactive
+    /// tournaments; worker threads reach it via parentDef and null-check at each call site,
+    /// exactly like ShouldShutDown. NonSerialized because TournamentDef is deep-cloned per
+    /// worker thread (the shared controller lives only on parentDef).
+    /// </summary>
+    [NonSerialized] public TournamentPauseController PauseController;
+
+    /// <summary>
     /// Optional callback invoked after each game is processed by any tournament thread.
     ///
     /// The callback is passed the TournamentResultStats accumulated so far (across all threads),

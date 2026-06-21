@@ -159,6 +159,13 @@ namespace Ceres.Features.Tournaments
       // Def.Logger.WriteLine($"Begin {def.NumGames} game test with limit {def.SearchLimitEngine1} {def.SearchLimitEngine2} ID { gameSequenceNum } ");
       int numPairsProcessed = 0;
 
+      // Register as an active participant in cooperative pause coordination (Ctrl-P). The matching
+      // DeregisterActive in the finally below removes this thread from the "all threads parked"
+      // accounting whether it exits the game loop normally or via an exception. No-op (null
+      // controller) for non-interactive or distributed tournaments.
+      Def.parentDef.PauseController?.RegisterActive();
+      try
+      {
       while (!Def.parentDef.ShouldShutDown)
       {
         int openingIndex = getGamePairToProcess(openings.Count);
@@ -231,6 +238,11 @@ namespace Ceres.Features.Tournaments
           }
           numPairsProcessed++;
         }
+      }
+      }
+      finally
+      {
+        Def.parentDef.PauseController?.DeregisterActive();
       }
 
       // Dispose of all engines.
@@ -430,6 +442,10 @@ namespace Ceres.Features.Tournaments
       thisResult.SearchLimitBlack = engine2White ? Def.Player1Def.SearchLimit : Def.Player2Def.SearchLimit;
 
       UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, engine2White, openingIndex, gameSequenceNum, thisResult);
+
+      // Cooperative pause checkpoint (Ctrl-P): park here after each completed game if a pause is
+      // in effect, so all worker threads quiesce at an end-of-game boundary. No-op when not paused.
+      Def.parentDef.PauseController?.WaitIfPaused();
 
       return thisResult;
     }
