@@ -486,69 +486,164 @@ namespace Ceres.Features.Tournaments
 
 
     /// <summary>
-    /// Returns true if the three most recent moves indicate the opponent blundered: the moving
-    /// engine's evaluation improved by more than cpThreshold since its prior move, and the node
-    /// counts (N) of the moving engine's current and prior moves and the intervening opponent
-    /// move are all at least thresholdN.
+    /// Returns true if the three most recent moves indicate the opponent played a candidate blunder:
+    /// the moving engine's evaluation improved by more than cpThreshold since its prior move, the
+    /// position was not already decided before that move (the moving engine's prior evaluation was
+    /// within +/- maxPriorAbsCp of equality), and the node counts (N) of the moving engine's current
+    /// and prior moves and the intervening opponent move are all at least thresholdN.
+    /// Note: this is only the immediate candidate test; a candidate is not dumped until the blundering
+    /// engine confirms the deterioration on its own following move (see CheckForBlunderDump).
     /// </summary>
     /// <param name="cur">Moving engine's current move.</param>
     /// <param name="opp">Opponent's intervening move.</param>
     /// <param name="prev">Moving engine's prior move.</param>
     /// <param name="thresholdN">Minimum N required for all three moves.</param>
     /// <param name="cpThreshold">Minimum centipawn improvement required to trigger.</param>
+    /// <param name="maxPriorAbsCp">Maximum absolute value (cp) of the moving engine's prior evaluation;
+    /// if the position was already more decisive than this it is considered already won/lost and ignored.</param>
     /// <param name="improvement">Centipawn improvement since the moving engine's prior move.</param>
     internal static bool IsBlunderCondition(GameMoveStat cur, GameMoveStat opp, GameMoveStat prev,
-                                            int thresholdN, float cpThreshold, out float improvement)
+                                            int thresholdN, float cpThreshold, float maxPriorAbsCp, out float improvement)
     {
       // cur and prev are both by the moving engine (same color), so their evaluations
       // (each from the moving engine's perspective) are directly comparable.
       improvement = cur.ScoreCentipawns - prev.ScoreCentipawns;
       return improvement > cpThreshold
+          && Math.Abs(prev.ScoreCentipawns) <= maxPriorAbsCp   // ignore positions already won/lost ("piling on")
           && cur.FinalN >= thresholdN
           && prev.FinalN >= thresholdN
           && opp.FinalN >= thresholdN;
     }
 
     /// <summary>
-    /// Checks whether the opponent just blundered (based on the moving engine's evaluation swing
-    /// and the search depths of the relevant moves) and, if so and the opponent is a Ceres MCGS
-    /// in-process engine, dumps the opponent's search graph diagnostics to a "blunder_info_NNN.txt"
-    /// file in the current working directory (overwriting any existing file of the same name).
+    /// A detected-but-unconfirmed blunder candidate. The diagnostic dump is captured at detection
+    /// time (while the blundering engine's most recent completed search is still the suspect move)
+    /// and only written to disk once the blundering engine confirms the deterioration on its own
+    /// next move. One instance is carried across plies within a single game by the caller.
     /// </summary>
-    private void CheckForBlunderDump(int gameSequenceNum, List<GameMoveStat> gameMoveHistory, GameEngine movingEngine,
-                                     GameEngine opponentEngine, string opponentBlunderMoveStr)
+    private sealed class BlunderCandidate
     {
+      public GameEngine BlundererEngine;    // engine that played the suspect move
+      public int BlunderPlyNum;             // ply number of the suspect move
+      public float BlunderMoveScoreCp;      // blunderer's own evaluation (cp) of the suspect move
+      public float ReferenceImprovementCp;  // reference engine's evaluation swing across the suspect move
+      public string Header;                 // pre-built (self-locating) header text
+      public string DumpBody;               // captured search-graph diagnostics
+    }
+
+    /// <summary>
+    /// Detects a likely opponent blunder (a large favorable evaluation swing for the moving/reference
+    /// engine across the opponent's last move, from a position that was not already decided) and, once
+    /// the blundering engine confirms the deterioration on its OWN following move, dumps that engine's
+    /// search graph diagnostics to a "blunder_info_*.txt" file in the current working directory.
+    /// Called once per ply; <paramref name="pendingBlunder"/> carries a detected-but-unconfirmed
+    /// candidate from one ply to the next (it is reset to null per game by the caller).
+    /// Only in-process Ceres MCGS engines can be dumped; other opponents are skipped.
+    /// </summary>
+    private void CheckForBlunderDump(int gameSequenceNum, int roundNumber, List<GameMoveStat> gameMoveHistory,
+                                     GameEngine movingEngine, GameEngine opponentEngine,
+                                     string opponentBlunderMoveStr, ref BlunderCandidate pendingBlunder)
+    {
+      // (1) Resolve any pending candidate. The blunderer plays again exactly one ply after detection;
+      //     write the dump only if the blunderer's OWN evaluation has now fallen by at least the
+      //     threshold (i.e. it agrees, on reflection, that the move was a blunder).
+      if (pendingBlunder != null && ReferenceEquals(movingEngine, pendingBlunder.BlundererEngine))
+      {
+        GameMoveStat confirmMove = gameMoveHistory[^1];   // blunderer's next move (same color as the suspect move)
+        float blundererDrop = pendingBlunder.BlunderMoveScoreCp - confirmMove.ScoreCentipawns;
+        if (blundererDrop > Def.BlunderDumpThresholdCentipawns)
+        {
+          string confirmLine =
+              $"Blunderer confirmation: {pendingBlunder.BlundererEngine.ID} own evaluation fell {blundererDrop:F0}cp on its next "
+            + $"move ({pendingBlunder.BlunderMoveScoreCp:F0}cp -> {confirmMove.ScoreCentipawns:F0}cp), confirming the blunder.";
+
+          string fileName = $"blunder_info_g{gameSequenceNum + 1}_ply{pendingBlunder.BlunderPlyNum}_{SanitizeForFileName(pendingBlunder.BlundererEngine.ID)}.txt";
+          string fullPath = Path.Combine(Directory.GetCurrentDirectory(), fileName);
+          File.WriteAllText(fullPath, pendingBlunder.Header + Environment.NewLine
+                                    + confirmLine + Environment.NewLine + Environment.NewLine
+                                    + pendingBlunder.DumpBody);
+
+          ConsoleUtils.WriteLineColored(ConsoleColor.Red,
+              $"BLUNDER: engine {pendingBlunder.BlundererEngine.ID} position worse by {pendingBlunder.ReferenceImprovementCp:F0}cp "
+            + $"(self-confirmed {blundererDrop:F0}cp), dumped to {fullPath}");
+        }
+        pendingBlunder = null;   // candidate resolved (whether confirmed or rejected)
+      }
+
+      // (2) Detect a new candidate from the three most recent plies.
       if (gameMoveHistory.Count < 3)
       {
         return;
       }
 
       GameMoveStat cur = gameMoveHistory[^1];   // moving engine's current move
-      GameMoveStat opp = gameMoveHistory[^2];   // opponent's intervening move
+      GameMoveStat opp = gameMoveHistory[^2];   // opponent's intervening (suspect) move
       GameMoveStat prev = gameMoveHistory[^3];  // moving engine's prior move
 
-      if (!IsBlunderCondition(cur, opp, prev, Def.BlunderDumpThresholdN, Def.BlunderDumpThresholdCentipawns, out float improvement))
+      if (!IsBlunderCondition(cur, opp, prev, Def.BlunderDumpThresholdN, Def.BlunderDumpThresholdCentipawns,
+                              Def.BlunderDumpMaxPriorAbsCentipawns, out float improvement))
       {
         return;
       }
 
-      string header = $"Engine {movingEngine.ID} detected {improvement:F0}cp improvement since last move, "
-                    + $"diagnostic dump of opponent engine {opponentEngine.ID} follows "
-                    + $"(move actually played was {opponentBlunderMoveStr}) in game {gameSequenceNum}.";
-
-      // Buffer the dump first so nothing is written for opponents that cannot be dumped
-      // (e.g. not a Ceres MCGS in-process engine, or no completed search yet).
+      // Buffer the dump now, while the opponent's most recent completed search is still the suspect move.
       StringWriter dump = new StringWriter();
       if (!opponentEngine.TryDumpLastSearchDiagnostics(dump, "UCI"))
       {
         return;
       }
 
-      string fileName = $"blunder_info_{Random.Shared.Next(1000):000}.txt";
-      string fullPath = Path.Combine(Directory.GetCurrentDirectory(), fileName);
-      File.WriteAllText(fullPath, header + Environment.NewLine + Environment.NewLine + dump.ToString());
+      // Build a self-locating header from the AUTHORITATIVE game coordinates (the tournament board),
+      // not the engine's internal search-graph counters (which can disagree under transposition / tree
+      // reuse - e.g. a move counter several plies off). 'disagreement' is how much more optimistic the
+      // blunderer is about its own position than the reference engine; a large value is a strong
+      // "engine did not see the loss" bug signal.
+      float refViewOfBlunderer = -cur.ScoreCentipawns;                 // reference eval, in the blunderer's perspective
+      float disagreement = opp.ScoreCentipawns - refViewOfBlunderer;   // blunderer optimism over reference
 
-      ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"BLUNDER: engine {opponentEngine.ID} position worse by {improvement:F0}cp, dumped to {fullPath}");
+      string header =
+          $"Engine {movingEngine.ID} detected {improvement:F0}cp improvement since its previous move, "
+        + $"diagnostic dump of opponent engine {opponentEngine.ID} follows (move actually played was {opponentBlunderMoveStr})." + Environment.NewLine
+        + $"  Game        : {gameSequenceNum + 1} (Round {roundNumber}; {movingEngine.ID} vs {opponentEngine.ID})" + Environment.NewLine
+        + $"  Blunderer   : {opponentEngine.ID} ({opp.Side}), played {opponentBlunderMoveStr} at ply {opp.PlyNum}" + Environment.NewLine
+        + $"  FEN (before): {opp.Position.FEN}" + Environment.NewLine
+        + $"  Reference {movingEngine.ID} eval: {prev.ScoreCentipawns:F0}cp (Q {prev.ScoreQ:F3}) before -> "
+        + $"{cur.ScoreCentipawns:F0}cp (Q {cur.ScoreQ:F3}) after   [swing {improvement:F0}cp]" + Environment.NewLine
+        + $"  Blunderer self-eval of the move : {opp.ScoreCentipawns:F0}cp (Q {opp.ScoreQ:F3})" + Environment.NewLine
+        + $"  Disagreement (blunderer optimism vs reference): {disagreement:F0}cp   (large => likely engine vision bug)" + Environment.NewLine
+        + $"  Nodes (N): reference prev {prev.FinalN:N0}, reference cur {cur.FinalN:N0}, blunder move {opp.FinalN:N0}";
+
+      pendingBlunder = new BlunderCandidate
+      {
+        BlundererEngine = opponentEngine,
+        BlunderPlyNum = opp.PlyNum,
+        BlunderMoveScoreCp = opp.ScoreCentipawns,
+        ReferenceImprovementCp = improvement,
+        Header = header,
+        DumpBody = dump.ToString()
+      };
+    }
+
+    /// <summary>
+    /// Replaces any character that is not a letter, digit, '-' or '_' with '_' so an engine ID
+    /// can be embedded safely in a dump file name.
+    /// </summary>
+    private static string SanitizeForFileName(string s)
+    {
+      if (string.IsNullOrEmpty(s))
+      {
+        return "engine";
+      }
+
+      char[] cs = s.ToCharArray();
+      for (int i = 0; i < cs.Length; i++)
+      {
+        if (!char.IsLetterOrDigit(cs[i]) && cs[i] != '-' && cs[i] != '_')
+        {
+          cs[i] = '_';
+        }
+      }
+      return new string(cs);
     }
 
 
@@ -892,6 +987,8 @@ namespace Ceres.Features.Tournaments
 
       // Most recent move string played (used by blunder detection to report the opponent's prior move).
       string lastPlayedMoveStr = null;
+      // Carries a detected-but-unconfirmed blunder candidate from one ply to the next within this game.
+      BlunderCandidate pendingBlunder = null;
       int numEngine2MovesDifferentFromCheckEngine = 0;
 
       List<float> scoresEngine1 = new List<float>();
@@ -1078,12 +1175,14 @@ namespace Ceres.Features.Tournaments
         gameMoveHistory.Add(moveStat);
 
         // Possibly detect a blunder by the opponent (whose move was the prior ply) and dump its
-        // search graph for diagnosis. lastPlayedMoveStr currently holds the opponent's prior move.
+        // search graph for diagnosis (the dump is written only after the blundering engine confirms
+        // it on its own next move). lastPlayedMoveStr currently holds the opponent's prior move.
         if (Def.BlunderDumpThresholdN != 0)
         {
           GameEngine movingEngine = engine2ToMove ? engine2 : engine1;
           GameEngine opponentEngine = engine2ToMove ? engine1 : engine2;
-          CheckForBlunderDump(gameSequenceNum, gameMoveHistory, movingEngine, opponentEngine, lastPlayedMoveStr);
+          CheckForBlunderDump(gameSequenceNum, 1 + openingIndex, gameMoveHistory, movingEngine, opponentEngine,
+                              lastPlayedMoveStr, ref pendingBlunder);
         }
         lastPlayedMoveStr = moveStat.Side == SideType.White ? info.WhiteMoveStr : info.BlackMoveStr;
 
