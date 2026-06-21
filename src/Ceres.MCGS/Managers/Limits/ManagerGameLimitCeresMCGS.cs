@@ -144,12 +144,16 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
     float factorFirstMove = inputs.IsFirstMoveOfGame ? 2.5f : 1.0f;
 
     // Make a divisor which is between about 10 and 12.
+    // For low absolute time (seconds) we expect less graph reuse
+    // and also higher possibility of very suboptimal moves if time allowed to fall too low.
+    // Therefore we are more conservative with time usage (higher divisor).
     // The actual time usage is highly sensitive to this value.
     float startDivisor = (inputs.TargetLimitType, inputs.RemainingFixedSelf) switch
     {
-      (SearchLimitType.SecondsPerMove, <= 60) => 12f,
-      (SearchLimitType.SecondsPerMove, <= 180) => 11f,
-      _ => 10f,
+      (not SearchLimitType.SecondsPerMove, _) => 10f,
+      (_, <= 60) => 12f,
+      (_, >= 180) => 10f,
+      (_, var t) => 12f - (t - 60f) / 60f, // linear ramp between 60s and 180s
     };
 
     // Now make also an increasing function of the piece count.
