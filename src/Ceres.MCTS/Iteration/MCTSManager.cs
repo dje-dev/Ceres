@@ -247,9 +247,9 @@ namespace Ceres.MCTS.Iteration
         estNPS = SearchLimit.DEFAULT_NPS; 
       }
 
-      int estNumFinalTreeNodes = searchLimit.EstNumFinalNodes(RootNWhenSearchStarted, (int)estNPS, false);
+      int estNumFinalTreeNodes = searchLimit.EstNumFinalNodes(RootNWhenSearchStarted, (int)estNPS);
       int? hardMaxNumFinalTreeNodes = searchLimit.HardMaxNumFinalNodes(RootNWhenSearchStarted, (int)estNPS, false);
-      int estNumSearchNodes = searchLimit.EstNumSearchNodes(RootNWhenSearchStarted, (int)estNPS, false);
+      int estNumSearchNodes = searchLimit.EstNumSearchNodes(RootNWhenSearchStarted, (int)estNPS);
 
       // TODO: technically this is overwriting the params belonging to the prior search, that's ugly (but won't actually cause a problem)
       paramsChooser.ChooseOptimal(estNumFinalTreeNodes);
@@ -918,7 +918,7 @@ namespace Ceres.MCTS.Iteration
 
       // Do the search
       IteratedMCTSDef schedule = manager.Context.ParamsSearch.IMCTSSchedule;
-      bool useIMCTS = schedule != null & manager.SearchLimit.EstNumSearchNodes(root.N, 30_000, false) > 100;
+      bool useIMCTS = schedule != null & manager.SearchLimit.EstNumSearchNodes(root.N, 30_000) > 100;
 
       MCTSNode selectedMove;
       BestMoveInfo bestMoveInfo;

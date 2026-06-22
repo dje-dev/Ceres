@@ -345,43 +345,38 @@ namespace Ceres.Chess
     /// </summary>
     /// <param name="initialNumNodes"></param>
     /// <param name="estNumNodesPerSecond"></param>
-    /// <param name="estIsObserved"></param>
     /// <returns></returns>
-    public int EstNumFinalNodes(int initialNumNodes, int estNumNodesPerSecond, bool estIsObserved) 
-      => initialNumNodes + EstNumSearchNodes(initialNumNodes, estNumNodesPerSecond, estIsObserved);
+    public int EstNumFinalNodes(int initialNumNodes, int estNumNodesPerSecond) 
+      => initialNumNodes + EstNumSearchNodes(initialNumNodes, estNumNodesPerSecond);
+
 
     /// Estimated number of incremental search nodes (N) for the search tree
     /// which starts with specified number of initial nodes and then
     /// searches for this limit.
-    public int EstNumSearchNodes(int initialNumNodes, int estNumNodesPerSecond, bool estIsObserved)
+    /// The returned value is a best estimate, not a hard upper bound.
+    public int EstNumSearchNodes(int initialNumNodes, int estEvaluationsPerSecond)
     {
+      // N.B. Due to transpositions, the actual number of graph nodes
+      //      may be much higher than the number of nodes that
+      //      could be evaluated by the net in the same unit of time.
+      const float EST_NODES_PER_NNEVAL = 2.0f;
+
       // TODO: make the estimations below smarter
       return Type switch
       {
         SearchLimitType.NodesPerMove => (int)Value, 
         SearchLimitType.NodesPerTree  => (int)MathF.Max(Value - initialNumNodes, 1),
-        SearchLimitType.SecondsPerMove => (int)SecsToNodes(Value, estNumNodesPerSecond, estIsObserved),
-        SearchLimitType.SecondsForAllMoves => (int)((Value / 20.0f) * estNumNodesPerSecond),
         SearchLimitType.NodesForAllMoves => (int)(Value / 20.0f),
+
+        SearchLimitType.SecondsPerMove => (int)(Value * estEvaluationsPerSecond * EST_NODES_PER_NNEVAL),
+        SearchLimitType.SecondsForAllMoves => (int)((Value / 20.0f) * estEvaluationsPerSecond * EST_NODES_PER_NNEVAL),
+
         SearchLimitType.BestValueMove => 1,
         SearchLimitType.BestActionMove => 1,
         _ => throw new NotImplementedException()
       };
     }
 
-
-    static float SecsToNodes(float secs, int estNumNodesPerSecond, bool estNodesIsObserved)
-    {
-      if (!estNodesIsObserved && secs < 0.1)
-      {
-        // first nodes are much slower due to lagency
-        return secs * estNumNodesPerSecond * 0.3f;
-      }
-      else
-      {
-        return secs * estNumNodesPerSecond;
-      }
-    }
 
     #endregion
 

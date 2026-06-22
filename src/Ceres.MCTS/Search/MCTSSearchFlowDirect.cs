@@ -253,7 +253,7 @@ namespace Ceres.MCTS.Search
         }
 
         float estNPS = float.IsNaN(Manager.EstimatedNPS) ? SearchLimit.DEFAULT_NPS : Manager.EstimatedNPS;
-        int estFinalTreeNodes = Manager.SearchLimit.EstNumFinalNodes(rootNode.N, (int)estNPS, true);
+        int estFinalTreeNodes = Manager.SearchLimit.EstNumFinalNodes(rootNode.N, (int)estNPS);
         int targetThisBatch = OptimalBatchSizeCalculator.CalcOptimalBatchSize(estFinalTreeNodes, rootNode.N,
                                                                               overlapThisSet,
                                                                               Context.ParamsSearch.Execution.FlowDualSelectors,

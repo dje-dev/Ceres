@@ -189,7 +189,7 @@ namespace Ceres.MCTS.Iteration
       float nGap = Math.Abs(childrenSortedQ[0].N - childrenSortedQ[1].N);
       float qGap = (float)(Math.Abs(childrenSortedQ[0].Q - childrenSortedQ[1].Q));
       float minNRequiredToChange = nGap / ManagerChooseBestMove.MinFractionNToUseQ(newRoot, qGap);
-      int estNewVisitsThisMove = searchLimit.EstNumSearchNodes(newRoot.N, (int)priorManager.EstimatedNPS, true);
+      int estNewVisitsThisMove = searchLimit.EstNumSearchNodes(newRoot.N, (int)priorManager.EstimatedNPS);
 
       // Assume up to 75% of future visits could go to some other node in extension.
       // This may seem optimistic, but:
