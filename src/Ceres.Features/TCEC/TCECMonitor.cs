@@ -61,7 +61,7 @@ namespace Ceres.Features.TCEC;
 /// </summary>
 public static class TCECMonitor
 {
-  const double DUMP_INTERVAL_SECONDS = 1.0;
+  const double DUMP_INTERVAL_SECONDS = 5.0;
   const int FEED_POLL_SECONDS = 2;
   const int MAX_PV_PLIES = 30;
   const int EVAL_LABEL_WIDTH = 54;
@@ -594,7 +594,7 @@ public static class TCECMonitor
     {
       Console.ForegroundColor = ConsoleColor.Yellow;
       Console.WriteLine("================================ TCEC LIVE ANALYSIS ================================");
-      Console.WriteLine("  Ceres analyzes the live TCEC game and AUTO-FOLLOWS each move (graph reused). 1s refresh.");
+      Console.WriteLine("  Ceres analyzes the live TCEC game and AUTO-FOLLOWS each move (graph reused). 5s refresh.");
       Console.WriteLine("  View:  [m] candidate moves   [p] principal variation   [i] search info");
       Console.WriteLine("  Run :  [g] analysis graph (prompts level)    [r] revalue-root   (then Esc to resume)");
       Console.WriteLine("  [q] or [Esc] = quit monitor (return to UCI prompt)");
