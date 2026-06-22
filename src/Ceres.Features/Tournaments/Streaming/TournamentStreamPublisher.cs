@@ -527,7 +527,7 @@ namespace Ceres.Features.Tournaments.Streaming
     static GameEndDTO CloneAsResult(GameEndDTO d) => new()
     {
       Type = "gameResult",
-      ThreadId = -1,
+      ThreadId = d.ThreadId,   // keep producing thread so consumers can pair games (each thread plays a pair back-to-back)
       WhiteName = d.WhiteName,
       BlackName = d.BlackName,
       Result = d.Result,
