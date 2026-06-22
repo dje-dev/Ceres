@@ -112,6 +112,12 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Cumulative backend-busy time in seconds (time during which at least one
     /// evaluator was inside the backend).
+    ///
+    /// Includes the currently-open busy interval (if an evaluator is inside the backend
+    /// at the moment of the read). Without this, a snapshot taken while the backend is
+    /// continuously occupied (busyCount never returns to 0, as happens under tightly
+    /// overlapped evaluators) would report far too little busy time (potentially 0),
+    /// since completed intervals are only folded into accumulatedBusyTicks on close.
     /// </summary>
     public double BusySeconds
     {
@@ -119,7 +125,12 @@ namespace Ceres.Chess.NNEvaluators
       {
         lock (lockObj)
         {
-          return accumulatedBusyTicks / (double)Stopwatch.Frequency;
+          long ticks = accumulatedBusyTicks;
+          if (busyCount > 0)
+          {
+            ticks += Stopwatch.GetTimestamp() - periodStartTimestamp;
+          }
+          return ticks / (double)Stopwatch.Frequency;
         }
       }
     }
