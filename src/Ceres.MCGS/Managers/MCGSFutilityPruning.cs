@@ -197,7 +197,17 @@ public class MCGSFutilityPruning
     // Don't prune any more if we disallow stop search from pruning
     // and we are already down to 2 remaining unpruned moves.
     bool okToPrune = true;
-    int numNotPruned = Manager.RootMovesPruningStatus.Sum(p => p == Managers.MCGSFutilityPruningStatus.NotPruned ? 1 : 0);
+    // Count not-yet-pruned root moves with a plain loop rather than LINQ Sum, which allocates an
+    // enumerator on every call (this runs frequently while the graph/backup lock is held).
+    int numNotPruned = 0;
+    var pruningStatus = Manager.RootMovesPruningStatus;
+    for (int i = 0; i < pruningStatus.Length; i++)
+    {
+      if (pruningStatus[i] == Managers.MCGSFutilityPruningStatus.NotPruned)
+      {
+        numNotPruned++;
+      }
+    }
     if (!Manager.ParamsSearch.FutilityPruningStopSearchEnabled && numNotPruned <= 2)
     {
       okToPrune = false;

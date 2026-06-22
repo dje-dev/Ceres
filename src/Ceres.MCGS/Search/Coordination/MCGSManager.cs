@@ -437,7 +437,15 @@ public partial class MCGSManager : IDisposable
     {
       try
       {
-        TerminationManager.UpdatePruningFlags();
+        // UpdatePruningFlags is comparatively expensive (and only does real work in the latter
+        // part of the search), so throttle it to every 3rd batch rather than running it every
+        // batch on the critical path while the select/backup exclusion lock is held. Use a
+        // different residue than UpdateEstimatedNPS (% 3 == 2) so the two do not stack on the
+        // same batch. UpdateSearchStopStatus stays every-batch so stop detection is not delayed.
+        if (batchSequenceNum % 3 == 0)
+        {
+          TerminationManager.UpdatePruningFlags();
+        }
         UpdateSearchStopStatus();
       }
       catch (Exception exc)
@@ -520,7 +528,7 @@ public partial class MCGSManager : IDisposable
     // Reset the backend-time tracker once at the true start of the search so backend-busy time
     // accumulates across all passes (including any extension passes) over the whole move.
     manager.EvaluatorsSet?.BackendTimeTracker?.Reset();
-    Ceres.MCGS.Search.Coordination.MCGSIterator.ResetPhaseTiming();
+    manager.Engine.Coordinator.ResetPhaseTiming();
 
     // Reset the per-batch ID sequence and the in-order-backup turn so batch indices remain
     // contiguous from 0 within each search (required by EnforceInOrderBackup).

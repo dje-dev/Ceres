@@ -219,14 +219,118 @@ internal sealed class PhaseCoordinator
   }
 
 
-  // Instrumentation: time spent blocked acquiring the select/backup exclusion lock.
-  internal static long ExclWaitSelectTicks;
-  internal static long ExclWaitBackupTicks;
+  // Per-search phase instrumentation (Stopwatch ticks), summed across both iterators and all
+  // batches of THIS search. These are INSTANCE fields (one PhaseCoordinator per search) so that
+  // concurrent searches running in the same process do not cross-increment or mutually reset each
+  // other's counters. Each phase total includes time waiting on the select/backup exclusion lock
+  // (exclWait). Also tracks the per-phase max and a duration histogram for the CPU phases
+  // (select/backup) so the residual-idle question can distinguish mean cost vs tail (worst-case).
+  internal long ExclWaitSelectTicks;
+  internal long ExclWaitBackupTicks;
+  internal long PhaseTicksSelect;
+  internal long PhaseTicksEval;
+  internal long PhaseTicksBackup;
+  internal long PhaseBatchCount;
+  internal long PhaseMaxSelectTicks;
+  internal long PhaseMaxBackupTicks;
+  static readonly double[] PHASE_BUCKET_MS = { 0.25, 0.5, 1, 2, 4, 8, double.PositiveInfinity };
+  readonly long[] PhaseHistSelect = new long[PHASE_BUCKET_MS.Length];
+  readonly long[] PhaseHistBackup = new long[PHASE_BUCKET_MS.Length];
 
-  internal static void ResetExclWait()
+  /// <summary>
+  /// Zeroes all phase-timing counters. Call once at the true start of each search.
+  /// </summary>
+  internal void ResetPhaseTiming()
   {
     ExclWaitSelectTicks = 0;
     ExclWaitBackupTicks = 0;
+    PhaseTicksSelect = 0;
+    PhaseTicksEval = 0;
+    PhaseTicksBackup = 0;
+    PhaseBatchCount = 0;
+    PhaseMaxSelectTicks = 0;
+    PhaseMaxBackupTicks = 0;
+    System.Array.Clear(PhaseHistSelect);
+    System.Array.Clear(PhaseHistBackup);
+  }
+
+  /// <summary>
+  /// Records the select-phase duration (Stopwatch ticks) for one batch.
+  /// </summary>
+  internal void RecordSelectPhase(long ticks)
+  {
+    Interlocked.Add(ref PhaseTicksSelect, ticks);
+    RecordPhaseHist(ticks, PhaseHistSelect, ref PhaseMaxSelectTicks);
+  }
+
+  /// <summary>
+  /// Records the evaluate-phase duration (Stopwatch ticks) for one batch.
+  /// </summary>
+  internal void RecordEvalPhase(long ticks)
+  {
+    Interlocked.Add(ref PhaseTicksEval, ticks);
+  }
+
+  /// <summary>
+  /// Records the backup-phase duration (Stopwatch ticks) for one batch and counts the batch.
+  /// </summary>
+  internal void RecordBackupPhase(long ticks)
+  {
+    Interlocked.Add(ref PhaseTicksBackup, ticks);
+    RecordPhaseHist(ticks, PhaseHistBackup, ref PhaseMaxBackupTicks);
+    Interlocked.Increment(ref PhaseBatchCount);
+  }
+
+  void RecordPhaseHist(long ticks, long[] hist, ref long maxField)
+  {
+    long cur;
+    while ((cur = Volatile.Read(ref maxField)) < ticks
+        && Interlocked.CompareExchange(ref maxField, ticks, cur) != cur)
+    {
+    }
+
+    double ms = ticks * 1000.0 / Stopwatch.Frequency;
+    for (int b = 0; b < PHASE_BUCKET_MS.Length; b++)
+    {
+      if (ms <= PHASE_BUCKET_MS[b])
+      {
+        Interlocked.Increment(ref hist[b]);
+        break;
+      }
+    }
+  }
+
+  static string HistString(long[] hist)
+  {
+    var sb = new System.Text.StringBuilder();
+    for (int b = 0; b < PHASE_BUCKET_MS.Length; b++)
+    {
+      string hi = double.IsInfinity(PHASE_BUCKET_MS[b]) ? "inf" : PHASE_BUCKET_MS[b].ToString("0.##");
+      sb.Append($"<={hi}:{hist[b]} ");
+    }
+    return sb.ToString().TrimEnd();
+  }
+
+  /// <summary>
+  /// Human-readable per-batch summary of this search's phase timing.
+  /// </summary>
+  internal string PhaseTimingSummary()
+  {
+    long n = Volatile.Read(ref PhaseBatchCount);
+    if (n == 0)
+    {
+      return "(no batches)";
+    }
+
+    double f = Stopwatch.Frequency;
+    double sel = PhaseTicksSelect * 1000.0 / f, ev = PhaseTicksEval * 1000.0 / f, bk = PhaseTicksBackup * 1000.0 / f;
+    double waitSel = ExclWaitSelectTicks * 1000.0 / f;
+    double waitBak = ExclWaitBackupTicks * 1000.0 / f;
+    double maxSel = PhaseMaxSelectTicks * 1000.0 / f, maxBak = PhaseMaxBackupTicks * 1000.0 / f;
+    return $"batches={n:N0} per-batch[ms] select={sel / n:F3} eval={ev / n:F3} backup={bk / n:F3} "
+         + $"exclWait(sel/bak)={waitSel / n:F3}/{waitBak / n:F3} max(sel/bak)={maxSel:F2}/{maxBak:F2}ms"
+         + $"\n                            selectHist[ms] {HistString(PhaseHistSelect)}"
+         + $"\n                            backupHist[ms] {HistString(PhaseHistBackup)}";
   }
 
   private void Enter(bool isBackup = false)
