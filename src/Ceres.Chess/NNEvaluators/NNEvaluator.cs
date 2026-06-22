@@ -197,8 +197,44 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public virtual bool SupportsParallelExecution => true;
 
-    public virtual float EstNPSBatch => PerformanceStats == null ? 30_000 : PerformanceStats.BigBatchNPS;
-    public virtual float EstNPSSingleton => PerformanceStats == null ? 500 : PerformanceStats.SingletonNPS;
+    /// <summary>
+    /// Conservative fallback estimate of big-batch throughput (nodes/sec), used only when no measured
+    /// value is available. Backends should record a realistic value at warmup (see SetEstimatedNPS).
+    /// </summary>
+    public const float DEFAULT_EST_NPS_BATCH = 30_000;
+
+    /// <summary>
+    /// Conservative fallback estimate of singleton (batch size 1) throughput (nodes/sec), used only
+    /// when no measured value is available.
+    /// </summary>
+    public const float DEFAULT_EST_NPS_SINGLETON = 500;
+
+    public virtual float EstNPSBatch => PerformanceStats == null ? DEFAULT_EST_NPS_BATCH : PerformanceStats.BigBatchNPS;
+    public virtual float EstNPSSingleton => PerformanceStats == null ? DEFAULT_EST_NPS_SINGLETON : PerformanceStats.SingletonNPS;
+
+    /// <summary>
+    /// Records estimated throughput (nodes/sec) measured by a subclass, typically during Warmup, so that
+    /// <see cref="EstNPSBatch"/> and <see cref="EstNPSSingleton"/> return realistic values for this
+    /// device/network instead of the conservative defaults. Pass a non-positive value for either argument
+    /// to leave that estimate unchanged (keeping any prior value, else the default). Never throws.
+    /// </summary>
+    /// <param name="singletonNPS">Measured singleton (batch size 1) throughput, or &lt;= 0 to leave unchanged.</param>
+    /// <param name="bigBatchNPS">Measured big-batch throughput, or &lt;= 0 to leave unchanged.</param>
+    protected void SetEstimatedNPS(float singletonNPS, float bigBatchNPS)
+    {
+      float singleton = singletonNPS > 0 ? singletonNPS
+                                         : (PerformanceStats?.SingletonNPS ?? DEFAULT_EST_NPS_SINGLETON);
+      float bigBatch = bigBatchNPS > 0 ? bigBatchNPS
+                                       : (PerformanceStats?.BigBatchNPS ?? DEFAULT_EST_NPS_BATCH);
+
+      PerformanceStats = new NNEvaluatorPerformanceStats()
+      {
+        EvaluatorType = GetType(),
+        SingletonNPS = singleton,
+        BigBatchNPS = bigBatch,
+        Breaks = PerformanceStats?.Breaks
+      };
+    }
 
     /// <summary>
     /// Types of input(s) required by the evaluator.

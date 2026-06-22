@@ -170,6 +170,28 @@ namespace Ceres.Chess.NNEvaluators.CUDA
       Evaluator = new NNBackendLC0_CUDA(gpuID, net, saveActivations, maxBatchSize,
                                         dumpTimings, enableCUDAGraphs, graphBatchSizeDivisor,
                                         TRY_SHARE_EVALUATORS ? ReferenceEvaluator?.Evaluator : null);
+
+      // Warm up and measure realistic throughput so EstNPSBatch / EstNPSSingleton reflect this
+      // device + network rather than the conservative defaults.
+      Warmup();
+    }
+
+
+    /// <summary>
+    /// Performs warmup and records a realistic throughput estimate (singleton and big-batch NPS) by
+    /// running the standard performance benchmark. Best-effort: any failure leaves the default NPS
+    /// estimates in place and must not prevent the evaluator from being used.
+    /// </summary>
+    public override void Warmup()
+    {
+      try
+      {
+        CalcStatistics(computeBreaks: false);
+      }
+      catch (Exception exc)
+      {
+        Console.WriteLine($"Warning: NNEvaluatorCUDA warmup/NPS estimation failed, using default estimates. {exc.Message}");
+      }
     }
 
 

@@ -610,8 +610,71 @@ public class NNEvaluatorTensorRT : NNEvaluator
         }
       }
 
+      // Now that the engine is warmed up (CUDA graphs captured, device at full clocks), estimate
+      // realistic throughput from timed runs so EstNPSBatch / EstNPSSingleton reflect this device +
+      // engine rather than the conservative defaults. Best-effort: a measurement failure must never
+      // abort warmup (the engine still works, just with default NPS estimates).
+      try
+      {
+        const int NUM_TIMING_ITERATIONS = 10;
+        int bigSize = maxWarmupSize;
+        int singletonRunSize = warmupSizes.Min();
+
+        double bestBigSecs = MeasureBestBatchSeconds(bigSize, NUM_TIMING_ITERATIONS);
+        double bestSingletonSecs = MeasureBestBatchSeconds(singletonRunSize, NUM_TIMING_ITERATIONS);
+
+        float bigBatchNPS = bestBigSecs > 0 && bestBigSecs < double.MaxValue ? (float)(bigSize / bestBigSecs) : 0;
+        // A single position cannot be evaluated any faster than the smallest batch the engine runs,
+        // so realistic singleton throughput is 1 / (time for the smallest warmed-up batch).
+        float singletonNPS = bestSingletonSecs > 0 && bestSingletonSecs < double.MaxValue ? (float)(1.0 / bestSingletonSecs) : 0;
+
+        SetEstimatedNPS(singletonNPS, bigBatchNPS);
+      }
+      catch (Exception exc)
+      {
+        Console.WriteLine($"Warning: NNEvaluatorTensorRT NPS estimation failed, using default estimates. {exc.Message}");
+      }
+
       haveWarmedUp = true;
     }
+  }
+
+
+  /// <summary>
+  /// Runs the given batch size through the execution pool <paramref name="numIterations"/> times with
+  /// dummy (zero) inputs and returns the best (minimum) elapsed seconds observed. Used only for
+  /// throughput estimation during warmup. The pool call is synchronous (it writes results into the
+  /// host output buffer), so wall-clock timing around it measures device-busy time.
+  /// </summary>
+  double MeasureBestBatchSeconds(int batchSize, int numIterations)
+  {
+    Half[] outputBuffer = new Half[batchSize * outputElementsPerPosition];
+    double bestSeconds = double.MaxValue;
+
+    if (useByteInputs)
+    {
+      byte[] dummyInput = new byte[batchSize * inputElementsPerPosition];
+      for (int i = 0; i < numIterations; i++)
+      {
+        Stopwatch sw = Stopwatch.StartNew();
+        pool.ProcessBytes(dummyInput, outputBuffer, batchSize);
+        sw.Stop();
+        bestSeconds = Math.Min(bestSeconds, sw.Elapsed.TotalSeconds);
+      }
+    }
+    else
+    {
+      Half[] dummyInput = new Half[batchSize * inputElementsPerPosition];
+      for (int i = 0; i < numIterations; i++)
+      {
+        Stopwatch sw = Stopwatch.StartNew();
+        pool.Process(dummyInput, outputBuffer, batchSize);
+        sw.Stop();
+        bestSeconds = Math.Min(bestSeconds, sw.Elapsed.TotalSeconds);
+      }
+    }
+
+    return bestSeconds;
   }
 
 
