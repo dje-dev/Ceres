@@ -258,6 +258,10 @@ namespace Ceres.Features.Tournaments.Streaming
 
     /// <summary>Total game time in milliseconds.</summary>
     public long GameTimeMs { get; set; }
+
+    /// <summary>Index of the opening used (same value for both colors of a pair). Lets a consumer
+    /// pair pentanomial games by opening — robust to threads/parallelism/distribution. -1 if unknown.</summary>
+    public int OpeningIndex { get; set; } = -1;
   }
 
 

@@ -534,7 +534,8 @@ namespace Ceres.Features.Tournaments.Streaming
       Reason = d.Reason,
       Moves = d.Moves,
       PlyCount = d.PlyCount,
-      GameTimeMs = d.GameTimeMs
+      GameTimeMs = d.GameTimeMs,
+      OpeningIndex = d.OpeningIndex
     };
 
 

@@ -398,7 +398,8 @@ namespace Ceres.Features.Tournaments.Streaming
         Reason = MapReason(r.ResultReason),
         Moves = (r.PlyCount + 1) / 2,
         PlyCount = r.PlyCount,
-        GameTimeMs = (long)Math.Round((r.TotalTimeEngine1 + r.TotalTimeEngine2) * 1000)
+        GameTimeMs = (long)Math.Round((r.TotalTimeEngine1 + r.TotalTimeEngine2) * 1000),
+        OpeningIndex = r.OpeningIndex
       };
     }
 
