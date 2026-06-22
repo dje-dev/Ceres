@@ -198,9 +198,13 @@ namespace Ceres.Chess.Textual.PgnFileTools
 
         string partialStr = _partial.ToString();
         bool isResult = partialStr == "*" || partialStr == "0-1" || partialStr == "1-0" || partialStr == "1/2-1/2";
-        if (gameInfo.Headers.Count > 0  // this clause added by DJE
-            && gameInfo.Headers.ContainsKey("Result")
-            && partialStr == gameInfo.Headers["Result"])
+        // A standalone result token ends the game. Opening-book lines correctly use "*" (no result)
+        // and carry no [Result] header, so terminate on isResult directly rather than only when it
+        // matches a [Result] header (otherwise "*" falls through to the SAN parser and errors).
+        if (isResult
+            || (gameInfo.Headers.Count > 0  // this clause added by DJE
+                && gameInfo.Headers.ContainsKey("Result")
+                && partialStr == gameInfo.Headers["Result"]))
         {
           _handle = Done;
           return true;
