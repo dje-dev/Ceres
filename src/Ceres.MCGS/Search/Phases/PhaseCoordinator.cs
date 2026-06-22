@@ -233,7 +233,7 @@ internal sealed class PhaseCoordinator
   internal long PhaseBatchCount;
   internal long PhaseMaxSelectTicks;
   internal long PhaseMaxBackupTicks;
-  static readonly double[] PHASE_BUCKET_MS = { 0.25, 0.5, 1, 2, 4, 8, double.PositiveInfinity };
+  static readonly double[] PHASE_BUCKET_MS = { 0.25, 0.5, 1, 2, 4, 8, 16, 32, double.PositiveInfinity };
   readonly long[] PhaseHistSelect = new long[PHASE_BUCKET_MS.Length];
   readonly long[] PhaseHistBackup = new long[PHASE_BUCKET_MS.Length];
 
