@@ -325,7 +325,7 @@ public static class GraphReuseManager
     return new ReuseDecision(GraphReuseAction.Reuse, null, reachabilitySeconds, reachableNodes, reachable);
   }
 
-  #endregion
+#endregion
 
   #region Memory + Logging
 

@@ -300,15 +300,33 @@ internal sealed class PhaseCoordinator
     }
   }
 
-  static string HistString(long[] hist)
+  static string HistString(long[] hist, int[] colWidth)
   {
     var sb = new System.Text.StringBuilder();
     for (int b = 0; b < PHASE_BUCKET_MS.Length; b++)
     {
       string hi = double.IsInfinity(PHASE_BUCKET_MS[b]) ? "inf" : PHASE_BUCKET_MS[b].ToString("0.##");
-      sb.Append($"<={hi}:{hist[b]} ");
+      if (b > 0)
+      {
+        sb.Append("  "); // two spaces between buckets for readability
+      }
+      sb.Append($"<={hi}:{hist[b].ToString().PadLeft(colWidth[b])}");
     }
-    return sb.ToString().TrimEnd();
+    return sb.ToString();
+  }
+
+  /// <summary>
+  /// Computes the per-bucket count-field width (widest count across both histograms) so that
+  /// the select and backup rows printed on adjacent lines align vertically column-by-column.
+  /// </summary>
+  static int[] HistColWidths(long[] histA, long[] histB)
+  {
+    int[] widths = new int[PHASE_BUCKET_MS.Length];
+    for (int b = 0; b < PHASE_BUCKET_MS.Length; b++)
+    {
+      widths[b] = System.Math.Max(histA[b].ToString().Length, histB[b].ToString().Length);
+    }
+    return widths;
   }
 
   /// <summary>
@@ -327,10 +345,11 @@ internal sealed class PhaseCoordinator
     double waitSel = ExclWaitSelectTicks * 1000.0 / f;
     double waitBak = ExclWaitBackupTicks * 1000.0 / f;
     double maxSel = PhaseMaxSelectTicks * 1000.0 / f, maxBak = PhaseMaxBackupTicks * 1000.0 / f;
+    int[] histColWidth = HistColWidths(PhaseHistSelect, PhaseHistBackup);
     return $"batches={n:N0} per-batch[ms] select={sel / n:F3} eval={ev / n:F3} backup={bk / n:F3} "
          + $"exclWait(sel/bak)={waitSel / n:F3}/{waitBak / n:F3} max(sel/bak)={maxSel:F2}/{maxBak:F2}ms"
-         + $"\n                            selectHist[ms] {HistString(PhaseHistSelect)}"
-         + $"\n                            backupHist[ms] {HistString(PhaseHistBackup)}";
+         + $"\n                            selectHist[ms] {HistString(PhaseHistSelect, histColWidth)}"
+         + $"\n                            backupHist[ms] {HistString(PhaseHistBackup, histColWidth)}";
   }
 
   private void Enter(bool isBackup = false)

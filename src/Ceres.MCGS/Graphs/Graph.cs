@@ -246,6 +246,13 @@ public unsafe partial class Graph : IDisposable
   /// <param name="tryEnableLargePages"></param>
   /// <param name="priorHistory"></param>
   /// <param name="testFlag"></param>
+  /// <param name="dictionarySizeHint">
+  /// Optional initial-capacity hint (in entries) for the transposition dictionaries. When greater than
+  /// zero, this caller-supplied estimate (derived from the search budget, or the reachable-set size on
+  /// the reuse/rewrite path) is used to size the dictionaries up front instead of the legacy
+  /// maxNodes-based heuristic. The value is clamped in <see cref="Initialize"/>. Pass -1 (the default)
+  /// to retain the legacy behavior.
+  /// </param>
   public Graph(int maxNodes,
                bool hasAction, bool hasState,
                bool graphEnabled,
@@ -254,7 +261,8 @@ public unsafe partial class Graph : IDisposable
                bool nodesWithOneVisitMayHaveDifferentQ,
                PositionWithHistory priorHistory,
                bool testFlag,
-               bool maintainSiblingSets)
+               bool maintainSiblingSets,
+               int dictionarySizeHint = -1)
   {
     MaintainSiblingSets = maintainSiblingSets;
 
@@ -269,7 +277,7 @@ public unsafe partial class Graph : IDisposable
 
     InitializeNullNode();
     SetSearchRootNode(new NodeIndex(GraphStore.ROOT_NODE_INDEX));
-    Initialize(maxNodes);
+    Initialize(maxNodes, dictionarySizeHint);
 
     // Make local copies of references to key data structures (for performance).
     NodesStore = Store.NodesStore;
@@ -324,11 +332,27 @@ public unsafe partial class Graph : IDisposable
   }
 
 
-  private void Initialize(int maxNodes)
+  private void Initialize(int maxNodes, int dictionarySizeHintRequested)
   {
-    // Try to size Dictionary based on maxNodes but don't allow to be too large.
-    const int MAX_DICTIONARY_SIZE_HINT = 2_000_000;
-    int dictionarySizeHint = Math.Min(maxNodes, MAX_DICTIONARY_SIZE_HINT);
+    // Size the transposition dictionaries up front.
+    //
+    // When the caller supplies an explicit hint (>0), it has estimated how many distinct positions the
+    // dictionary will actually hold (from the search budget on a fresh graph, or the exact reachable-set
+    // size on the reuse/rewrite path). Use that, clamped to a sane range. Otherwise fall back to the
+    // legacy heuristic of sizing from maxNodes with a fixed cap.
+    //
+    // Note maxNodes is the worst-case node-buffer RESERVATION (per-move budget * MAX_MOVES_PER_GRAPH,
+    // capped near 1.1B), so Math.Min(maxNodes, <cap>) collapsed to the cap for essentially every
+    // non-trivial search; the explicit hint is what makes the starting size track the search size.
+    const int LEGACY_MAX_DICTIONARY_SIZE_HINT = 2_000_000;
+    int dictionarySizeHint = dictionarySizeHintRequested > 0
+      ? Math.Clamp(dictionarySizeHintRequested,
+                   MCGSParamsFixed.DICTIONARY_SIZE_HINT_MIN,
+                   MCGSParamsFixed.DICTIONARY_SIZE_HINT_MAX)
+      : Math.Min(maxNodes, LEGACY_MAX_DICTIONARY_SIZE_HINT);
+
+    // Never reserve capacity for more entries than the node store could ever contain.
+    dictionarySizeHint = Math.Min(dictionarySizeHint, maxNodes);
     const int DICTIONARY_CONCURRENCY = 16;
 
     bool skipPosSeqDict = SINGLE_DICTIONARY_POSITION_MODE && Store.UsesPositionEquivalenceMode;

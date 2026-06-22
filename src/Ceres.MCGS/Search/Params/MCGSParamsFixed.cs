@@ -47,6 +47,37 @@ public static class MCGSParamsFixed
   /// </summary>
   public const bool USE_LEGACY_CONCURRENT_DICTIONARY = false;
 
+  #region Transposition dictionary initial sizing
+
+  // The per-graph transposition dictionaries are "right-sized" up front from the search budget
+  // (see MCGSSearch.EstimateInitialDictionaryCapacity) or, on the reuse/rewrite path, from the exact
+  // reachable-set size (see GraphExtractor). This avoids a cascade of incremental growths as a long
+  // search climbs from a small default to tens of millions of entries: directory doublings plus
+  // per-bucket pre-allocation with the extendible map, or stop-the-world rehashes with the legacy
+  // ConcurrentDictionary. The estimate only sets the STARTING capacity; the map still grows if needed.
+
+  /// <summary>
+  /// Floor for the initial transposition dictionary capacity hint (entries). Keeps tiny searches
+  /// (e.g. a single-node probe) from over-allocating while still avoiding a pathologically small start.
+  /// </summary>
+  public const int DICTIONARY_SIZE_HINT_MIN = 16_384;
+
+  /// <summary>
+  /// Ceiling for the initial transposition dictionary capacity hint (entries). Bounds the up-front
+  /// allocation (the extendible map pre-allocates one bucket object per (capacity / bucket-capacity)
+  /// directory slot), so even a very large search budget cannot reserve an unreasonable amount of
+  /// memory before any search work is done.
+  /// </summary>
+  public const int DICTIONARY_SIZE_HINT_MAX = 300_000_000;
+
+  /// <summary>
+  /// Multiplier applied to the estimated per-move search-node count to anticipate the accumulation of
+  /// distinct positions across the multiple moves that share a single (reused) graph.
+  /// </summary>
+  public const double DICTIONARY_SIZE_HINT_REUSE_ACCUM_FACTOR = 30.0;
+
+  #endregion
+
   public const bool DEBUG_MODE = false;
   public const bool LOGGING_ENABLED = false; // performance degradation high when in Debug mode
   public const bool LOG_ECHO_INLINE = false;

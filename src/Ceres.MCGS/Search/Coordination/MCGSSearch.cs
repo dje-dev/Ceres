@@ -373,6 +373,11 @@ As a workaround, EvaluatorSygyzy will just return as if no hit.
         throw new Exception("FPUType.ActionHead requires a neural network with an action head output.");
       }
 
+      // Right-size the transposition dictionaries to the realistic expected number of distinct
+      // positions for this search budget, instead of the worst-case node-buffer reservation (maxNodes).
+      int dictionarySizeHint = EstimateInitialDictionaryCapacity(searchLimitToUse, Manager.ParamsSearch, 1 + (int)Manager.NNEvaluator0.EstNPSBatch);
+//      ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"dict= {(float)dictionarySizeHint/1_000_000}  graph={maxNodesInt/1_000_000.0}");
+
       graphToUse = new(maxNodesInt, hasAction,
                        Manager.ParamsSearch.EnableState,
                        Manager.ParamsSearch.EnableGraph,
@@ -381,7 +386,8 @@ As a workaround, EvaluatorSygyzy will just return as if no hit.
                        Manager.ParamsSearch.EnablePseudoTranspositionBlending,
                        priorMoves,
                        Manager.ParamsSearch.TestFlag,
-                       Manager.ParamsSearch.MaintainSiblingSets);
+                       Manager.ParamsSearch.MaintainSiblingSets,
+                       dictionarySizeHint);
 
       // Re-establish the cross-graph evaluation-reuse provider that was attached to the abandoned graph
       // (the one-shot PossiblyInitializeForOpponentGraphReuse will not re-run for this new graph).
@@ -400,6 +406,41 @@ As a workaround, EvaluatorSygyzy will just return as if no hit.
     (MGMove bestMove, BestMoveInfoMCGS moveInfo) = DoSearch(Manager, verbose, progressCallback,
                                                             moveImmediateIfOnlyOneMove, forcedMove);
     BestMove = bestMove;
+  }
+
+
+  /// <summary>
+  /// Estimates a sensible initial capacity (in entries) for the per-graph transposition dictionaries,
+  /// based on the search budget. This lets the dictionary be sized up front to roughly the number of
+  /// distinct positions it will hold, avoiding a cascade of incremental resizes (directory doublings and
+  /// bucket pre-allocation with the extendible map, or stop-the-world rehashes under the legacy
+  /// ConcurrentDictionary) as a long search grows the table from a small default to tens of millions of
+  /// entries while holding locks (a stall that idles the GPU).
+  ///
+  /// A tiny budget (e.g. a single node) yields a tiny hint; a large budget (e.g. a long tournament time
+  /// control arriving via UCI) yields a larger one. The returned value is clamped here and again,
+  /// defensively, in Graph.Initialize.
+  /// </summary>
+  /// <param name="limit">The per-move search limit actually being used (per-game limits have already
+  /// been mapped to a per-move target by the limits manager).</param>
+  /// <param name="paramsSearch">Search parameters (used to read graph-reuse settings).</param>
+  /// <param name="estimatedEPS">Estimated maximum evaluations per second from this backend.</param>
+  static int EstimateInitialDictionaryCapacity(SearchLimit limit, ParamsSearch paramsSearch, int estimatedEPS)
+  {
+
+    // Expected nodes added by this move's search (fresh graph => 0 initial nodes).
+    long perMoveNodes = Math.Max(1, limit.EstNumSearchNodes(0, estimatedEPS));
+
+    // The graph (and its dictionary) persists across the multiple moves that share a reused graph, so
+    // anticipate some cross-move accumulation of distinct positions. Without reuse a single search adds
+    // only modestly more positions than its final tree size.
+    double accumFactor = paramsSearch.GraphReuseEnabled
+                           ? MCGSParamsFixed.DICTIONARY_SIZE_HINT_REUSE_ACCUM_FACTOR
+                           : 1.25;
+
+    long estEntries = (long)(perMoveNodes * accumFactor);
+
+    return (int)Math.Clamp(estEntries, MCGSParamsFixed.DICTIONARY_SIZE_HINT_MIN, MCGSParamsFixed.DICTIONARY_SIZE_HINT_MAX);
   }
 
 

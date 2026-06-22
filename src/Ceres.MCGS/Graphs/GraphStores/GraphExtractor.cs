@@ -245,6 +245,9 @@ public static unsafe class GraphExtractor
       oldToNew[newToOld[k]] = k + 1;
     }
 
+    // The rewrite re-inserts exactly numReachable positions into the new graph's transposition
+    // dictionaries, so size them to that known count up front rather than letting them grow from the
+    // legacy default (which forces repeated resizes while copying tens of millions of entries).
     Graph newGraph = new(maxNodes: oldGraph.Store.MaxNodes,
                          hasAction: oldGraph.Store.HasAction,
                          hasState: oldGraph.Store.HasState,
@@ -254,7 +257,8 @@ public static unsafe class GraphExtractor
                          nodesWithOneVisitMayHaveDifferentQ: oldGraph.NodesWithOneVisitMayHaveDifferentQ,
                          priorHistory: priorMoves,
                          testFlag: oldGraph.TestFlag,
-                         maintainSiblingSets: oldGraph.MaintainSiblingSets);
+                         maintainSiblingSets: oldGraph.MaintainSiblingSets,
+                         dictionarySizeHint: numReachable);
 
     // Commit node-store pages for indices [0..numReachable] before any direct write. The copy loop
     // writes nodes directly (not via AllocateNext) so the node buffer never grows during the loop,
