@@ -2760,7 +2760,10 @@ public static unsafe class GraphRewriter
     });
 
     // Pass 2: Sequential collision handling (NodeIndexSet creation/extension).
-    for (int c = 0; c < collisionCount; c++)
+    // Skipped when sibling sets are not maintained: each colliding node simply keeps the first
+    // (direct-index) registration from Pass 1, which is the sole representative ever needed.
+    int numCollisionsToProcess = graph.MaintainSiblingSets ? collisionCount : 0;
+    for (int c = 0; c < numCollisionsToProcess; c++)
     {
       int newIdx = collisionNodesPtr[c];
       ref GNodeStruct nodeRef = ref graph.NodesBufferOS[newIdx];
@@ -2827,7 +2830,9 @@ public static unsafe class GraphRewriter
       {
         graph.transpositionsPosStandalone[key] = GNodeIndexSetIndex.FromDirectNodeIndex(newIdx);
       }
-      else if (existingEntry.IsDirectNodeIndex)
+      // The promotion branches below are skipped when sibling sets are not maintained: a colliding
+      // node keeps the first node's direct-index registration as the sole representative for the hash.
+      else if (graph.MaintainSiblingSets && existingEntry.IsDirectNodeIndex)
       {
         int existingNodeIdx = existingEntry.DirectNodeIndex;
         int newSetIndex = graph.NodeIndexSetStore.AllocateNext();
@@ -2837,7 +2842,7 @@ public static unsafe class GraphRewriter
         graph.NodeIndexSetStore.sets[newSetIndex] = siblingSet;
         graph.transpositionsPosStandalone[key] = GNodeIndexSetIndex.FromNodeSetIndex(newSetIndex);
       }
-      else
+      else if (graph.MaintainSiblingSets)
       {
         int setIndex = existingEntry.NodeSetIndex;
         NodeIndexSet siblingSet = graph.NodeIndexSetStore.sets[setIndex];

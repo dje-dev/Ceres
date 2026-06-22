@@ -380,7 +380,8 @@ As a workaround, EvaluatorSygyzy will just return as if no hit.
                        MCGSParamsFixed.TryEnableLargePages,
                        Manager.ParamsSearch.EnablePseudoTranspositionBlending,
                        priorMoves,
-                       Manager.ParamsSearch.TestFlag);
+                       Manager.ParamsSearch.TestFlag,
+                       Manager.ParamsSearch.MaintainSiblingSets);
 
       // Re-establish the cross-graph evaluation-reuse provider that was attached to the abandoned graph
       // (the one-shot PossiblyInitializeForOpponentGraphReuse will not re-run for this new graph).

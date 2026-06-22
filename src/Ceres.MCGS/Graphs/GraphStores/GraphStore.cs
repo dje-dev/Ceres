@@ -191,6 +191,12 @@ public partial class GraphStore : IDisposable
   public readonly bool UsesPositionEquivalenceMode;
 
   /// <summary>
+  /// If multi-element sibling sets are built/maintained in NodeIndexSetStore (see ParamsSearch.MaintainSiblingSets).
+  /// When false the store is reserved as a stub and no sets are ever allocated.
+  /// </summary>
+  public readonly bool MaintainSiblingSets;
+
+  /// <summary>
   /// If the neural network used to generate position evaluations
   /// supports the "state" feature that carries information forward from move to move.
   /// </summary>
@@ -260,7 +266,8 @@ public partial class GraphStore : IDisposable
                     bool graphEnabled,
                     bool usesPositionEquivalenceMode,
                     bool tryEnableLargePages,
-                    PositionWithHistory priorMoves)
+                    PositionWithHistory priorMoves,
+                    bool maintainSiblingSets)
   {
     if (MCGSParamsFixed.LOGGING_ENABLED)
     {
@@ -272,6 +279,7 @@ public partial class GraphStore : IDisposable
 
     GraphEnabled = graphEnabled;
     UsesPositionEquivalenceMode = usesPositionEquivalenceMode;
+    MaintainSiblingSets = maintainSiblingSets;
     MaxNodes = maxNodes;
     HasState = hasState;
     HasAction = hasAction;
@@ -299,8 +307,10 @@ public partial class GraphStore : IDisposable
     int parentsMultiplier = usesPositionEquivalenceMode ? 8 : 1; // In coalesced mode many more nodes will converge on same node
     ParentsStore = new GParentsStore(this, maxParents, usesPositionEquivalenceMode, tryEnableLargePages);
 
-    // Create the NodeIndexSet store with a reasonable size estimate
-    long reservedNodeIndexSets = Math.Max(10000, maxNodes);
+    // Create the NodeIndexSet store. The multi-element sets are read only by pseudo-transposition
+    // blending and sibling move ordering; when neither is active (MaintainSiblingSets == false)
+    // no sets are ever allocated, so reserve only a stub (the reserved null entry).
+    long reservedNodeIndexSets = maintainSiblingSets ? Math.Max(10000, maxNodes) : 1;
     NodeIndexSetStore = new GNodeIndexSetStore(this, (int)reservedNodeIndexSets,
                                               MCGSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC,
                                               MCGSParamsFixed.TryEnableLargePages, false);

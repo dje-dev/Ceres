@@ -218,6 +218,13 @@ public unsafe partial class Graph : IDisposable
   /// </summary>
   public GNodeIndexSetStore NodeIndexSetStore;
 
+  /// <summary>
+  /// If multi-element sibling sets are built/maintained in NodeIndexSetStore for this graph
+  /// (mirror of ParamsSearch.MaintainSiblingSets). When false, the standalone transposition
+  /// dictionary keeps a single direct-index representative per hash and no sets are ever created.
+  /// </summary>
+  public readonly bool MaintainSiblingSets;
+
   #endregion
 
   public GEdgeHeaderStruct ChildEdgeHeaderAtIndex(int nodeBlockIndexIntoEdgeHeaderStore, int childIndex)
@@ -246,10 +253,13 @@ public unsafe partial class Graph : IDisposable
                bool tryEnableLargePages,
                bool nodesWithOneVisitMayHaveDifferentQ,
                PositionWithHistory priorHistory,
-               bool testFlag)
+               bool testFlag,
+               bool maintainSiblingSets)
   {
+    MaintainSiblingSets = maintainSiblingSets;
+
     // Create underlying store.
-    Store = new GraphStore(maxNodes, hasAction, hasState, graphEnabled, coalescedMode, tryEnableLargePages, priorHistory);
+    Store = new GraphStore(maxNodes, hasAction, hasState, graphEnabled, coalescedMode, tryEnableLargePages, priorHistory, maintainSiblingSets);
 
     NodesBasePtr = (GNodeStruct*)Unsafe.AsPointer(ref Store.NodesStore.nodes[0]);
     NodesRootNodePtr = (GNodeStruct*)Unsafe.AsPointer(ref Store.NodesStore.nodes[GraphStore.ROOT_NODE_INDEX]);
@@ -731,9 +741,12 @@ public unsafe partial class Graph : IDisposable
         GNodeIndexSetIndex directIndex = GNodeIndexSetIndex.FromDirectNodeIndex(node.Index.Index);
         transpositionsPosStandalone[hash64WithMoveAndReps] = directIndex;
       }
-      else
+      else if (MaintainSiblingSets)
       {
-        // We already have an entry for this hash
+        // We already have an entry for this hash.
+        // (Skipped entirely when sibling sets are not maintained: the first node registered
+        //  remains the sole direct-index representative for this hash, which is all that
+        //  value-copy / auto-extension / cross-graph reuse require.)
         if (setIndex.IsDirectNodeIndex)
         {
           // There's currently only one node stored directly - need to convert to a NodeIndexSet.
@@ -1784,6 +1797,7 @@ public unsafe partial class Graph : IDisposable
   {
     if (transpositionsPosStandalone.TryGetValue(hash, out GNodeIndexSetIndex setIndex))
     {
+      Debug.Assert(MaintainSiblingSets, "Multi-element sibling set encountered though MaintainSiblingSets is false");
       Debug.Assert(!setIndex.IsDirectNodeIndex); // see comment below
       set = NodeIndexSetStore.sets[setIndex.NodeSetIndex];
       return true;
@@ -1818,6 +1832,7 @@ public unsafe partial class Graph : IDisposable
       else
       {
         // Multiple transposition nodes in a set
+        Debug.Assert(MaintainSiblingSets, "Multi-element sibling set encountered though MaintainSiblingSets is false");
         return NodeIndexSetStore.sets[setIndex.NodeSetIndex].Stats(targetNode, targetNodeNAfterPendingVisits);
       }
     }

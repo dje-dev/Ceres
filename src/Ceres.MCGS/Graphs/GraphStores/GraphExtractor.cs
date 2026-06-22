@@ -253,7 +253,8 @@ public static unsafe class GraphExtractor
                          tryEnableLargePages: MCGSParamsFixed.TryEnableLargePages,
                          nodesWithOneVisitMayHaveDifferentQ: oldGraph.NodesWithOneVisitMayHaveDifferentQ,
                          priorHistory: priorMoves,
-                         testFlag: oldGraph.TestFlag);
+                         testFlag: oldGraph.TestFlag,
+                         maintainSiblingSets: oldGraph.MaintainSiblingSets);
 
     // Commit node-store pages for indices [0..numReachable] before any direct write. The copy loop
     // writes nodes directly (not via AllocateNext) so the node buffer never grows during the loop,

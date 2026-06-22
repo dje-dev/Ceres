@@ -96,7 +96,7 @@ public partial class MCGSManager
     const bool HAS_ACTION = false;
     const bool HAS_STATE = false;
 
-    Graph graph = new(1_000, HAS_ACTION, HAS_STATE, GRAPH_ENABLED, false, false, false, PositionWithHistory.StartPosition, false);
+    Graph graph = new(1_000, HAS_ACTION, HAS_STATE, GRAPH_ENABLED, false, false, false, PositionWithHistory.StartPosition, false, false);
     GNode rootForRecursivePreload = graph.GraphRootNode;
 
     //      if (BUILD_TREE_MODE)

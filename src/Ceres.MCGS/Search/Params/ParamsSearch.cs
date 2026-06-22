@@ -193,6 +193,26 @@ public record ParamsSearch
                                                 && PathTranspositionMode == PathMode.PositionAndHistoryEquivalence;
 
   /// <summary>
+  /// If the multi-element per-position sibling sets (NodeIndexSetStore entries with more than one
+  /// member) need to be built and maintained during search.
+  ///
+  /// These multi-element sets are read ONLY by (a) pseudo-transposition Q/D blending and
+  /// (b) sibling-based move ordering. When neither is active nothing ever reads a multi-element
+  /// set, so the sets need not be built at all: the standalone dictionary keeps a single
+  /// (direct-index) representative per hash, which is all that transposition value-copy,
+  /// auto-extension, and cross-graph evaluation reuse require (those already use only element [0]).
+  /// Skipping set maintenance avoids the NodeIndexSetStore reservation plus the CPU of building
+  /// the sets at node creation and rebuilding them on every tree-reuse graph rewrite.
+  ///
+  /// Note: multi-element sets only ever form in PositionAndHistoryEquivalence mode (in coalesced
+  /// PositionEquivalence mode every standalone-hash entry stays a singleton regardless), so the
+  /// move-ordering term is gated on that mode and this is automatically false in coalesced mode.
+  /// </summary>
+  public bool MaintainSiblingSets => EnablePseudoTranspositionBlending
+                                  || (MoveOrderingPhase != MoveOrderingPhaseEnum.None
+                                   && PathTranspositionMode == PathMode.PositionAndHistoryEquivalence);
+
+  /// <summary>
   /// If transposition auto-extension is enabled (PositionAndHistoryEquivalence mode only):
   /// when a new node is created with its value/policy copied from an evaluated pseudo-twin
   /// (TranspositionCopyValues) and the twin has at least TranspositionAutoExtensionMinTwinN

@@ -212,10 +212,11 @@ public record struct NodeIndexSet
     }
     else
     {
+      Debug.Assert(graph.MaintainSiblingSets, "Multi-element sibling set encountered though MaintainSiblingSets is false");
       NodeIndexSet siblings = graph.NodeIndexSetStore.sets[transpositionsSet.NodeSetIndex];
       GNode maxNode = siblings.MaxEligibleNNode(graph, default);
       return maxNode;
-    }  
+    }
   }
 
 
