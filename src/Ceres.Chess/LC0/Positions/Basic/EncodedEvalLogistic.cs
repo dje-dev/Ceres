@@ -113,7 +113,9 @@ namespace Ceres.Chess.LC0.Positions
     /// </summary>
     /// <param name="centipawnValue"></param>
     /// <returns></returns>
-    static float CentipawnToLogisticUnbounded(float centipawnValue) => (float)MathF.Atanh((1.0f / CENTIPAWN_TAN_MULT) * MathF.Atan((float)(centipawnValue / CENTIPAWN_MULT)));
+    // True inverse of LogisticToCentipawn:  cp = MULT * tan(TAN_MULT * logistic)
+    // ==> logistic = atan(cp / MULT) / TAN_MULT.
+    static float CentipawnToLogisticUnbounded(float centipawnValue) => (1.0f / CENTIPAWN_TAN_MULT) * MathF.Atan(centipawnValue / CENTIPAWN_MULT);
 
 
     /// <summary>
