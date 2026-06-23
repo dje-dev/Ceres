@@ -43,29 +43,43 @@ public partial class UCIManagerMCGS
   /// <param name="command">the full command line, e.g. "game-analyze /path/game.pgn 105 10s"</param>
   internal void ProcessGameAnalyzeInteractive(string command)
   {
+    if (TryParseGameAnalyzeArgs(command, "game-analyze", out string pgnFile, out string moveSpec, out string timeSpec))
+    {
+      try
+      {
+        ProcessGameAnalyze(pgnFile, moveSpec, timeSpec);
+      }
+      catch (Exception exc)
+      {
+        UCIWriteLine($"info string game-analyze failed: {exc.Message}");
+      }
+    }
+  }
+
+
+  /// <summary>
+  /// Parses the three game-analyze arguments from the command line, interactively prompting
+  /// for any that are missing. Returns false (with an error message) if any remain empty.
+  /// </summary>
+  internal bool TryParseGameAnalyzeArgs(string command, string commandName,
+                                        out string pgnFile, out string moveSpec, out string timeSpec)
+  {
     string[] parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-    string pgnFile = parts.Length > 1 ? parts[1]
-                                      : PromptForGameAnalyzeArg("Enter path to PGN file:");
-    string moveSpec = parts.Length > 2 ? parts[2]
-                                       : PromptForGameAnalyzeArg("Enter move number (e.g. 105 = move 105 White to move, 105.. = Black to move):");
-    string timeSpec = parts.Length > 3 ? parts[3]
-                                       : PromptForGameAnalyzeArg("Enter search time (e.g. 10s):");
+    pgnFile = parts.Length > 1 ? parts[1]
+                               : PromptForGameAnalyzeArg("Enter path to PGN file:");
+    moveSpec = parts.Length > 2 ? parts[2]
+                                : PromptForGameAnalyzeArg("Enter move number (e.g. 105 = move 105 White to move, 105.. = Black to move):");
+    timeSpec = parts.Length > 3 ? parts[3]
+                                : PromptForGameAnalyzeArg("Enter search time (e.g. 10s):");
 
     if (string.IsNullOrWhiteSpace(pgnFile) || string.IsNullOrWhiteSpace(moveSpec) || string.IsNullOrWhiteSpace(timeSpec))
     {
-      UCIWriteLine("info string game-analyze requires three arguments: <pgn file> <move number> <time> (e.g. game-analyze game.pgn 105 10s)");
-      return;
+      UCIWriteLine($"info string {commandName} requires three arguments: <pgn file> <move number> <time> (e.g. {commandName} game.pgn 105 10s)");
+      return false;
     }
 
-    try
-    {
-      ProcessGameAnalyze(pgnFile, moveSpec, timeSpec);
-    }
-    catch (Exception exc)
-    {
-      UCIWriteLine($"info string game-analyze failed: {exc.Message}");
-    }
+    return true;
   }
 
 
@@ -76,6 +90,76 @@ public partial class UCIManagerMCGS
   {
     UCIWriteLine(prompt);
     return InStream.ReadLine();
+  }
+
+
+  /// <summary>
+  /// Loads the PGN, navigates to the position specified by the move spec (preserving full move
+  /// history), and builds the corresponding UCI "position fen ... moves ..." command. Echoes the
+  /// constructed position and final FEN to the console. Returns false (with an error message) on failure.
+  /// Shared by both the "game-analyze" and "game-analyze-lc0" features.
+  /// </summary>
+  /// <param name="pgnFile">path to the PGN file</param>
+  /// <param name="moveSpec">move number, optionally suffixed with dots to indicate Black to move (e.g. "105" or "105..")</param>
+  /// <param name="commandName">name of the invoking command (used in messages)</param>
+  /// <param name="positionWithHistory">resulting position with full move history</param>
+  /// <param name="positionCommand">resulting UCI "position fen ... moves ..." command string</param>
+  internal bool TryBuildGameAnalyzePosition(string pgnFile, string moveSpec, string commandName,
+                                            out PositionWithHistory positionWithHistory, out string positionCommand)
+  {
+    positionWithHistory = null;
+    positionCommand = null;
+
+    // Parse the move specification (a trailing dot indicates Black to move).
+    string trimmedMoveSpec = moveSpec.Trim();
+    bool blackToMove = trimmedMoveSpec.EndsWith(".");
+    string numberPart = trimmedMoveSpec.TrimEnd('.');
+    if (!int.TryParse(numberPart, NumberStyles.Integer, CultureInfo.InvariantCulture, out int moveNumber) || moveNumber < 1)
+    {
+      UCIWriteLine($"info string {commandName}: invalid move number \"{moveSpec}\" (expected e.g. 105 or 105..)");
+      return false;
+    }
+
+    // Load the game from the PGN.
+    if (!System.IO.File.Exists(pgnFile))
+    {
+      UCIWriteLine($"info string {commandName}: PGN file not found: {pgnFile}");
+      return false;
+    }
+
+    Game game = Game.FromPGN(pgnFile).FirstOrDefault();
+    if (game == null)
+    {
+      UCIWriteLine($"info string {commandName}: no games found in {pgnFile}");
+      return false;
+    }
+
+    // PositionMiscInfo.MoveNum is stored as a ply count (fullmove * 2, +1 if Black to move).
+    SideType targetSide = blackToMove ? SideType.Black : SideType.White;
+    int targetMoveNum = moveNumber * 2 + (blackToMove ? 1 : 0);
+
+    game.FirstMatchingPosition(pos => pos.MiscInfo.MoveNum == targetMoveNum
+                                   && pos.MiscInfo.SideToMove == targetSide, out int moveIndex);
+    if (moveIndex == -1)
+    {
+      UCIWriteLine($"info string {commandName}: position at move {moveNumber}{(blackToMove ? ".." : "")} "
+                 + $"({targetSide} to move) not found in game (game has {game.Moves.Count} half-moves)");
+      return false;
+    }
+
+    // Build the position (with full move history) up to and including the target position.
+    Game truncatedGame = game.TruncatedAtMove(moveIndex);
+    positionWithHistory = truncatedGame.FinalPositionWithHistory;
+    positionCommand = "position fen " + positionWithHistory.GetFENAndMovesString(IsChess960OptionSet);
+
+    UCIWriteLine();
+    UCIWriteLine($"{commandName}: {game.PlayerWhite} vs {game.PlayerBlack}, "
+               + $"move {moveNumber}{(blackToMove ? ".." : "")} ({targetSide} to move)");
+    UCIWriteLine(positionCommand);
+    UCIWriteLine("Final FEN: " + positionWithHistory.FinalPosition.FEN);
+    UCIWriteLine();
+
+    return true;
   }
 
 
@@ -97,54 +181,10 @@ public partial class UCIManagerMCGS
       return;
     }
 
-    // Parse the move specification (a trailing dot indicates Black to move).
-    string trimmedMoveSpec = moveSpec.Trim();
-    bool blackToMove = trimmedMoveSpec.EndsWith(".");
-    string numberPart = trimmedMoveSpec.TrimEnd('.');
-    if (!int.TryParse(numberPart, NumberStyles.Integer, CultureInfo.InvariantCulture, out int moveNumber) || moveNumber < 1)
+    if (!TryBuildGameAnalyzePosition(pgnFile, moveSpec, "game-analyze", out _, out string positionCommand))
     {
-      UCIWriteLine($"info string game-analyze: invalid move number \"{moveSpec}\" (expected e.g. 105 or 105..)");
       return;
     }
-
-    // Load the game from the PGN.
-    if (!System.IO.File.Exists(pgnFile))
-    {
-      UCIWriteLine($"info string game-analyze: PGN file not found: {pgnFile}");
-      return;
-    }
-
-    Game game = Game.FromPGN(pgnFile).FirstOrDefault();
-    if (game == null)
-    {
-      UCIWriteLine($"info string game-analyze: no games found in {pgnFile}");
-      return;
-    }
-
-    // PositionMiscInfo.MoveNum is stored as a ply count (fullmove * 2, +1 if Black to move).
-    SideType targetSide = blackToMove ? SideType.Black : SideType.White;
-    int targetMoveNum = moveNumber * 2 + (blackToMove ? 1 : 0);
-
-    game.FirstMatchingPosition(pos => pos.MiscInfo.MoveNum == targetMoveNum
-                                   && pos.MiscInfo.SideToMove == targetSide, out int moveIndex);
-    if (moveIndex == -1)
-    {
-      UCIWriteLine($"info string game-analyze: position at move {moveNumber}{(blackToMove ? ".." : "")} "
-                 + $"({targetSide} to move) not found in game (game has {game.Moves.Count} half-moves)");
-      return;
-    }
-
-    // Build the position (with full move history) up to and including the target position.
-    Game truncatedGame = game.TruncatedAtMove(moveIndex);
-    PositionWithHistory pwh = truncatedGame.FinalPositionWithHistory;
-    string positionCommand = "position fen " + pwh.GetFENAndMovesString(IsChess960OptionSet);
-
-    UCIWriteLine();
-    UCIWriteLine($"game-analyze: {game.PlayerWhite} vs {game.PlayerBlack}, "
-               + $"analyzing move {moveNumber}{(blackToMove ? ".." : "")} ({targetSide} to move) for {searchMs.Value}ms");
-    UCIWriteLine(positionCommand);
-    UCIWriteLine("Final FEN: " + pwh.FinalPosition.FEN);
-    UCIWriteLine();
 
     // Set up the position exactly as if the user had typed the position command.
     ProcessPosition(positionCommand);

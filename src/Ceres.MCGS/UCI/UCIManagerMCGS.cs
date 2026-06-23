@@ -352,13 +352,17 @@ public partial class UCIManagerMCGS
   /// executed once after reset and before the interactive loop begins (used by the
   /// "game-analyze" command-line verb to leave the console in UCI mode pre-positioned).
   /// </param>
-  public void PlayUCI(string gameAnalyzeStartupArgs = null)
+  public void PlayUCI(string gameAnalyzeStartupArgs = null, string gameAnalyzeLC0StartupArgs = null)
   {
     ResetGame();
 
     if (gameAnalyzeStartupArgs != null)
     {
       ProcessGameAnalyzeInteractive("game-analyze " + gameAnalyzeStartupArgs);
+    }
+    else if (gameAnalyzeLC0StartupArgs != null)
+    {
+      ProcessGameAnalyzeLC0Interactive("game-analyze-lc0 " + gameAnalyzeLC0StartupArgs);
     }
 
     while (true)
@@ -396,6 +400,7 @@ public partial class UCIManagerMCGS
           UCIWriteLine("revalue-root    - revalues root/move Q of last search via exploration-ladder deep rollouts from the visit frontier (optional rollouts/position/stage, ladder, dry-up rounds (0=off), e.g. \"revalue-root 50 0.15,0.04,0 12\")");
           UCIWriteLine("dump-info       - dump information about last search (top level candidate moves, principal variation, etc.)");
           UCIWriteLine("game-analyze    - locate a position in a PGN by move number and analyze it (prompts for: <pgn file> <move number, e.g. 105 or 105..> <time, e.g. 10s>)");
+          UCIWriteLine("game-analyze-lc0- like game-analyze but runs the analysis with Lc0 (streaming its UCI output), then loads the position into Ceres without searching");
           UCIWriteLine("dump-time       - dump information about time manager's last decision");
           UCIWriteLine("dump-processor  - dump information about CPUs in this system");
           UCIWriteLine("dump-params     - dump configuration parameters currently in use for Ceres");
@@ -575,6 +580,10 @@ public partial class UCIManagerMCGS
           }
           else
             UCIWriteLine("info string No search manager created");
+          break;
+
+        case string c when c.StartsWith("game-analyze-lc0"):
+          ProcessGameAnalyzeLC0Interactive(c);
           break;
 
         case string c when c.StartsWith("game-analyze"):

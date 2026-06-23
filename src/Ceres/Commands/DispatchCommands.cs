@@ -278,11 +278,14 @@ namespace Ceres.Commands
         string options = keys.GetValue("Options");
         InterprocessCommandManager.EnqueueCommand("graph", options);
       }
-      else if (featureName == "GAME-ANALYZE")
+      else if (featureName == "GAME-ANALYZE" || featureName == "GAME-ANALYZE-LC0")
       {
         // Positional args: <pgn file> <move number> <time>.
         // Key=value args (e.g. network=, device=) may appear in any position; they are
         // distinguished from positionals by the presence of "=".
+        bool isLC0 = featureName == "GAME-ANALYZE-LC0";
+        string cmdName = featureName.ToLower();
+
         List<string> positionals = new();
         List<string> keyVals = new();
         foreach (string part in args.Split(' ', StringSplitOptions.RemoveEmptyEntries))
@@ -302,19 +305,26 @@ namespace Ceres.Commands
 
         if (positionals.Count < 3)
         {
-          ShowErrorExit("GAME-ANALYZE requires three arguments: <pgn file> <move number> <time>\r\n"
-                      + "  Example: game-analyze game.pgn 105 10s [network=<net> device=<device>]\r\n"
+          ShowErrorExit($"{featureName} requires three arguments: <pgn file> <move number> <time>\r\n"
+                      + $"  Example: {cmdName} game.pgn 105 10s [network=<net> device=<device>]\r\n"
                       + "  Append \"..\" to the move number to start with Black to move (e.g. 105..).");
         }
 
-        string gameAnalyzeStartup = $"{positionals[0]} {positionals[1]} {positionals[2]}";
-        LaunchUCI(string.Join(" ", keyVals), searchModifier, selectModifier, gameAnalyzeStartup);
+        string startup = $"{positionals[0]} {positionals[1]} {positionals[2]}";
+        if (isLC0)
+        {
+          LaunchUCI(string.Join(" ", keyVals), searchModifier, selectModifier, gameAnalyzeLC0Startup: startup);
+        }
+        else
+        {
+          LaunchUCI(string.Join(" ", keyVals), searchModifier, selectModifier, gameAnalyzeStartup: startup);
+        }
         Environment.Exit(0);
       }
       else
       {
         ShowErrorExit("Expected argument to begin with one of the features " +
-                       "UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BACKENDCOMPARE, BENCHMARK, PERFT, GRAPH, GAME-ANALYZE or SETOPT");
+                       "UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BACKENDCOMPARE, BENCHMARK, PERFT, GRAPH, GAME-ANALYZE, GAME-ANALYZE-LC0 or SETOPT");
       }
     }
 
@@ -326,7 +336,7 @@ namespace Ceres.Commands
 
 
     private static void LaunchUCI(string keyValueArgs, Action<ParamsSearch> searchModifier, Action<ParamsSelect> selectModifier,
-                                  string gameAnalyzeStartup = null)
+                                  string gameAnalyzeStartup = null, string gameAnalyzeLC0Startup = null)
     {
       FeatureUCIParams uciParams = FeatureUCIParams.ParseUCICommand(keyValueArgs);
 
@@ -359,9 +369,13 @@ namespace Ceres.Commands
         // Ceres.MCGS, so it cannot be referenced from inside the MCGS UCI manager directly).
         ux.TCECMonitorHandler = engine => Ceres.Features.TCEC.TCECMonitor.Run(engine);
 
+        // Inject the Lc0 analysis handler for "game-analyze-lc0" (also lives in Ceres.Features).
+        ux.LC0AnalyzeHandler = a => Ceres.Features.GameEngines.GameAnalyzeLC0Runner.Run(
+                                      a.evaluatorDef, a.fenAndMoves, a.movetimeMs, a.outWriter);
+
         Console.WriteLine();
         Console.WriteLine("Entering UCI command processing mode (MCGS v2).");
-        ux.PlayUCI(gameAnalyzeStartup);
+        ux.PlayUCI(gameAnalyzeStartup, gameAnalyzeLC0Startup);
       }
       else
       {
@@ -382,9 +396,9 @@ namespace Ceres.Commands
           backendBenchMCTS,
           searchBenchmarkAction);
 
-        if (gameAnalyzeStartup != null)
+        if (gameAnalyzeStartup != null || gameAnalyzeLC0Startup != null)
         {
-          Console.WriteLine("WARNING: the game-analyze feature requires MCGS (v2) mode; ignoring startup analysis request.");
+          Console.WriteLine("WARNING: the game-analyze / game-analyze-lc0 features require MCGS (v2) mode; ignoring startup analysis request.");
         }
 
         Console.WriteLine();
