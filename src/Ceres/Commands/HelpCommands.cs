@@ -22,7 +22,7 @@ namespace Ceres.Commands
 {
   internal static class HelpCommands
   {
-    internal const string VALID_COMMANDS = "HELP, UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BENCHMARK, GRAPH, SETOPT or SETUP";
+    internal const string VALID_COMMANDS = "HELP, UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BENCHMARK, GRAPH, GAME-ANALYZE, SETOPT or SETUP";
 
     internal static void ProcessHelpCommand(string cmd)
     {
@@ -55,6 +55,8 @@ namespace Ceres.Commands
         DumpHelpText(CERES_HELP_BENCHMARK);
       else if (parts[1] == "GRAPH")
         DumpHelpText(CERES_HELP_GRAPH);
+      else if (parts[1] == "GAME-ANALYZE")
+        DumpHelpText(CERES_HELP_GAME_ANALYZE);
       else
         DispatchCommands.ShowErrorExit($"Unrecognized command {parts[1]}, try " + HelpCommands.VALID_COMMANDS);
       System.Environment.Exit(0);
@@ -129,6 +131,15 @@ namespace Ceres.Commands
     Example               : Ceres GRAPH options=0
 ";
 
+    const string CERES_HELP_GAME_ANALYZE =
+@"  GAME-ANALYZE - Locate a position in a PGN file by move number, analyze it for a fixed time, dump search detail, then remain in UCI mode pre-positioned for further analysis (MCGS/v2 only).
+    Required positional args : <pgn file> <move number> <time>
+                               move number: e.g. 105 (move 105, White to move) or 105.. (move 105, Black to move)
+                               time:        e.g. 10s, 500ms, 1m (a bare number is interpreted as seconds)
+    Optional key/values      : { network, device }  (may appear in any position)
+    Example                  : Ceres GAME-ANALYZE game.pgn 105 10s network=~T79 device=GPU:0
+";
+
     static void DumpAllHelp()
     {
       DumpHelpText(CERES_HELP_UCI);
@@ -139,6 +150,7 @@ namespace Ceres.Commands
       DumpHelpText(CERES_HELP_BACKENDBENCH);
       DumpHelpText(CERES_HELP_BENCHMARK);
       DumpHelpText(CERES_HELP_GRAPH);
+      DumpHelpText(CERES_HELP_GAME_ANALYZE);
       DumpHelpText(CERES_HELP_SETOPT);
       DumpHelpText(CERES_HELP_SETUP);
     }

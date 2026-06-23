@@ -347,9 +347,19 @@ public partial class UCIManagerMCGS
   /// <summary>
   /// Runs the UCI loop.
   /// </summary>
-  public void PlayUCI()
+  /// <param name="gameAnalyzeStartupArgs">
+  /// If non-null, a "game-analyze" specification ("&lt;pgn&gt; &lt;move&gt; &lt;time&gt;") which is
+  /// executed once after reset and before the interactive loop begins (used by the
+  /// "game-analyze" command-line verb to leave the console in UCI mode pre-positioned).
+  /// </param>
+  public void PlayUCI(string gameAnalyzeStartupArgs = null)
   {
     ResetGame();
+
+    if (gameAnalyzeStartupArgs != null)
+    {
+      ProcessGameAnalyzeInteractive("game-analyze " + gameAnalyzeStartupArgs);
+    }
 
     while (true)
     {
@@ -385,6 +395,7 @@ public partial class UCIManagerMCGS
           UCIWriteLine("dump-pp-html    - dumps principal positions from last search (like dump-pp but to HTML page)");
           UCIWriteLine("revalue-root    - revalues root/move Q of last search via exploration-ladder deep rollouts from the visit frontier (optional rollouts/position/stage, ladder, dry-up rounds (0=off), e.g. \"revalue-root 50 0.15,0.04,0 12\")");
           UCIWriteLine("dump-info       - dump information about last search (top level candidate moves, principal variation, etc.)");
+          UCIWriteLine("game-analyze    - locate a position in a PGN by move number and analyze it (prompts for: <pgn file> <move number, e.g. 105 or 105..> <time, e.g. 10s>)");
           UCIWriteLine("dump-time       - dump information about time manager's last decision");
           UCIWriteLine("dump-processor  - dump information about CPUs in this system");
           UCIWriteLine("dump-params     - dump configuration parameters currently in use for Ceres");
@@ -564,6 +575,10 @@ public partial class UCIManagerMCGS
           }
           else
             UCIWriteLine("info string No search manager created");
+          break;
+
+        case string c when c.StartsWith("game-analyze"):
+          ProcessGameAnalyzeInteractive(c);
           break;
 
         case string c when c.StartsWith("graph"):
