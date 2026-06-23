@@ -126,8 +126,36 @@ public static class GraphReuseManager
 
     // Try to find path from graph root to search root
     searchRootPathFromGraphRoot = graphToPossiblyReuse.GuardedFindPathAlongPositionWithHistory(priorMoves);
-    if (searchRootPathFromGraphRoot == null || searchRootPathFromGraphRoot.Count < 2)
+    if (searchRootPathFromGraphRoot == null)
     {
+      // History prefix mismatch (or path lookup failed); cannot reuse.
+      graphToPossiblyReuse.Dispose();
+      return null;
+    }
+
+    // Identical position: the new search root IS the graph root (path has no moves below the root).
+    // Reuse the whole graph as-is. MCGSEngine sets SearchRootNode = graph root when the path is empty
+    // (exactly as for a freshly created graph), so leaving the path empty resumes the existing root.
+    // Only searchRootNodeInfo.ChildNode is consumed downstream in this case (graph-rewrite decision and
+    // per-game time allocation); the remaining fields are unused here and passed as default.
+    if (searchRootPathFromGraphRoot.Count == 0)
+    {
+      GNode rootNode = graphToPossiblyReuse.GraphRootNode;
+      if (!rootNode.IsEvaluated)
+      {
+        graphToPossiblyReuse.Dispose();
+        searchRootPathFromGraphRoot = null;
+        return null;
+      }
+
+      searchRootNodeInfo = new GraphRootToSearchRootNodeInfo(rootNode, default, default, default, default, false);
+      graphToPossiblyReuse.SetSearchRootNode(rootNode.Index);
+      return graphToPossiblyReuse;
+    }
+
+    if (searchRootPathFromGraphRoot.Count < 2)
+    {
+      // Search root is exactly one ply below the graph root: retain existing conservative behavior (no reuse).
       graphToPossiblyReuse.Dispose();
       searchRootPathFromGraphRoot = null;
       return null;
