@@ -34,6 +34,21 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
   const int EARLY_SMOOTHING_MAX_ADJUSTS = 3;
   const float EARLY_SMOOTHING_BOOST = 1.3f;
 
+  // Courtesy speedup: in clearly-won positions, deliberately spend less time
+  // (play faster) when the clock has ample time. This is a courtesy for
+  // tournaments that require playing on to mate. Thresholds are expressed in Q
+  // (not centipawns) so behavior is invariant to future changes in the cp<->Q
+  // display mapping. The Q values are the inverse of the current
+  // EncodedEvalLogistic.LogisticToCentipawn mapping (cp = 90*tan(1.5637541897*Q)):
+  //   +400cp -> Q = 0.8630,   +700cp -> Q = 0.9227.
+  // (Hard-coded rather than computed via EncodedEvalLogistic.CentipawnToLogistic
+  //  at runtime so these thresholds stay fixed even if that mapping is later retuned.)
+  const float COURTESY_Q_400CP = 0.8630f;
+  const float COURTESY_Q_700CP = 0.9227f;
+  const float COURTESY_MULT_400CP = 0.80f;
+  const float COURTESY_MULT_700CP = 0.60f;
+  const float COURTESY_MIN_CLOCK_SECONDS = 180f; // 3 minutes, excluding increment
+
 
   /// <summary>
   /// Returns target minimum fraction of initial move nodes in early game.
@@ -127,17 +142,37 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
       Console.WriteLine($"{graphReuseShrinkageMultiplier,5:F2}" + " " + priorRootN + " -> " + thisRootN + "  (+" + (thisRootN - priorRootN) + ")");
     }
 
+    // Courtesy speedup gate: only for time-based play, and only with at least
+    // 3 minutes on the clock (excluding increment) so this can never cause time
+    // trouble. RemainingFixedSelf already includes any increment (per UCI), so
+    // subtract it to get the clock time "not counting increment".
+    float remainingExcludingIncrement = inputs.RemainingFixedSelf - inputs.IncrementSelf;
+    bool courtesyEligible = inputs.TargetLimitType == SearchLimitType.SecondsPerMove
+                         && remainingExcludingIncrement >= COURTESY_MIN_CLOCK_SECONDS;
+
     // When we are behind then it's worth taking a gamble and using more time
     // but when we are ahead, take a little less time to be sure we don't err in time pressure.
-    float factorWinningness = inputs.RootQ switch
+    float factorWinningness;
+    if (courtesyEligible && inputs.RootQ >= COURTESY_Q_700CP)
     {
-      // 0.55 is about 125, 0.75 is about 190
-      < -0.75f => 1.10f,
-      < -0.50f => 1.05f,
-      > 0.75f => 0.90f,
-      > 0.50f => 0.95f,
-      _ => 1.0f
-    };
+      factorWinningness = COURTESY_MULT_700CP;  // absolutely won (~+700cp): play faster
+    }
+    else if (courtesyEligible && inputs.RootQ >= COURTESY_Q_400CP)
+    {
+      factorWinningness = COURTESY_MULT_400CP;  // clearly won (~+400cp): play a little faster
+    }
+    else
+    {
+      factorWinningness = inputs.RootQ switch
+      {
+        // 0.55 is about 125, 0.75 is about 190
+        < -0.75f => 1.10f,
+        < -0.50f => 1.05f,
+        > 0.75f => 0.90f,
+        > 0.50f => 0.95f,
+        _ => 1.0f
+      };
+    }
 
 
     // Spend 2.5x time first move of game (definitely no graph reuse available)
