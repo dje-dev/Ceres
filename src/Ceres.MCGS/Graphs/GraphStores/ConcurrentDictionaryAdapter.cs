@@ -42,6 +42,8 @@ public sealed class ConcurrentDictionaryAdapter<TKey, TValue>
   public TValue this[TKey key] { set => inner[key] = value; }
   public int Count => inner.Count;
 
+  public void Clear() => inner.Clear();
+
   public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator() => inner.GetEnumerator();
   IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

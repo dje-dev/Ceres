@@ -31,4 +31,10 @@ public interface IConcurrentDictionary<TKey, TValue> : IEnumerable<KeyValuePair<
   bool TryAdd(TKey key, TValue value);
   TValue this[TKey key] { set; }
   int Count { get; }
+
+  /// <summary>
+  /// Removes all entries. Intended for single-threaded (quiescent) reuse of the map;
+  /// implementations are not required to be safe under concurrent access.
+  /// </summary>
+  void Clear();
 }

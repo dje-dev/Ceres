@@ -245,9 +245,12 @@ public static unsafe class GraphExtractor
       oldToNew[newToOld[k]] = k + 1;
     }
 
-    // The rewrite re-inserts exactly numReachable positions into the new graph's transposition
-    // dictionaries, so size them to that known count up front rather than letting them grow from the
-    // legacy default (which forces repeated resizes while copying tens of millions of entries).
+    // We carry the prior graph's transposition dictionaries over to the new graph below (and Phase 6
+    // of FinalizeAfterCopy refills them in place), so the new graph's own constructor-built dictionaries
+    // are immediately discarded. Pass a minimal dictionarySizeHint (clamped up to the 16K floor in
+    // Graph.Initialize -> a ~128-bucket throwaway) rather than numReachable: the only use of the
+    // constructor dictionary is the root-node registration done during construction, which is never
+    // read before Phase 6 rebuilds the dictionaries from scratch.
     Graph newGraph = new(maxNodes: oldGraph.Store.MaxNodes,
                          hasAction: oldGraph.Store.HasAction,
                          hasState: oldGraph.Store.HasState,
@@ -258,7 +261,20 @@ public static unsafe class GraphExtractor
                          priorHistory: priorMoves,
                          testFlag: oldGraph.TestFlag,
                          maintainSiblingSets: oldGraph.MaintainSiblingSets,
-                         dictionarySizeHint: numReachable);
+                         dictionarySizeHint: 1);
+
+    // Carry over the prior graph's transposition dictionary ALLOCATION. Extraction remaps every node
+    // index, so the entry VALUES (node indices / GNodeIndexSetIndex) cannot be reused -- but the
+    // allocation can: hand the prior (larger, already-grown) dictionaries to the new graph so Phase 6
+    // refills them in place with zero bucket splits and future-growth headroom, instead of allocating
+    // fresh. Safe to assign the stale-content dictionaries now: no rewrite phase before Phase 6 (nor
+    // the copy loop below) reads them, and Phase 6 clears each one before refilling. The old graph is
+    // disposed by the caller after we return; Dispose only nulls these (now-null) fields and frees the
+    // native store, so the managed dictionaries live on, owned by the new graph.
+    newGraph.transpositionsPosStandalone = oldGraph.transpositionsPosStandalone;
+    newGraph.transpositionPositionAndSequence = oldGraph.transpositionPositionAndSequence;
+    oldGraph.transpositionsPosStandalone = null;
+    oldGraph.transpositionPositionAndSequence = null;
 
     // Commit node-store pages for indices [0..numReachable] before any direct write. The copy loop
     // writes nodes directly (not via AllocateNext) so the node buffer never grows during the loop,

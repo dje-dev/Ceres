@@ -424,6 +424,35 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
 
 
   /// <summary>
+  /// Removes all entries while RETAINING the directory and bucket allocations: the directory,
+  /// globalDepth, and each bucket's Entries array and LocalDepth are preserved. Only each bucket's
+  /// Count (and totalCount) is reset to zero; Entry slots are intentionally not cleared because all
+  /// reads are gated by Count, so a zero-Count bucket reads as empty regardless of stale slot data.
+  ///
+  /// This retention is the point: a subsequent refill reuses the already-grown buckets and so incurs
+  /// no (or far fewer) splits / directory doublings.
+  ///
+  /// PRECONDITION: the caller must guarantee EXCLUSIVE (single-threaded, quiescent) access — no other
+  /// operation may be in flight concurrently (as during graph rewrite, which is the only caller). It
+  /// is fast precisely because it exploits that: it takes no locks and uses no volatile/interlocked
+  /// accesses, and it walks the directory directly without tracking distinct buckets. The latter is
+  /// safe because zeroing a shared bucket's Count more than once is idempotent — so we avoid the
+  /// per-slot reference hashing + set insert (and the HashSet allocation) that a distinct-bucket walk
+  /// would otherwise cost on a directory with hundreds of thousands of slots. Cost is a single tight
+  /// pass over the directory.
+  /// </summary>
+  public void Clear()
+  {
+    Bucket[] dir = directory;
+    for (int i = 0; i < dir.Length; i++)
+    {
+      dir[i].Count = 0;
+    }
+    totalCount = 0;
+  }
+
+
+  /// <summary>
   /// Enumerates all key/value pairs by visiting each distinct bucket exactly once.
   /// This is intended for diagnostics; concurrent modifications may cause
   /// entries to be skipped or returned more than once.

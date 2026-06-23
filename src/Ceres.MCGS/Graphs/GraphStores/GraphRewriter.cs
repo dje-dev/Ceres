@@ -2656,18 +2656,37 @@ public static unsafe class GraphRewriter
     // Reset NodeIndexSetStore.
     graph.NodeIndexSetStore.nextFreeIndex = GNodeIndexSetStore.FIRST_ALLOCATED_INDEX;
 
-    // Create fresh dictionaries upfront.
+    // Reuse the dictionaries already present on the graph instead of allocating fresh ones. Clearing
+    // in place retains their (already-grown) directory + bucket arrays, so the refill below does zero
+    // (or far fewer) bucket splits and directory doublings. This benefits every caller:
+    //   - the extract path: GraphExtractor has handed over the prior graph's larger dictionaries;
+    //   - the in-place rewrite paths: this is the graph's own live dictionary.
+    // Only when no dictionary is present (defensive; should not happen on these paths) do we allocate.
     const int DICTIONARY_CONCURRENCY = 16;
-    graph.transpositionsPosStandalone =
-      new Ceres.Base.DataTypes.ConcurrentDictionaryExtendible<PosHash64WithMove50AndReps, GNodeIndexSetIndex>(DICTIONARY_CONCURRENCY, numRetained);
+    if (graph.transpositionsPosStandalone != null)
+    {
+      graph.transpositionsPosStandalone.Clear();
+    }
+    else
+    {
+      graph.transpositionsPosStandalone =
+        new Ceres.Base.DataTypes.ConcurrentDictionaryExtendible<PosHash64WithMove50AndReps, GNodeIndexSetIndex>(DICTIONARY_CONCURRENCY, numRetained);
+    }
 
     bool needPosSeqDict = graph.GraphEnabled
                        && !(Graph.SINGLE_DICTIONARY_POSITION_MODE && graph.Store.UsesPositionEquivalenceMode);
 
     if (needPosSeqDict)
     {
-      graph.transpositionPositionAndSequence =
-        new Ceres.Base.DataTypes.ConcurrentDictionaryExtendible<PosHash96MultisetFinalized, int>(DICTIONARY_CONCURRENCY, numRetained);
+      if (graph.transpositionPositionAndSequence != null)
+      {
+        graph.transpositionPositionAndSequence.Clear();
+      }
+      else
+      {
+        graph.transpositionPositionAndSequence =
+          new Ceres.Base.DataTypes.ConcurrentDictionaryExtendible<PosHash96MultisetFinalized, int>(DICTIONARY_CONCURRENCY, numRetained);
+      }
     }
     else
     {
