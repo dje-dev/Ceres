@@ -255,7 +255,7 @@ public static class GraphReuseManager
     }
 
     // Plenty of memory free: reuse (no BFS). Memory is probed only past the trivially-small short-circuit.
-    double memoryUsedFraction = CurrentMemoryUsedFraction(paramsSearch);
+    double memoryUsedFraction = CurrentMemoryUsedFraction(paramsSearch, out long memoryUsedBytes);
     if (memoryUsedFraction < 0.20)
     {
       return new ReuseDecision(GraphReuseAction.Reuse, null, 0.0, -1, default);
@@ -294,14 +294,16 @@ public static class GraphReuseManager
       if (reachableFraction <= HIGH_MEM_EXTRACT_MAX_RETENTION && timeToExtract <= 0.80 * availableTime)
       {
         return new ReuseDecision(GraphReuseAction.Extract,
-          $"high memory {memoryUsedFraction:P0}; {reachableNodes:N0} reachable ({reachableFraction:P0}, ~{timeToExtract:F1}s)",
+          $"high memory {memoryUsedFraction:P0} ({MemoryGBString(memoryUsedBytes, paramsSearch.MaxMemoryBytes)}); "
+        + $"{reachableNodes:N0} reachable ({reachableFraction:P0}, ~{timeToExtract:F1}s)",
           reachabilitySeconds, reachableNodes, reachable);
       }
 
       // Can't usefully shrink: free the memory only when it is critical (> 90%); otherwise keep the graph.
       return memoryUsedFraction > 0.90
         ? new ReuseDecision(GraphReuseAction.Abandon,
-            $"critical memory {memoryUsedFraction:P0}; extraction won't help ({reachableFraction:P0} reachable)",
+            $"critical memory {memoryUsedFraction:P0} ({MemoryGBString(memoryUsedBytes, paramsSearch.MaxMemoryBytes)}); "
+          + $"extraction won't help ({reachableFraction:P0} reachable)",
             reachabilitySeconds, reachableNodes, reachable)
         : new ReuseDecision(GraphReuseAction.Reuse, null, reachabilitySeconds, reachableNodes, reachable);
     }
@@ -334,11 +336,22 @@ public static class GraphReuseManager
   /// (private bytes / MaxMemoryBytes). A gen-0 collection is forced first so the
   /// reading is not inflated by short-lived garbage.
   /// </summary>
-  private static double CurrentMemoryUsedFraction(ParamsSearch paramsSearch)
+  private static double CurrentMemoryUsedFraction(ParamsSearch paramsSearch, out long usedBytes)
   {
     GC.Collect(0);
     HardwareManager.ProcessMemoryInfo memInfo = HardwareManager.GetProcessMemoryInfo();
-    return memInfo.PrivateBytes / (double)paramsSearch.MaxMemoryBytes;
+    usedBytes = memInfo.PrivateBytes;
+    return usedBytes / (double)paramsSearch.MaxMemoryBytes;
+  }
+
+
+  /// <summary>
+  /// Formats a used/max memory pair as "used/max GB" (binary GiB, matching how MaxMemoryBytes is configured).
+  /// </summary>
+  private static string MemoryGBString(long usedBytes, long maxBytes)
+  {
+    const double BYTES_PER_GB = 1024.0 * 1024.0 * 1024.0;
+    return $"{usedBytes / BYTES_PER_GB:F1}/{maxBytes / BYTES_PER_GB:F1} GB";
   }
 
 
