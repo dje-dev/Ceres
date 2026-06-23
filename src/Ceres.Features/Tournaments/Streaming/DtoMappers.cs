@@ -179,6 +179,16 @@ namespace Ceres.Features.Tournaments.Streaming
       }
       catch { }
 
+      // Principal variation (best line) as space-separated UCI moves. startFromRoot:true is required
+      // by the ctor; try/catch so a PV failure never drops the interim frame.
+      string pv = null;
+      try
+      {
+        pv = new Ceres.MCGS.Utils.SearchPrincipalVariationMCGS(
+                 m, m.Engine.SearchRootNode, startFromRoot: true).ShortStr();
+      }
+      catch { }
+
       return new InterimDTO
       {
         Type = "interim",
@@ -194,7 +204,8 @@ namespace Ceres.Features.Tournaments.Streaming
         MAvg = 0f,
         MoveTimeMs = (int)Math.Round(elapsedSec * 1000),
         Wdl = wdl,
-        Top = top
+        Top = top,
+        Pv = pv
       };
     }
 

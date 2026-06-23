@@ -236,6 +236,10 @@ namespace Ceres.Features.Tournaments.Streaming
 
     /// <summary>Current top moves (TopQ), ordered best-first.</summary>
     public List<TopMoveDTO> Top { get; set; }
+
+    /// <summary>Principal variation (best line from this search) as space-separated UCI/long-algebraic
+    /// moves, e.g. "e6c6 c5b4 d5e4"; null if unavailable. Consumers map to SAN.</summary>
+    public string Pv { get; set; }
   }
 
 
