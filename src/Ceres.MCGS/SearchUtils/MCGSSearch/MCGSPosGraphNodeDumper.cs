@@ -102,6 +102,13 @@ public static class MCGSPosGraphNodeDumper
       }
     }
 
+    // A draw-by-repetition placeholder child (Position/PositionEquivalence mode) is created
+    // but never visited or NN-evaluated: its V/Q/WDL are sentinel NaNs while the draw value
+    // lives on the incoming edge (edge.Q dilutes to 0 via NDrawByRepetition). Display the draw
+    // so the dump shows the move's true value (0) instead of NaN. The node is intentionally
+    // left unevaluated so it can be NN-evaluated if later reached via a non-repetition path.
+    bool isRepDrawPlaceholder = !node.IsEvaluated && !edge.IsNull && edge.NDrawByRepetition > 0;
+
     // Flag column: pruning status (F/T/S) overridden by terminal (C/D).
     char flag = ' ';
     if (!node.IsSearchRoot && hasParent && parentNode.IsSearchRoot
@@ -118,6 +125,7 @@ public static class MCGSPosGraphNodeDumper
     }
     if (node.Terminal == GameResult.Checkmate) flag = 'C';
     else if (node.Terminal == GameResult.Draw) flag = 'D';
+    if (isRepDrawPlaceholder) flag = 'R';
 
     // Rep column: nonblank only when the position repeated earlier in the walk.
     char repChar = ' ';
@@ -166,6 +174,16 @@ public static class MCGSPosGraphNodeDumper
       : MGMoveConverter.ToMove(edge.MoveMG).ToSAN(parentNode.CalcPosition().ToPosition);
 
     double q = node.Q;
+
+    // Display values: for an unevaluated draw-by-repetition placeholder, substitute the draw
+    // (V=0, Q=0, W/D/L = 0/1/0) for the node's sentinel NaNs. For all other rows these equal
+    // the underlying node fields exactly, leaving their output unchanged.
+    float vDisp = isRepDrawPlaceholder ? 0f : node.V;
+    double qDisp = isRepDrawPlaceholder ? 0.0 : q;          // == edge.Q (0) for a pure rep draw
+    float winPDisp = isRepDrawPlaceholder ? 0f : (float)node.WinP;
+    float drawPDisp = isRepDrawPlaceholder ? 1f : node.DrawP;
+    float lossPDisp = isRepDrawPlaceholder ? 0f : (float)node.LossP;
+
     int? plyUntilIrreversible = node.PlyUntilPVIsIrreversibleMove();
 
     // Column writes - widths must match WriteHeaders.
@@ -189,22 +207,22 @@ public static class MCGSPosGraphNodeDumper
       DumpWithColor(actionVDisplay, $"{actionVDisplay,W_ACTV:F3} ", -0.2f, 0.2f, writer);
     }
 
-    DumpWithColor(node.V, $"{node.V,W_V:F3} ", -0.2f, 0.2f, writer);
-    DumpWithColor((float)q, $"{q,W_Q:F3} ", -0.2f, 0.2f, writer);
+    DumpWithColor(vDisp, $"{vDisp,W_V:F3} ", -0.2f, 0.2f, writer);
+    DumpWithColor((float)qDisp, $"{qDisp,W_Q:F3} ", -0.2f, 0.2f, writer);
 
-    writer.Write($"{node.WinP,5:F2}/{node.DrawP,5:F2}/{node.LossP,5:F2} ");      // W_WDL = 17
+    writer.Write($"{winPDisp,5:F2}/{drawPDisp,5:F2}/{lossPDisp,5:F2} ");      // W_WDL = 17
     // Tree W/D/L: D taken fresh from children (ComputeDForDisplay), W/L derived from the
     // always-correct Q so the trio is internally consistent (sums to 1) and free of any
     // running-average D staleness at this node.
-    double dDisp = node.ComputeDForDisplay();
-    writer.Write($"{(node.Q + 1 - dDisp) / 2.0,5:F2}/{dDisp,5:F2}/{(1 - dDisp - node.Q) / 2.0,5:F2} ");
+    double dDisp = isRepDrawPlaceholder ? 1.0 : node.ComputeDForDisplay();
+    writer.Write($"{(qDisp + 1 - dDisp) / 2.0,5:F2}/{dDisp,5:F2}/{(1 - dDisp - qDisp) / 2.0,5:F2} ");
 
     writer.Write($"{100 * node.UncertaintyValue,W_UNC:F0} ");
     writer.Write($"{100 * node.UncertaintyPolicy,W_UNC:F0} ");
     writer.Write(plyUntilIrreversible.HasValue
       ? $"{plyUntilIrreversible.Value,W_PIRR} "
       : $"{"-",W_PIRR} ");
-    writer.Write($"{100 * MathF.Abs(node.V - (float)q),W_VERR:F0} ");
+    writer.Write($"{100 * MathF.Abs(vDisp - (float)qDisp),W_VERR:F0} ");
     writer.Write($"{100 * node.LeafValueVolatilityDebiased,W_VOL:F0} ");
     writer.Write($"{100 * node.RepDrawFraction,W_REPD:F0}");
 
