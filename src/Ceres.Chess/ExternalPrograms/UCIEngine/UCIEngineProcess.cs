@@ -221,6 +221,14 @@ namespace Ceres.Chess.External.CEngine
     public void TerminateEngine() => SendCommandLine("quit");
 
 
-    public void ReadAsync() => EngineProcess.BeginOutputReadLine();    
+    public void ReadAsync()
+    {
+      EngineProcess.BeginOutputReadLine();
+
+      // Also pump stderr so the child's startup/error output (otherwise silently discarded) is
+      // surfaced via ErrorReceviedEvent. This makes failures such as a process that exits before
+      // "readyok" diagnosable instead of opaque.
+      EngineProcess.BeginErrorReadLine();
+    }
   }
 }

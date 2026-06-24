@@ -38,9 +38,12 @@ namespace Ceres.Chess.GameEngines
   {
     /// <summary>
     /// Identifying string of the engine.
-    /// Returns the UCI "id name" value if available, otherwise the provided name.
+    /// Returns the caller-provided name (the configured engine id, e.g. "CeresMCGS1") so that
+    /// tournament output and stat attribution use the id the caller specified, consistent with
+    /// EnginePlayerDef.ID and every other GameEngine. Falls back to the engine's self-reported
+    /// UCI "id name" only if no name was provided.
     /// </summary>
-    public override string ID => UCIRunner?.EngineID ?? Name;
+    public override string ID => Name ?? UCIRunner?.EngineID;
 
     /// <summary>
     /// Name of engine.
@@ -350,7 +353,7 @@ namespace Ceres.Chess.GameEngines
       }
 
       float q = EncodedEvalLogistic.CentipawnToLogistic(gameInfo.ScoreCentipawns);
-      return new GameEngineSearchResult(gameInfo.BestMove, q, gameInfo.ScoreCentipawns, float.NaN, searchLimit, default, 0, 
+      return new GameEngineSearchResult(gameInfo.BestMove, q, gameInfo.ScoreCentipawns, float.NaN, searchLimit, default, 0,
                                        (int)gameInfo.Nodes, gameInfo.NPS, gameInfo.EPS, gameInfo.Depth);
     }
 

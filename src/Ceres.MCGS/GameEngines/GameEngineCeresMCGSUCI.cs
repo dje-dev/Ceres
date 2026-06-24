@@ -68,10 +68,6 @@ public class GameEngineCeresMCGSUCI : GameEngineUCI
            forceDisableSmartPruning ? AddedDisableSetSmartPruning(uciSetOptionCommands) : uciSetOptionCommands,
            callback, false, ExtraArgsForEvaluator(evaluatorDef))
   {
-    if (overrideEXE != null)
-    {
-      overrideEXE = overrideEXE.Replace(".exe", "");
-    }
     if (evaluatorDef == null)
     {
       throw new ArgumentNullException(nameof(evaluatorDef));
@@ -180,7 +176,21 @@ public class GameEngineCeresMCGSUCI : GameEngineUCI
   /// <returns></returns>
   static string GetExecutableFN(string overrideEXE)
   {
-    string executableFN = overrideEXE ?? Assembly.GetExecutingAssembly().FullName;
+    // Note: use Location (the file path) not FullName (the assembly display name).
+    string executableFN = overrideEXE ?? Assembly.GetExecutingAssembly().Location;
+
+    // On Linux the engine is launched via "dotnet <X.dll>" (see OverrideLaunchExecutable), so the
+    // dotnet muxer requires a managed assembly. If the caller handed us the native apphost (no
+    // extension) or a stripped ".exe" name, normalize to the corresponding ".dll" when it exists.
+    if (SoftwareManager.IsLinux && !executableFN.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+    {
+      string dllCandidate = Path.ChangeExtension(executableFN, ".dll");
+      if (File.Exists(dllCandidate))
+      {
+        executableFN = dllCandidate;
+      }
+    }
+
     if (!File.Exists(executableFN))
     {
       throw new ArgumentException(nameof(overrideEXE), $"specified executable not found: {executableFN}");
