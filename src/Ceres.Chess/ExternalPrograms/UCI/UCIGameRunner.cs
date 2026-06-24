@@ -160,10 +160,56 @@ namespace Ceres.Chess.ExternalPrograms.UCI
     /// </summary>
     public readonly System.Collections.Concurrent.ConcurrentQueue<string> BestLineHistory = new();
 
+
+    #region Marker-delimited block capture
+
+    /// <summary>
+    /// When non-null, a marker-delimited block capture is in progress; received lines belonging to
+    /// the block are collected here (see CaptureMarkedBlock). Null when no capture is active.
+    /// </summary>
+    volatile List<string> blockCaptureLines;
+    volatile string blockBeginMarker;
+    volatile string blockEndMarker;
+    volatile bool blockCaptureActive;     // true once the begin marker has been seen
+    volatile bool blockCaptureComplete;   // true once the end marker has been seen
+
+    #endregion
+
     void DataRead(int id, string data)
     {
       double elapsedTime = (double)(Stopwatch.GetTimestamp() - startTime) / freq;
       if (UCI_VERBOSE_LOGGING) Console.WriteLine(Math.Round(elapsedTime, 3) + " ENGINE::{0}::{1}", id, data);
+
+      // If a marker-delimited block capture is active, intercept lines belonging to the block so
+      // they are collected (and not routed as normal engine output). Lines arriving before the
+      // begin marker fall through to normal handling below.
+      List<string> capture = blockCaptureLines;
+      if (capture != null)
+      {
+        string trimmed = data.Trim();
+        if (!blockCaptureActive)
+        {
+          if (trimmed == blockBeginMarker)
+          {
+            blockCaptureActive = true;
+            return;
+          }
+        }
+        else
+        {
+          if (trimmed == blockEndMarker)
+          {
+            blockCaptureActive = false;
+            blockCaptureComplete = true;
+            return;
+          }
+          lock (capture)
+          {
+            capture.Add(data);
+          }
+          return;
+        }
+      }
 
       if (data.StartsWith("id name "))
       {
@@ -261,6 +307,50 @@ namespace Ceres.Chess.ExternalPrograms.UCI
     public  void SendCommand(string command)
     {
       SendCommandCRLF(engine, command);
+    }
+
+
+    /// <summary>
+    /// Sends a command to the engine and captures the lines it emits between the specified begin and
+    /// end marker lines (the markers themselves are excluded). Lines arriving before the begin marker
+    /// are routed normally. Returns the captured lines, or null if the end marker was not seen within
+    /// the timeout (or the engine exited). Intended for capturing custom multi-line diagnostics output
+    /// such as the "dump-info-block" command.
+    /// </summary>
+    /// <param name="command">the UCI command to send (e.g. "dump-info-block")</param>
+    /// <param name="beginMarker">exact line (after trimming) marking the start of the block</param>
+    /// <param name="endMarker">exact line (after trimming) marking the end of the block</param>
+    /// <param name="timeoutMs">maximum time to wait for the end marker</param>
+    public IReadOnlyList<string> CaptureMarkedBlock(string command, string beginMarker, string endMarker, int timeoutMs)
+    {
+      List<string> lines = new List<string>();
+      blockBeginMarker = beginMarker;
+      blockEndMarker = endMarker;
+      blockCaptureActive = false;
+      blockCaptureComplete = false;
+      blockCaptureLines = lines;   // set last: arms the intercept in DataRead
+
+      try
+      {
+        SendCommand(command);
+
+        long deadline = Stopwatch.GetTimestamp() + (long)(timeoutMs / 1000.0 * Stopwatch.Frequency);
+        while (!blockCaptureComplete && Stopwatch.GetTimestamp() < deadline)
+        {
+          if (engine.EngineProcess.HasExited)
+          {
+            break;
+          }
+          System.Threading.Thread.Sleep(10);
+        }
+      }
+      finally
+      {
+        blockCaptureLines = null;   // disarm the intercept
+        blockCaptureActive = false;
+      }
+
+      return blockCaptureComplete ? lines : null;
     }
 
     protected void SendCommandCRLF(UCIEngineProcess thisEngine, string cmd)

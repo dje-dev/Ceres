@@ -190,6 +190,20 @@ public partial class UCIManagerMCGS
   public ParamsSelect OverrideParamsSelect;
 
 
+  /// <summary>
+  /// Search parameters loaded from a file via the "load-params" UCI command (or null if none).
+  /// When set, these take complete precedence: they are used verbatim for all future searches,
+  /// bypassing the per-field setoption overlays normally applied by the ParamsSearch getter.
+  /// </summary>
+  ParamsSearch loadedParamsSearch;
+
+  /// <summary>
+  /// Select parameters loaded from a file via the "load-params" UCI command (or null if none).
+  /// See <see cref="loadedParamsSearch"/> for precedence semantics.
+  /// </summary>
+  ParamsSelect loadedParamsSelect;
+
+
 
   void CreateEvaluator()
   {
@@ -293,6 +307,12 @@ public partial class UCIManagerMCGS
   {
     get
     {
+      // Params loaded from a file are authoritative: use them verbatim, bypassing the overlays below.
+      if (loadedParamsSelect != null)
+      {
+        return loadedParamsSelect;
+      }
+
       ParamsSelect parms = OverrideParamsSelect ?? new ParamsSelect();
       parms.CPUCT = cpuct;
       parms.CPUCTBase = cpuctBase;
@@ -321,6 +341,12 @@ public partial class UCIManagerMCGS
   {
     get
     {
+      // Params loaded from a file are authoritative: use them verbatim, bypassing the overlays below.
+      if (loadedParamsSearch != null)
+      {
+        return loadedParamsSearch;
+      }
+
       ParamsSearch parms = OverrideParamsSearch ?? new ParamsSearch();
       parms.MoveOverheadSeconds = moveOverheadSeconds;
       parms.EnableTablebases = parms.EnableTablebases && tablebaseDirectory != null;
@@ -399,11 +425,14 @@ public partial class UCIManagerMCGS
           UCIWriteLine("dump-pp-html    - dumps principal positions from last search (like dump-pp but to HTML page)");
           UCIWriteLine("revalue-root    - revalues root/move Q of last search via exploration-ladder deep rollouts from the visit frontier (optional rollouts/position/stage, ladder, dry-up rounds (0=off), e.g. \"revalue-root 50 0.15,0.04,0 12\")");
           UCIWriteLine("dump-info       - dump information about last search (top level candidate moves, principal variation, etc.)");
+          UCIWriteLine("dump-info-block - like dump-info but prefixed with a process/GC/machine header and wrapped in begin/end markers (used for programmatic capture)");
           UCIWriteLine("game-analyze    - locate a position in a PGN by move number and analyze it (prompts for: <pgn file> <move number, e.g. 105 or 105..> <time, e.g. 10s>)");
           UCIWriteLine("game-analyze-lc0- like game-analyze but runs the analysis with Lc0 (streaming its UCI output), then loads the position into Ceres without searching");
           UCIWriteLine("dump-time       - dump information about time manager's last decision");
           UCIWriteLine("dump-processor  - dump information about CPUs in this system");
           UCIWriteLine("dump-params     - dump configuration parameters currently in use for Ceres");
+          UCIWriteLine("save-params <f> - serialize the current ParamsSearch and ParamsSelect (as JSON) to the specified file");
+          UCIWriteLine("load-params <f> - load ParamsSearch and ParamsSelect from a JSON file; these then override all options for future searches");
           UCIWriteLine("dump-store {d}  - dumps full node store for tree from last search (optionally with max depth specifier)");
           UCIWriteLine("dump-trans-pos  - dumps transpositions list (standalone hash)");
           UCIWriteLine("dump-nvidia     - dumps information about NVIDIA CUDA devices detected in the system");
@@ -568,18 +597,11 @@ public partial class UCIManagerMCGS
           break;
 
         case "dump-info":
-          if (CeresEngine?.Search?.Manager != null)
-          {
-            //MCGSearch search = CeresEngine.Search;
-            //DumpFullInfo(GameEngineSearchResultCeresMCGS searchResult, TextWriter writer, string description)
+          ProcessDumpInfoCommand(blockFormat: false);
+          break;
 
-            CeresEngine.Search.Manager.DumpFullInfo(lastSearchResult, Console.Out, "UCI");
-            //               CeresEngine.Search.Manager.DumpFullInfo(search.BestMove, search.SearchRootNode,
-            //                                                      search.LastReuseDecision, search.LastMakeNewRootTimingStats,
-            //                                                      search.LastGameLimitInputs, Console.Out, "UCI");
-          }
-          else
-            UCIWriteLine("info string No search manager created");
+        case "dump-info-block":
+          ProcessDumpInfoCommand(blockFormat: true);
           break;
 
         case string c when c.StartsWith("game-analyze-lc0"):
@@ -647,7 +669,19 @@ public partial class UCIManagerMCGS
             CeresEngine.Search.Manager.DumpParams();
           }
           else
-            UCIWriteLine("info string No search manager created");
+          {
+            // No search has run yet; dump the parameters that would be used for the next search
+            // (this reflects any params loaded via "load-params").
+            DumpPendingParams();
+          }
+          break;
+
+        case string c when c.StartsWith("load-params"):
+          ProcessLoadParamsCommand(c);
+          break;
+
+        case string c when c.StartsWith("save-params"):
+          ProcessSaveParamsCommand(c);
           break;
 
         case string c when c.StartsWith("forward"):
@@ -1131,6 +1165,139 @@ public partial class UCIManagerMCGS
 
     CeresEngine = null;
     haveInitializedEngine = false;
+  }
+
+
+  /// <summary>
+  /// Handles the "dump-info" / "dump-info-block" commands. If a search is currently in progress the
+  /// dump is deferred to the engine's next quiescent point (so the mutating graph is never read from
+  /// this UCI input thread); otherwise it is emitted immediately. When blockFormat is true the dump
+  /// is prefixed with a process/GC/machine header and wrapped in begin/end markers.
+  /// </summary>
+  void ProcessDumpInfoCommand(bool blockFormat)
+  {
+    // If a search is running, route through the engine's thread-safe (quiescent) dump mechanism.
+    if (CeresEngine != null && CeresEngine.IsSearching)
+    {
+      CeresEngine.RequestDumpInfo("UCI",
+        blockFormat ? GameEngineCeresMCGSInProcess.DumpInfoFormat.Block
+                    : GameEngineCeresMCGSInProcess.DumpInfoFormat.Plain);
+      return;
+    }
+
+    // No search active: safe to read and dump immediately on this thread.
+    if (blockFormat)
+    {
+      DiagnosticsBlock.WriteBlock(Console.Out, w =>
+      {
+        if (CeresEngine?.Search?.Manager != null)
+        {
+          CeresEngine.Search.Manager.DumpFullInfo(lastSearchResult, w, "UCI");
+        }
+        else
+        {
+          w.WriteLine("info string No search manager created");
+        }
+      });
+    }
+    else
+    {
+      if (CeresEngine?.Search?.Manager != null)
+      {
+        CeresEngine.Search.Manager.DumpFullInfo(lastSearchResult, Console.Out, "UCI");
+      }
+      else
+      {
+        UCIWriteLine("info string No search manager created");
+      }
+    }
+  }
+
+
+  /// <summary>
+  /// Dumps the ParamsSelect / ParamsSearch / ParamsSearchExecution that would be used for the next
+  /// search (reflecting any params loaded via "load-params"). Used by "dump-params" when no search
+  /// manager has yet been created.
+  /// </summary>
+  void DumpPendingParams()
+  {
+    ParamsSelect pendingSelect = ParamsSelect;
+    ParamsSearch pendingSearch = ParamsSearch;
+    Console.WriteLine(ObjUtils.FieldValuesDumpString<ParamsSelect>(pendingSelect, new ParamsSelect(), false));
+    Console.WriteLine(ObjUtils.FieldValuesDumpString<ParamsSearch>(pendingSearch, new ParamsSearch(), false));
+    Console.WriteLine(ObjUtils.FieldValuesDumpString<ParamsSearchExecution>(pendingSearch.Execution, new ParamsSearchExecution(), false));
+  }
+
+
+  /// <summary>
+  /// Handles the "load-params &lt;filename&gt;" command: loads serialized ParamsSearch and ParamsSelect
+  /// from the specified JSON file, makes them authoritative for all future searches, and clears the
+  /// currently-loaded search engine so the next search rebuilds with them.
+  /// </summary>
+  void ProcessLoadParamsCommand(string command)
+  {
+    string fileName = command.Substring("load-params".Length).Trim();
+    if (string.IsNullOrEmpty(fileName))
+    {
+      UCIWriteLine("info string load-params requires a filename, e.g. load-params my.ceres.params");
+      return;
+    }
+
+    try
+    {
+      ParamsFileContents contents = ParamsFileSerializer.Load(fileName);
+      loadedParamsSearch = contents.ParamsSearch;
+      loadedParamsSelect = contents.ParamsSelect;
+
+      // Clear the currently-loaded search engine (if any) so the next search rebuilds with these params.
+      ReinitializeEngine();
+
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+        $"Loaded search params from {fileName} - these now override all UCI options for future searches.");
+    }
+    catch (Exception exc)
+    {
+      UCIWriteLine($"info string load-params failed: {exc.Message}");
+    }
+  }
+
+
+  /// <summary>
+  /// Handles the "save-params &lt;filename&gt;" command: serializes the current ParamsSearch and
+  /// ParamsSelect (those in use by the active search if any, else those that would be used next)
+  /// to the specified JSON file. Useful for generating an editable template to later load-params.
+  /// </summary>
+  void ProcessSaveParamsCommand(string command)
+  {
+    string fileName = command.Substring("save-params".Length).Trim();
+    if (string.IsNullOrEmpty(fileName))
+    {
+      UCIWriteLine("info string save-params requires a filename, e.g. save-params my.ceres.params");
+      return;
+    }
+
+    try
+    {
+      ParamsSearch searchToSave;
+      ParamsSelect selectToSave;
+      if (CeresEngine?.Search?.Manager != null)
+      {
+        searchToSave = CeresEngine.Search.Manager.ParamsSearch;
+        selectToSave = CeresEngine.Search.Manager.ParamsSelect;
+      }
+      else
+      {
+        searchToSave = ParamsSearch;
+        selectToSave = ParamsSelect;
+      }
+
+      ParamsFileSerializer.Save(fileName, searchToSave, selectToSave);
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"Saved current search params to {fileName}.");
+    }
+    catch (Exception exc)
+    {
+      UCIWriteLine($"info string save-params failed: {exc.Message}");
+    }
   }
 
 

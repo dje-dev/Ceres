@@ -465,20 +465,40 @@ namespace Ceres.Features.Tournaments
       {
         // Flag every currently-searching in-process MCGS engine to dump its search diagnostics,
         // labeling the dump with the originating console command (the engine stays agnostic to it).
+        // For external Ceres engines accessed over UCI, request a marker-delimited dump-info-block
+        // over the UCI channel, capture it, and display it here (mirroring the in-process dump).
         const string DUMP_DESCRIPTION = "Ctrl-D DUMP-INFO";
         foreach (TournamentGameThread t in gameThreads)
         {
           foreach (GameEngine engine in t.Run.Engines)
           {
-            if (engine is GameEngineCeresMCGSInProcess mcgs && mcgs.IsSearching)
-            {
-              mcgs.RequestDumpInfo(DUMP_DESCRIPTION);
-            }
+            RequestDumpInfoForEngine(engine, DUMP_DESCRIPTION);
           }
-          if (t.Run.Engine2CheckEngine is GameEngineCeresMCGSInProcess checkMcgs && checkMcgs.IsSearching)
+          RequestDumpInfoForEngine(t.Run.Engine2CheckEngine, DUMP_DESCRIPTION);
+        }
+      }
+
+      void RequestDumpInfoForEngine(GameEngine engine, string description)
+      {
+        if (engine is GameEngineCeresMCGSInProcess mcgs && mcgs.IsSearching)
+        {
+          mcgs.RequestDumpInfo(description);
+        }
+        else if (engine is GameEngineCeresMCGSUCI uci && uci.IsSearching)
+        {
+          // Capturing the block requires waiting for the subprocess to respond (up to a few seconds),
+          // so run it off the key-monitor thread to keep that thread responsive.
+          Task.Run(() =>
           {
-            checkMcgs.RequestDumpInfo(DUMP_DESCRIPTION);
-          }
+            try
+            {
+              uci.DumpInfoBlockToConsole(description, Console.Out);
+            }
+            catch (Exception)
+            {
+              // Never let a diagnostics dump failure disrupt the tournament.
+            }
+          });
         }
       }
 

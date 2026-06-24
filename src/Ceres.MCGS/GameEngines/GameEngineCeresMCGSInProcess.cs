@@ -106,10 +106,31 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   string dumpInfoDescription = "DUMP-INFO";
 
   /// <summary>
-  /// Serializes diagnostic dumps so concurrent engines (multi-threaded tournaments) do not
-  /// interleave their output on the console.
+  /// Output format for a requested diagnostics dump. Set by RequestDumpInfo before the request flag.
   /// </summary>
-  static readonly object dumpConsoleLock = new();
+  public enum DumpInfoFormat
+  {
+    /// <summary>Plain dump (yellow header followed by the full search info).</summary>
+    Plain,
+
+    /// <summary>
+    /// Dump wrapped as a "dump-info-block": prefixed with a process/GC/machine header and bracketed
+    /// by begin/end markers (see <see cref="DiagnosticsBlock"/>) for clean programmatic capture.
+    /// </summary>
+    Block
+  }
+
+  /// <summary>
+  /// Format requested for the pending dump. Set by RequestDumpInfo before the request flag.
+  /// </summary>
+  DumpInfoFormat dumpInfoFormat = DumpInfoFormat.Plain;
+
+  /// <summary>
+  /// Serializes diagnostic dumps so concurrent engines (multi-threaded tournaments) do not
+  /// interleave their output on the console. Shared with the UCI-engine dump wrapper so in-process
+  /// and external-UCI engine dumps also do not interleave.
+  /// </summary>
+  static readonly object dumpConsoleLock = DiagnosticsBlock.ConsoleLock;
 
   /// <summary>
   /// Optional name of file to which detailed log information 
@@ -520,10 +541,13 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   /// within ~0.5s), or at the end of the current search if it finishes sooner. Safe to call from
   /// another thread. The description identifies the requester (e.g. "UCI", "AUTO") and appears in
   /// the dump header; the engine itself is agnostic to who or what triggered the request.
+  /// When format is Block the dump is emitted as a marker-delimited dump-info-block (with a
+  /// process/GC/machine header) suitable for programmatic capture.
   /// </summary>
-  public void RequestDumpInfo(string description = "DUMP-INFO")
+  public void RequestDumpInfo(string description = "DUMP-INFO", DumpInfoFormat format = DumpInfoFormat.Plain)
   {
     dumpInfoDescription = description;
+    dumpInfoFormat = format;
     dumpInfoRequested = true;
   }
 
@@ -538,40 +562,61 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   void DumpDiagnosticsWithHeader(MCGSManager manager, bool liveMidSearch)
   {
     string description = dumpInfoDescription;
+    DumpInfoFormat format = dumpInfoFormat;
     try
     {
       lock (dumpConsoleLock)
       {
-        int moveNum;
-        try
+        if (format == DumpInfoFormat.Block)
         {
-          int priorPlies = manager.Engine.SearchRootNode.Graph.Store.HistoryHashes.PriorPositionsMG.Length;
-          moveNum = 1 + priorPlies / 2;
+          // Wrap the dump in begin/end markers plus a process/GC/machine header so a consumer
+          // (e.g. the tournament manager driving this engine over UCI) can capture it cleanly.
+          DiagnosticsBlock.WriteBlock(Console.Out, w => WriteDiagnosticsBody(manager, liveMidSearch, description, w));
         }
-        catch
+        else
         {
-          moveNum = 0;
-        }
-
-        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
-          $"===== {description}  engine={ID}  move={moveNum} =====");
-
-        string phase = liveMidSearch ? " (in-search)" : " (search end)";
-        if (liveMidSearch)
-        {
-          // Non-final, read-only best-move peek (we are not finalizing a move, just reporting).
-          BestMoveInfoMCGS bestMoveInfo = manager.GetBestMove(out _, out _, out _, isFinalBestMoveCalc: false);
-          manager.DumpFullInfo(bestMoveInfo, manager.Engine.SearchRootNode, default, Console.Out, description + phase);
-        }
-        else if (LastSearchResult?.Search?.Manager != null)
-        {
-          LastSearchResult.Search.Manager.DumpFullInfo(LastSearchResult, Console.Out, description + phase);
+          WriteDiagnosticsBody(manager, liveMidSearch, description, Console.Out);
         }
       }
     }
     catch (Exception e)
     {
       Console.WriteLine("Search diagnostics dump failed: " + e.Message);
+    }
+  }
+
+
+  /// <summary>
+  /// Writes the diagnostics body (a header line identifying this engine and the current move,
+  /// followed by the full search info dump) to the specified writer. Must be called while holding
+  /// dumpConsoleLock; when liveMidSearch is true it must only be called at a quiescent point.
+  /// </summary>
+  void WriteDiagnosticsBody(MCGSManager manager, bool liveMidSearch, string description, TextWriter writer)
+  {
+    int moveNum;
+    try
+    {
+      int priorPlies = manager.Engine.SearchRootNode.Graph.Store.HistoryHashes.PriorPositionsMG.Length;
+      moveNum = 1 + priorPlies / 2;
+    }
+    catch
+    {
+      moveNum = 0;
+    }
+
+    ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+      $"===== {description}  engine={ID}  move={moveNum} =====");
+
+    string phase = liveMidSearch ? " (in-search)" : " (search end)";
+    if (liveMidSearch)
+    {
+      // Non-final, read-only best-move peek (we are not finalizing a move, just reporting).
+      BestMoveInfoMCGS bestMoveInfo = manager.GetBestMove(out _, out _, out _, isFinalBestMoveCalc: false);
+      manager.DumpFullInfo(bestMoveInfo, manager.Engine.SearchRootNode, default, writer, description + phase);
+    }
+    else if (LastSearchResult?.Search?.Manager != null)
+    {
+      LastSearchResult.Search.Manager.DumpFullInfo(LastSearchResult, writer, description + phase);
     }
   }
 

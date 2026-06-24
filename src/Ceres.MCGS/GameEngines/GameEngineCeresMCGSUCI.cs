@@ -18,12 +18,14 @@ using System.Reflection;
 using System.IO;
 using System.Collections.Generic;
 
+using Ceres.Base.Misc;
 using Ceres.Base.OperatingSystem;
 
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.MCGS.Search.Params;
+using Ceres.MCGS.UCI;
 
 
 #endregion
@@ -45,16 +47,18 @@ public class GameEngineCeresMCGSUCI : GameEngineUCI
   /// <param name="id">descriptive identifier</param>
   /// <param name="evaluatorDef">specification of the neural network to be used</param>
   /// <param name="forceDisableSmartPruning"></param>
-  /// <param name="emulateCeresSettings"></param>
-  /// <param name="searchParams"></param>
-  /// <param name="selectParams"></param>
+  /// <param name="transferCeresParams">if true, the supplied searchParams/selectParams are serialized
+  /// to a temporary file and the external engine is instructed (via load-params) to use them for all
+  /// of its searches, so the separate process runs with the same parameters as an in-process engine</param>
+  /// <param name="searchParams">search parameters to transfer when transferCeresParams is true</param>
+  /// <param name="selectParams">select parameters to transfer when transferCeresParams is true</param>
   /// <param name="uciSetOptionCommands"></param>
   /// <param name="callback"></param>
   /// <param name="overrideEXE">optionally the full name of the executable file(otherwise looks for Ceres executable in working directory)</param>
   public GameEngineCeresMCGSUCI(string id,
                                 NNEvaluatorDef evaluatorDef,
                                 bool forceDisableSmartPruning = false,
-                                bool emulateCeresSettings = false,
+                                bool transferCeresParams = false,
                                 ParamsSearch searchParams = null,
                                 ParamsSelect selectParams = null,
                                 List<string> uciSetOptionCommands = null,
@@ -68,24 +72,46 @@ public class GameEngineCeresMCGSUCI : GameEngineUCI
     {
       overrideEXE = overrideEXE.Replace(".exe", "");
     }
-    // TODO: support some limited emulation of options
-    if (searchParams != null || selectParams != null)
-    {
-      throw new NotSupportedException("Customized searchParams and selectParams not yet supported");
-    }
     if (evaluatorDef == null)
     {
       throw new ArgumentNullException(nameof(evaluatorDef));
-    }
-    if (emulateCeresSettings)
-    {
-      throw new NotImplementedException(nameof(emulateCeresSettings));
     }
 
     if (evaluatorDef.DeviceCombo == NNEvaluatorDeviceComboType.Pooled)
     {
       throw new Exception("Evaluators for GameEngineDefCeresMCGSUCI should not be created as Pooled.");
     }
+
+    // If requested, transfer the supplied in-process search parameters to the external engine so it
+    // runs with identical settings. The base constructor has already started the engine process and
+    // waited for it to become ready, and the engine processes UCI commands in order, so this
+    // load-params is applied before any subsequent position/go commands are issued for this engine.
+    if (transferCeresParams)
+    {
+      TransferParamsToEngine(searchParams ?? new ParamsSearch(), selectParams ?? new ParamsSelect());
+    }
+  }
+
+
+  /// <summary>
+  /// Temporary file holding the parameters transferred to the external engine (or null). Retained
+  /// for the engine's lifetime and removed on Dispose.
+  /// </summary>
+  string transferredParamsFile;
+
+
+  /// <summary>
+  /// Serializes the specified parameters to a temporary file and instructs the external engine to
+  /// load them (via the "load-params" UCI command), so that all of the engine's future searches use
+  /// exactly these parameters.
+  /// </summary>
+  void TransferParamsToEngine(ParamsSearch searchParams, ParamsSelect selectParams)
+  {
+    string paramsFile = Path.Combine(Path.GetTempPath(), $"ceres_transfer_params_{Guid.NewGuid():N}.ceres.params");
+    ParamsFileSerializer.Save(paramsFile, searchParams, selectParams);
+    transferredParamsFile = paramsFile;
+
+    UCIRunner.SendCommand("load-params " + paramsFile);
   }
 
 
@@ -165,9 +191,61 @@ public class GameEngineCeresMCGSUCI : GameEngineUCI
   #endregion
 
 
+  /// <summary>
+  /// Requests a diagnostics dump from the external Ceres engine over UCI (via the "dump-info-block"
+  /// command), captures the marker-delimited output, strips the markers, and writes the result to the
+  /// specified writer (prefixed with a yellow header identifying this engine). This mirrors, for an
+  /// external UCI Ceres engine, the in-process Ctrl-D dump. Safe to call from another thread; blocks
+  /// up to timeoutMs waiting for the engine's response, so callers driving this from an interactive
+  /// key handler should invoke it on a background task.
+  /// </summary>
+  /// <param name="description">label identifying the requester (shown in the header, e.g. "Ctrl-D DUMP-INFO")</param>
+  /// <param name="writer">destination for the captured dump</param>
+  /// <param name="timeoutMs">maximum time to wait for the engine to emit the block</param>
+  public void DumpInfoBlockToConsole(string description, TextWriter writer, int timeoutMs = 8000)
+  {
+    IReadOnlyList<string> lines = UCIRunner.CaptureMarkedBlock("dump-info-block",
+                                                               DiagnosticsBlock.BEGIN_MARKER,
+                                                               DiagnosticsBlock.END_MARKER,
+                                                               timeoutMs);
+    lock (DiagnosticsBlock.ConsoleLock)
+    {
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"===== {description}  engine={ID} (UCI) =====");
+      if (lines == null)
+      {
+        writer.WriteLine($"(dump-info-block timed out after {timeoutMs} ms or engine produced no block)");
+      }
+      else
+      {
+        foreach (string line in lines)
+        {
+          writer.WriteLine(line);
+        }
+      }
+    }
+  }
+
+
   public override void Dispose()
   {
     UCIRunner.Shutdown();
+
+    // Remove the transferred-params temporary file (if any); the engine has long since loaded it.
+    if (transferredParamsFile != null)
+    {
+      try
+      {
+        if (File.Exists(transferredParamsFile))
+        {
+          File.Delete(transferredParamsFile);
+        }
+      }
+      catch (Exception)
+      {
+        // Best-effort cleanup; ignore failures.
+      }
+      transferredParamsFile = null;
+    }
   }
 
 

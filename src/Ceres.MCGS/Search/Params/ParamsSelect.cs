@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Text.Json.Serialization;
 using Ceres.Base.Math;
 using Ceres.Chess.UserSettings;
 using Ceres.MCGS.Search.RPO;
@@ -311,6 +312,7 @@ public record ParamsSelect
   /// <summary>
   /// Convenience predicate: visit-target pi_bar selection is active.
   /// </summary>
+  [JsonIgnore]
   public bool CBGPUCTSelectActive => CBGPUCT_Mode == CBGPUCTModeType.SelectOnly
                                   || CBGPUCT_Mode == CBGPUCTModeType.SelectAndBackup;
 
@@ -330,6 +332,7 @@ public record ParamsSelect
   /// <summary>
   /// Convenience predicate: V_bar regularized backup is active.
   /// </summary>
+  [JsonIgnore]
   public bool CBGPUCTBackupActive => CBGPUCT_Mode == CBGPUCTModeType.BackupOnly
                                   || CBGPUCT_Mode == CBGPUCTModeType.SelectAndBackup;
 

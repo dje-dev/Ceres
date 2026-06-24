@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Text.Json.Serialization;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess.UserSettings;
 
@@ -189,6 +190,7 @@ public record ParamsSearch
   /// This is only applicable in PositionAndHistoryEquivalence
   /// (otherwise the nodes sharing same position are already coalesced).
   /// </summary>
+  [JsonIgnore]
   public bool EnablePseudoTranspositionBlending => EnablePseudoTranspositionBlendingInPositionAndEquivalenceMode
                                                 && PathTranspositionMode == PathMode.PositionAndHistoryEquivalence;
 
@@ -208,6 +210,7 @@ public record ParamsSearch
   /// PositionEquivalence mode every standalone-hash entry stays a singleton regardless), so the
   /// move-ordering term is gated on that mode and this is automatically false in coalesced mode.
   /// </summary>
+  [JsonIgnore]
   public bool MaintainSiblingSets => EnablePseudoTranspositionBlending
                                   || (MoveOrderingPhase != MoveOrderingPhaseEnum.None
                                    && PathTranspositionMode == PathMode.PositionAndHistoryEquivalence);

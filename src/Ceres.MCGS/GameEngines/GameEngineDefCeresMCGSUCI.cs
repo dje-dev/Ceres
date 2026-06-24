@@ -75,6 +75,14 @@ public class GameEngineDefCeresMCGSUCI : GameEngineDef
   /// </summary>
   public readonly ParamsSelect ParamsSelect = null;
 
+  /// <summary>
+  /// If true, the ParamsSearch/ParamsSelect above are transferred to the external (separate-process)
+  /// Ceres engine so that it runs with exactly these parameters (via the load-params mechanism).
+  /// This lets a tournament configure its Ceres MCGS UCI engines to use the same in-process
+  /// parameters as would be used by an in-process Ceres engine.
+  /// </summary>
+  public readonly bool TransferCeresParams;
+
 
   /// <summary>
   /// Constructor.
@@ -84,6 +92,7 @@ public class GameEngineDefCeresMCGSUCI : GameEngineDef
   /// <param name="uciSetOptionCommands"></param>
   /// <param name="callback"></param>
   /// <param name="overrideEXE"></param>
+  /// <param name="transferCeresParams">if true, transfer paramsSearch/paramsSelect to the external engine</param>
   public GameEngineDefCeresMCGSUCI(string id,
                                   NNEvaluatorDef evaluatorDef,
                                   List<string> uciSetOptionCommands = null,
@@ -92,7 +101,8 @@ public class GameEngineDefCeresMCGSUCI : GameEngineDef
                                   bool disableFutilityStopSearch = false,
                                   int processorGroupID = 0,
                                   ParamsSearch paramsSearch = null,
-                                  ParamsSelect paramsSelect = null)
+                                  ParamsSelect paramsSelect = null,
+                                  bool transferCeresParams = false)
     : base(id)
   {
     EvaluatorDef = evaluatorDef;
@@ -103,6 +113,7 @@ public class GameEngineDefCeresMCGSUCI : GameEngineDef
     ProcessorGroupID = processorGroupID;
     ParamsSearch = paramsSearch;
     ParamsSelect = paramsSelect;
+    TransferCeresParams = transferCeresParams;
   }
 
 
@@ -119,7 +130,7 @@ public class GameEngineDefCeresMCGSUCI : GameEngineDef
   public override GameEngine CreateEngine()
   {
     return new GameEngineCeresMCGSUCI(ID, EvaluatorDef, DisableFutilityStopSearch,
-                                      false, ParamsSearch, ParamsSelect, UCISetOptionCommands, Callback, OverrideEXE);
+                                      TransferCeresParams, ParamsSearch, ParamsSelect, UCISetOptionCommands, Callback, OverrideEXE);
   }
 
 

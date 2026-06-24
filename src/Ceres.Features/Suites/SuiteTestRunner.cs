@@ -617,7 +617,7 @@ namespace Ceres.Features.Suites
                        catch (Exception exc)
                        {
                          Def.Output.WriteLine("Error in ProcessEPD " + exc);
-                         throw exc;
+                         throw;
                        }
                      });
       }

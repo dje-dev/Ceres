@@ -207,6 +207,9 @@ namespace Ceres.Chess.External.CEngine
       {
         EngineInput.AutoFlush = true;
         EngineLoaded = true;
+
+        // Ensure this child engine is terminated if our process exits, so it is not orphaned.
+        ChildProcessGuard.Track(EngineProcess);
       }
       else
       {
