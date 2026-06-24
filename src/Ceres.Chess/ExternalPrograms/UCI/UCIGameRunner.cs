@@ -134,6 +134,12 @@ namespace Ceres.Chess.ExternalPrograms.UCI
     protected volatile string lastBestMove = null;
     protected volatile string lastError = null;
 
+    /// <summary>
+    /// Signaled by the engine read thread the instant a "bestmove" line arrives, so that
+    /// EvalPosition can block (sleep) until the search completes rather than busy-spinning.
+    /// </summary>
+    readonly System.Threading.ManualResetEventSlim bestMoveSignal = new System.Threading.ManualResetEventSlim(false);
+
     public string LastInfoString => lastInfo;
     public string LastBestMove => lastBestMove;
 
@@ -222,6 +228,8 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       else if (data.Contains("bestmove"))
       {
         lastBestMove = data;
+        // Wake EvalPosition's blocking wait immediately (it is waiting for exactly this line).
+        bestMoveSignal.Set();
       }
       else if (data.Contains("info string"))
       {
@@ -436,6 +444,7 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       lastInfo = null;
       LastInfoLineByMultiPV.Clear();
       BestLineHistory.Clear();
+      bestMoveSignal.Reset();   // clear any prior signal before issuing this search
 
       //      string posString = fenAndMovesString.Contains("startpos") ? fen
       string curPosCmd = "position ";
@@ -478,7 +487,9 @@ namespace Ceres.Chess.ExternalPrograms.UCI
           }
         }
 
-        System.Threading.Thread.Sleep(isShortSearch ? 0 : 1);
+        // Block (without consuming CPU) until the read thread signals "bestmove", or until a short
+        // timeout elapses so the error / process-exit / long-wait checks below still run periodically.
+        bestMoveSignal.Wait(500);
         if (elapsedSeconds > 5)
         {
           if (engine.EngineProcess.HasExited)

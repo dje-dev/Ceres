@@ -13,13 +13,7 @@
 
 #region Using directives
 
-using System;
-using System.Runtime;
-using System.Runtime.InteropServices;
-using System.Threading;
-using Ceres.Base.Environment;
-using Ceres.Base.OperatingSystem;
-using Ceres.Chess.Diagnostics;
+using Ceres.Chess.Initialization;
 
 #endregion
 
@@ -45,8 +39,7 @@ namespace Ceres.MCTS.Environment
     /// This method is thread-safe and will only perform initialization once.
     /// </summary>
     /// <param name="launchMonitor">If true, launches a performance monitor</param>
-    /// <param name="numaNode">NUMA node to use</param>
-    public static void BaseInitialize(bool launchMonitor = false, int numaNode = 0)
+    public static void BaseInitialize(bool launchMonitor = false)
     {
       // Quick check without lock for performance (double-checked locking pattern)
       if (isInitialized)
@@ -62,29 +55,10 @@ namespace Ceres.MCTS.Environment
           return;
         }
 
-        HardwareManager.VerifyHardwareSoftwareCompatability();
-
-        // On .NET 6 the spin count for sempahores is directly configurable.
-        // Because most of the Ceres multithreading is not extremely fine grained,
-        // the awaited event almost always happens later than the default spinning period.
-        // Therefore it is better to use a short spin and save the CPU cycles.
-        // This reduces reported CPU time by about 15% to 20% with no slowdown.
-        // For .NET 6.0: see WorkerThread.cs, default was 70: AppContextConfigHelper.GetInt32Config("System.Threading.ThreadPool.UnfairSemaphoreSpinLimit", 70, false)
-        // (see for how to set this option: https://www.strathweb.com/2019/12/runtime-host-configuration-options-and-appcontext-data-in-net-core/)
-        AppDomain.CurrentDomain.SetData("System.Threading.ThreadPool.UnfairSemaphoreSpinLimit", 5);
-
-        // TODO: consider using SustainedLowLatency when running under timed time control
-        GCSettings.LatencyMode = GCLatencyMode.Batch;
-
-
-        HardwareManager.Initialize(numaNode);
-
-        if (launchMonitor && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-          // TODO: log this. Console.WriteLine($"dotnet-counters  monitor --process-id {Process.GetCurrentProcess().Id} Ceres System.Runtime Ceres.MCTS.Environment.MCTSEventSource");
-          EventSourceCeres.ENABLED = true;
-          EventSourceCeres.LaunchConsoleMonitor("Ceres.MCTS.Environment.MCTSEventSource");
-        }
+        // Shared, engine-agnostic process initialization (hardware checks, GC latency mode set
+        // explicitly to Interactive/background GC, processor affinity, optional monitor). Centralized
+        // so the in-process and external (UCI) launch paths configure the runtime identically.
+        CeresEngineInitialization.InitializeBaseProcess(launchMonitor, "Ceres.MCTS.Environment.MCTSEventSource");
 
         MCTSEventSource.Initialize();
 

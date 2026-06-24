@@ -104,7 +104,7 @@ namespace Ceres
       //        NNWeightsFilesLC0.RegisterDirectory(CeresUserSettingsManager.Settings.DirLC0Networks);
 
       // Perform low-level hardware initialization.
-      MCTSEngineInitialization.BaseInitialize(CeresEnvironment.MONITORING_METRICS, CeresUserSettingsManager.Settings.NUMANode);
+      MCTSEngineInitialization.BaseInitialize(CeresEnvironment.MONITORING_METRICS);
 
       Console.WriteLine();
 

@@ -52,15 +52,6 @@ namespace Ceres.Base.OperatingSystem
     static Process process = Process.GetCurrentProcess();
 
 
-    public static void Initialize(int numaNode)
-    {
-      if (numaNode != -1)
-      {
-        AffinitizeSingleNUMANode(numaNode);
-      }
-    }
-
-
     public static void VerifyHardwareSoftwareCompatability()
     {
       string errorString = null;

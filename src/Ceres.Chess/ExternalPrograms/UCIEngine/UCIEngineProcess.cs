@@ -208,6 +208,20 @@ namespace Ceres.Chess.External.CEngine
         EngineInput.AutoFlush = true;
         EngineLoaded = true;
 
+        // Pin the child engine to the same logical processors as this (parent) process,
+        // so the two run with the same NUMA / processor-group locality. 
+        if (OperatingSystem.IsWindows())
+        {
+          try
+          {
+            EngineProcess.ProcessorAffinity = Process.GetCurrentProcess().ProcessorAffinity;
+          }
+          catch (Exception exc)
+          {
+            Console.WriteLine($"Note: could not set child engine processor affinity to match parent: {exc.Message}");
+          }
+        }
+
         // Ensure this child engine is terminated if our process exits, so it is not orphaned.
         ChildProcessGuard.Track(EngineProcess);
       }

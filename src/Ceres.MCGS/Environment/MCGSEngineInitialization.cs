@@ -13,13 +13,7 @@
 
 #region Using directives
 
-using System;
-using System.Runtime;
-using System.Runtime.InteropServices;
-using System.Threading;
-using Ceres.Base.Environment;
-using Ceres.Base.OperatingSystem;
-using Ceres.Chess.Diagnostics;
+using Ceres.Chess.Initialization;
 
 #endregion
 
@@ -46,7 +40,7 @@ public static class MCGSEngineInitialization
   /// </summary>
   /// <param name="launchMonitor">If true, launches a performance monitor</param>
   /// <param name="numaNode">NUMA node to use</param>
-  public static void BaseInitialize(bool launchMonitor = false, int numaNode = 0)
+  public static void BaseInitialize(bool launchMonitor = false)
   {
     // Quick check without lock for performance (double-checked locking pattern)
     if (isInitialized)
@@ -62,21 +56,9 @@ public static class MCGSEngineInitialization
         return;
       }
 
-      HardwareManager.VerifyHardwareSoftwareCompatability();
-
-      // TODO: consider setting GCSettings.LatencyMode to
-      //       SustainedLowLatency when running under tight time constrints
-
-      HardwareManager.Initialize(numaNode);
-
-      if (launchMonitor && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-      {
-        // TODO: log this. Console.WriteLine($"dotnet-counters  monitor --process-id {Process.GetCurrentProcess().Id} Ceres System.Runtime Ceres.MCTS.Environment.MCTSEventSource");
-        EventSourceCeres.ENABLED = true;
-        EventSourceCeres.LaunchConsoleMonitor("Ceres.MCGS.Environment.MCGSEventSource");
-      }
-
-      //      MCGSEventSource.Initialize();
+      // Shared, engine-agnostic process initialization (hardware checks, GC latency mode set
+      // explicitly to Interactive/background GC, processor affinity, optional monitor).
+      CeresEngineInitialization.InitializeBaseProcess(launchMonitor, "Ceres.MCGS.Environment.MCGSEventSource");
 
       isInitialized = true;
     }
