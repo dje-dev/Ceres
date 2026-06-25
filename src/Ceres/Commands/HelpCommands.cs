@@ -134,12 +134,15 @@ namespace Ceres.Commands
 ";
 
     const string CERES_HELP_GAME_ANALYZE =
-@"  GAME-ANALYZE - Locate a position in a PGN file by move number, analyze it for a fixed time, dump search detail, then remain in UCI mode pre-positioned for further analysis (MCGS/v2 only).
-    Required positional args : <pgn file> <move number> <time>
+@"  GAME-ANALYZE - Locate a position (or range of positions) in a PGN file by move number, analyze each for a fixed time, dump search detail, then remain in UCI mode pre-positioned for further analysis (MCGS/v2 only).
+    Required positional args : <pgn file> <move number or range> <time>
                                move number: e.g. 105 (move 105, White to move) or 105.. (move 105, Black to move)
+                               range:       <start>-<end>, e.g. 1-9999 (effectively all moves) or ..7-..12 (Black's 7th through Black's 12th move).
+                                            Every position between the endpoints (inclusive) is analyzed in game order, reusing the search graph from one position to the next.
                                time:        e.g. 10s, 500ms, 1m (a bare number is interpreted as seconds)
     Optional key/values      : { network, device }  (may appear in any position)
     Example                  : Ceres GAME-ANALYZE game.pgn 105 10s network=~T79 device=GPU:0
+    Example (range)          : Ceres GAME-ANALYZE game.pgn ..7-..12 10s network=~T79 device=GPU:0
 ";
 
     const string CERES_HELP_GAME_ANALYZE_LC0 =

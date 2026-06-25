@@ -291,11 +291,13 @@ public partial class UCIManagerMCGS
 
   /// <summary>
   /// Outputs line to UCI.
+  /// When a game-analyze capture writer is active (used to compute a position's output in the
+  /// background without it interleaving with the console), the line is redirected there instead.
   /// </summary>
   /// <param name="result"></param>
   void UCIWriteLine(string result = null)
   {
-    OutStream.WriteLine(result);
+    (gameAnalyzeCaptureWriter ?? OutStream).WriteLine(result);
     if (uciLogWriter != null)
     {
       LogWriteLine("OUT:", result);
@@ -426,7 +428,7 @@ public partial class UCIManagerMCGS
           UCIWriteLine("revalue-root    - revalues root/move Q of last search via exploration-ladder deep rollouts from the visit frontier (optional rollouts/position/stage, ladder, dry-up rounds (0=off), e.g. \"revalue-root 50 0.15,0.04,0 12\")");
           UCIWriteLine("dump-info       - dump information about last search (top level candidate moves, principal variation, etc.)");
           UCIWriteLine("dump-info-block - like dump-info but prefixed with a process/GC/machine header and wrapped in begin/end markers (used for programmatic capture)");
-          UCIWriteLine("game-analyze    - locate a position in a PGN by move number and analyze it (prompts for: <pgn file> <move number, e.g. 105 or 105..> <time, e.g. 10s>)");
+          UCIWriteLine("game-analyze    - locate a position (or range) in a PGN by move number and analyze it (prompts for: <pgn file> <move number or range, e.g. 105, 105.., 1-9999, ..7-..12> <time, e.g. 10s>)");
           UCIWriteLine("game-analyze-lc0- like game-analyze but runs the analysis with Lc0 (streaming its UCI output), then loads the position into Ceres without searching");
           UCIWriteLine("dump-time       - dump information about time manager's last decision");
           UCIWriteLine("dump-processor  - dump information about CPUs in this system");

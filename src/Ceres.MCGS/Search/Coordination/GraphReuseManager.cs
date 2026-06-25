@@ -153,14 +153,10 @@ public static class GraphReuseManager
       return graphToPossiblyReuse;
     }
 
-    if (searchRootPathFromGraphRoot.Count < 2)
-    {
-      // Search root is exactly one ply below the graph root: retain existing conservative behavior (no reuse).
-      graphToPossiblyReuse.Dispose();
-      searchRootPathFromGraphRoot = null;
-      return null;
-    }
-
+    // Search root is one or more plies below the graph root: reuse the subtree rooted at it.
+    // (Count == 1 — a single-ply advance — is reused too; this is what lets sequential
+    // position-by-position analysis, e.g. the game-analyze move range, continue the prior
+    // search. All SearchRootPathFromGraphRoot consumers handle a length-1 path generically.)
     searchRootNodeInfo = searchRootPathFromGraphRoot[^1];
 
     // Search root node must be evaluated
