@@ -2752,9 +2752,33 @@ public static unsafe class GraphRewriter
     int collisionCount = 0;
 
     int maxDop = Math.Max(2, System.Environment.ProcessorCount / 3);
+
+    // In single-dictionary PositionEquivalence mode the standalone dict doubles as the
+    // node-identity dedup index, keyed by the POSITION-ONLY key (Move50Category=default,
+    // RepetitionCount=0) exactly as the live LookupOrCreateAndAcquire standaloneKey. The
+    // real-category insertion below already supplies that key for counter<=75 non-repetition
+    // nodes (their real category IS default), but not for repetition, counter>90 (skipped
+    // below), or counter 76-90 nodes (inserted under a non-default category). For those we
+    // also register the position-only key so the rebuilt dict matches a freshly-built one and
+    // the live dedup lookup finds the board after a rewrite/extract (else duplicate nodes).
+    bool posEquivSingleDict = Graph.SINGLE_DICTIONARY_POSITION_MODE && graph.Store.UsesPositionEquivalenceMode;
+
     Parallel.For(1, numTotalRetained, new ParallelOptions { MaxDegreeOfParallelism = maxDop }, newIdx =>
     {
       ref GNodeStruct nodeRef = ref graph.NodesBufferOS[newIdx];
+
+      // Position-only dedup key (see note above). First-wins; result ignored (in a coalesced
+      // graph there is one node per board, so this key does not contend with any other node's
+      // insertion). counter<=75 non-rep nodes are excluded because the real-category TryAdd
+      // below already inserts this exact (default) key - re-adding it would be miscounted as
+      // a collision and could trigger spurious sibling promotion.
+      if (posEquivSingleDict
+       && (nodeRef.miscFields.HasRepetitions || nodeRef.miscFields.Move50Category != Move50CategoryEnum.LessThan75))
+      {
+        graph.transpositionsPosStandalone.TryAdd(
+          MGPositionHashing.Hash64WithMove50AndRepsAdded(nodeRef.HashStandalone, 0, default),
+          GNodeIndexSetIndex.FromDirectNodeIndex(newIdx));
+      }
 
       if (nodeRef.miscFields.HasRepetitions)
       {
@@ -2824,9 +2848,20 @@ public static unsafe class GraphRewriter
   /// </summary>
   static void Phase6RebuildStandaloneDictSequential(Graph graph, int numTotalRetained)
   {
+    // See the position-only dedup key rationale in Phase6RebuildStandaloneDictParallel.
+    bool posEquivSingleDict = Graph.SINGLE_DICTIONARY_POSITION_MODE && graph.Store.UsesPositionEquivalenceMode;
+
     for (int newIdx = 1; newIdx < numTotalRetained; newIdx++)
     {
       ref GNodeStruct nodeRef = ref graph.NodesBufferOS[newIdx];
+
+      if (posEquivSingleDict
+       && (nodeRef.miscFields.HasRepetitions || nodeRef.miscFields.Move50Category != Move50CategoryEnum.LessThan75))
+      {
+        graph.transpositionsPosStandalone.TryAdd(
+          MGPositionHashing.Hash64WithMove50AndRepsAdded(nodeRef.HashStandalone, 0, default),
+          GNodeIndexSetIndex.FromDirectNodeIndex(newIdx));
+      }
 
       if (nodeRef.miscFields.HasRepetitions)
       {
