@@ -16,6 +16,7 @@
 using System;
 using System.Diagnostics;
 using System.Runtime;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using Ceres.Base.OperatingSystem;
@@ -55,17 +56,29 @@ public static class CeresEngineInitialization
   {
     HardwareManager.VerifyHardwareSoftwareCompatability();
 
-    // For more consistent performance testing, don't enable foreground priority boost.
+    // The spin count for semaphores is directly configurable.
+    // Because most of the Ceres multithreading is not extremely fine grained,
+    // the awaited event almost always happens later than the default spinning period.
+    // Therefore it is better to use a short spin and save the CPU cycles.
+    // This reduces reported CPU time and also reduced wall clock time.
+    // (default was 70: AppContextConfigHelper.GetInt32Config("System.Threading.ThreadPool.UnfairSemaphoreSpinLimit", 70, false))
+    AppDomain.CurrentDomain.SetData("System.Threading.ThreadPool.UnfairSemaphoreSpinLimit", 2);
+
+    // For more stable performance testing, don't enable foreground priority boost.
+    // This is a Windows-only concept and doesn't seem to have significant wall-clock impact.
     DisableForegroundPriorityBoost();
 
-    // Run with the concurrent (background) GC latency mode. Interactive keeps full (gen2)
-    // collections concurrent - off the search's critical path - instead of blocking / stop-the-world.
-    GCSettings.LatencyMode = GCLatencyMode.Interactive;
+    // Batch mode seems to speed up nps by a few percent.
+    GCSettings.LatencyMode = GCLatencyMode.Batch;
 
-    // NUMA affinitiy disabled, problematic to attempt to
-    // derive best value and balance across possibly multiple instances.
-    //HardwareManager.AffinitizeSingleNUMANode(numaNode);
+    // Affinitize to a single NUMA node to reduce cross-node memory access.
+    // In practice we affinitize to use only 32 logical processors
+    // which limits typically to a single NUMA node on modern hardware.
+    // This yields significant performance improvements on NUMA hardware (up to 10%).
+    HardwareManager.AffinitizeSingleNUMANode(0);
 
+    // Possibly launch the .NET logging.
+    // Note that this is a legacy style of logging and typically no longer used.
     if (launchMonitor
      && !Console.IsOutputRedirected  // launched as a subprocess, e.g. in a touranment, suppress
      && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))     
