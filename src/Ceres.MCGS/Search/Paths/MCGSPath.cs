@@ -1199,4 +1199,62 @@ public partial class MCGSPath : IEquatable<MCGSPath>, IComparable<MCGSPath>
 
     return false;
   }
+
+
+  /// <summary>
+  /// Cheap necessary-condition test for whether ReconcileDrawByRepetitions could possibly do anything
+  /// at the current search root, used to skip its tree walk when provably a no-op.
+  ///
+  /// An edge is reconciled only when its child board is a history-level repetition, i.e. when
+  /// HashFoundInGraphRootPathOrPrehistory returns true - which (under FIX_DRP_NEEDS_3_BEFORE_ROOT)
+  /// requires that board to already appear at least TWICE within the spine+prehistory reversible run.
+  /// So a reconcilable edge can exist only if SOME board already recurs in that run. This scans the run
+  /// once (O(rule50)) with the identical irreversibility cutoffs as HashFoundInGraphRootPathOrPrehistory
+  /// and returns whether such a recurrence exists; when it does not, the whole reconciliation is skippable.
+  /// (Without the seen-twice gate the threshold is one, i.e. any non-empty reversible run qualifies.)
+  /// </summary>
+  public static bool SpinePrehistoryHasRepetitionTarget(Graph graph,
+                                                        ReadOnlySpan<GraphRootToSearchRootNodeInfo> nodesGraphToSearchRoot)
+  {
+    bool needTwo = MCGSParamsFixed.FIX_DRP_NEEDS_3_BEFORE_ROOT;
+    HashSet<PosHash64> seen = new();
+
+    // Spine: search root (^1) back toward the graph root, stopping at the move into the reversible run.
+    for (int i = nodesGraphToSearchRoot.Length - 1; i >= 0; i--)
+    {
+      if (!seen.Add(nodesGraphToSearchRoot[i].ChildHashStandalone64))
+      {
+        return true;                  // board appears >= 2x within the run
+      }
+      if (!needTwo)
+      {
+        return true;                  // seen-once gate: any board in a non-empty run is a target
+      }
+      if (nodesGraphToSearchRoot[i].MoveToChildIrreversible)
+      {
+        return false;                 // reversible run cut here; older positions cannot repeat into it
+      }
+    }
+
+    // Prehistory: newest (graph root) back, stopping at the most recent irreversible move.
+    ReadOnlySpan<PosHash64> prehistoryHashes = graph.Store.HistoryHashes.PriorPositionsHashes64;
+    bool[] prehistoryMoveIrreversible = graph.Store.HistoryHashes.MoveAfterPositionWasIrreversible;
+    for (int i = prehistoryHashes.Length - 1; i >= 0; i--)
+    {
+      if (!seen.Add(prehistoryHashes[i]))
+      {
+        return true;
+      }
+      if (!needTwo)
+      {
+        return true;
+      }
+      if (i == 0 || prehistoryMoveIrreversible[i - 1])
+      {
+        break;
+      }
+    }
+
+    return false;
+  }
 }

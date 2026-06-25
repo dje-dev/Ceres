@@ -120,15 +120,6 @@ public static class MCGSParamsFixed
   public const bool UPDATE_MAXQ_SUBOPTIMALITY = false;
 
   /// <summary>
-  /// Depth in the to which a depth-first attempt is made to
-  /// back out draw by repetitions visits which are invalidated
-  /// by a change on search root (0 to disable).
-  /// 
-  /// WARNING: Levels greater than 1 are less well tested.
-  /// </summary>
-  public const int POSITION_MODE_DEPTH_BACKUP_INVALIDATED_REPETITION = 0;
-
-  /// <summary>
   /// If siblings should choose max(N) for Q.
   /// Tests at 45s+0.75s suggest Elo at least 10 worse when enabled.
   /// </summary>

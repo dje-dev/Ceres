@@ -526,6 +526,26 @@ public record ParamsSearch
   public bool TwofoldDrawEnabled = true;
 
   /// <summary>
+  /// (PositionEquivalence mode only) Depth, in plies below the search root, to which expanded child
+  /// edges are reconciled against the CURRENT repetition context at the start of each search: any edge
+  /// whose child board is a history-level repetition (present in the graph-root -> search-root spine or
+  /// prehistory, hence a draw on EVERY search path) but which still carries non-draw visits is
+  /// reclassified as a full draw (NDrawByRepetition = N => edge.Q = 0), and affected node Q values are
+  /// refreshed bottom-up.
+  ///
+  /// Fixes a graph-reuse defect where a board-coalesced node is reused across game plies: an edge can
+  /// carry non-draw visits accumulated when the same board was reached earlier WITHOUT the repeating
+  /// history, diluting the move's value so the engine walks into a repetition with its eval frozen.
+  ///   0 = off.
+  ///   1 = search root's direct children only (the dominant, decision-determining case; cheap).
+  ///   N > 1 = also reconcile that many plies deeper (cost grows with depth; when > 1 a yellow
+  ///           per-search timing/stats line is printed). Only history-level repetitions are converted,
+  ///           which is sound at any depth regardless of node sharing.
+  /// See GNode.ReconcileDrawByRepetitions. Is a no-op unless such a repetition exists in range.
+  /// </summary>
+  public int RepetitionDrawReconciliationDepth = 4;
+
+  /// <summary>
   /// If nodes should apply supplemental updates.
   /// </summary>
   public bool EnableGraphCatchUp = false;

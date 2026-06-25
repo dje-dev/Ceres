@@ -25,152 +25,179 @@ using Ceres.MCGS.Search.Paths;
 namespace Ceres.MCGS.Graphs.GNodes;
 
 /// <summary>
-/// Logic for removing invalidated draw-by-repetition visits from nodes/edges.
-/// 
-/// When the search root changes, some draw-by-repetition visits may become invalidated
-/// because the positions they repeated against are no longer in the path to the new root.
-/// 
-/// The update logic depends on whether the position is still a draw-by-repetition (DBR)
-/// and whether we can safely propagate N decrements upward (requires single-parent path to root):
-/// 
-///   Condition      | Action                              | Only if canPropagateUpward | Update ancestor N
-///   ---------------|-------------------------------------|----------------------------|------------------
-///   Now a DBR      | NDrawByRepetition = N               | true                       | no
-///   Now not DBR    | NDrawByRepetition = 0, N -= removed | true                       | yes
-/// 
-/// When canPropagateUpward is false (multi-parent node exists somewhere above in the path),
-/// we skip all updates because we cannot correctly apportion the removed N across multiple parent edges.
+/// Repetition draw-by-repetition reconciliation and queries on the search-root subtree:
+/// reclassifying coalesced edges whose move now completes a repetition as full draws
+/// (ReconcileDrawByRepetitions), and the helper used by best-move selection to detect when a move
+/// hands the opponent a repetition draw (DrawByRepetitionExistsAtChildEdgeAmongExpandedChildren).
 /// </summary>
 public partial struct GNode
 {
+
+
+
   /// <summary>
-  /// Attempts to remove invalidated draw-by-repetition visits
-  /// from this node's edges up to the specified depth.
-  /// 
-  /// Repetitions can become invalidated when after the search root
-  /// is changed some of the now truncated-paths should no longer
-  /// have their draw-by-repetition visits counted.
+  /// Statistics describing a ReconcileDrawByRepetitions pass (for diagnostics / yellow console output
+  /// when reconciling deeper than the search root's direct children).
   /// </summary>
-  /// <param name="depthToProcess"></param>
-  /// <param name="nodesGraphToSearchRoot"></param>
-  /// <returns></returns>
-  internal void RemoveInvalidatedDrawByRepetitionsFromNodeEdges(int depthToProcess, ReadOnlySpan<GraphRootToSearchRootNodeInfo> nodesGraphToSearchRoot)
+  internal struct RepetitionReconcileStats
   {
-    HashSet<PosHash64> pathHashes = [HashStandalone];
-    RemoveInvalidatedDrawByRepetitionsFromNodeEdges(this, nodesGraphToSearchRoot, depthToProcess, pathHashes, canPropagateUpward: true);
+    /// <summary>Distinct nodes visited by the reconciliation walk.</summary>
+    public int NodesWalked;
+    /// <summary>Edges reclassified from (partly) non-draw to full draw-by-repetition.</summary>
+    public int EdgesReconciled;
+    /// <summary>Total visit mass reclassified (sum over reconciled edges of N - prior NDrawByRepetition).</summary>
+    public long VisitMassReconciled;
+    /// <summary>Deepest ply below the search root reached by the walk.</summary>
+    public int MaxDepthReached;
+    /// <summary>True if the walk was halted early by the node-count safety cap.</summary>
+    public bool HitNodeCap;
   }
 
 
-  private int RemoveInvalidatedDrawByRepetitionsFromNodeEdges(GNode node,
-                                                              ReadOnlySpan<GraphRootToSearchRootNodeInfo> nodesGraphToSearchRoot,
-                                                              int depthToProcess, HashSet<PosHash64> pathHashes,
-                                                              bool canPropagateUpward)
+  /// <summary>
+  /// Reconciles the draw-by-repetition classification of expanded child edges, from this (search-root)
+  /// node down to <paramref name="maxDepthPlies"/> plies, against the CURRENT repetition context (the
+  /// graph-root -> search-root spine plus prehistory).
+  ///
+  /// Why this is needed (PositionEquivalence mode only): nodes are coalesced by board position, so the
+  /// same board recurring at different points in the game maps to ONE node which is reused across moves
+  /// via graph reuse. An edge whose move completes a repetition NOW may have accumulated many non-draw
+  /// visits earlier in the game when that same board was reached WITHOUT the repeating history. Those
+  /// stale visits dilute the edge's aggregate Q (GEdgeStruct.Q dilutes child Q by the non-draw fraction
+  /// N-NDrawByRepetition), so the forced-draw move is not valued as a draw and the engine can walk into
+  /// (or fail to claim) a repetition with its eval frozen.
+  ///
+  /// Only HISTORY-LEVEL repetitions are reconciled: an edge is converted only when its child board is
+  /// present in the spine/prehistory. Because the spine+prehistory is a common prefix of EVERY search
+  /// path, such a board is a draw regardless of the in-tree path that reached it - so reclassifying the
+  /// whole edge (NDrawByRepetition = N => edge.Q == 0) is exact even for shared (multi-parent) nodes and
+  /// at any depth. Purely in-tree repetitions (board repeats an in-tree ancestor only) are path-dependent
+  /// and are intentionally left to live selection's per-path detection. The test is identical to the one
+  /// live selection uses at the search root (MCGSPath.HashFoundInHistoryOrPrehistory reduces to exactly
+  /// HashFoundInGraphRootPathOrPrehistory there), so the reclassification is stable rather than re-diluted.
+  ///
+  /// Node Q values are refreshed bottom-up: a node is recomputed from its children after its subtree is
+  /// processed, so a converted edge (or a changed descendant) propagates up to this node. Forward-only:
+  /// edges that are not currently history repetitions are left untouched.
+  /// </summary>
+  /// <param name="nodesGraphToSearchRoot">Path from graph root to search root for spine/prehistory checking.</param>
+  /// <param name="maxDepthPlies">How many plies below the search root to reconcile (1 = direct children only).</param>
+  /// <returns>Statistics about the pass.</returns>
+  internal RepetitionReconcileStats ReconcileDrawByRepetitions(ReadOnlySpan<GraphRootToSearchRootNodeInfo> nodesGraphToSearchRoot,
+                                                               int maxDepthPlies)
   {
-    bool madeChangesAnyEdge = false;
-    int totalRemovedFromChildren = 0;
+    RepetitionReconcileStats stats = default;
+    if (maxDepthPlies < 1)
+    {
+      return stats;
+    }
+
+    // Visited: nodes already processed (coalesced DAG => process each once; history-rep status is
+    // path-independent so a single pass suffices). Changed: subset whose Q was refreshed (so a node
+    // reached via a second parent learns its child changed without reprocessing it).
+    HashSet<int> visited = new();
+    HashSet<int> changed = new();
+    ReconcileRecursive(this, nodesGraphToSearchRoot, 1, maxDepthPlies, NodeWalkCap(maxDepthPlies, N), visited, changed, ref stats);
+    return stats;
+  }
+
+
+  // The reconciliation walk visits the distinct expanded nodes within maxDepth plies of the search root,
+  // which is bounded by (expanded branching)^maxDepth. Expanded branching is far below the ~35 legal-move
+  // average (only visited edges are walked, expansion thins with depth, transpositions coalesce) and lower
+  // still in the repetition-prone/low-material positions where the gate lets this run (empirically ~6-15).
+  // So the safety cap is scaled with depth from a GENEROUS branching estimate: it is a pure backstop that
+  // essentially never truncates real work (a typical level-4 walk is a few thousand to tens of thousands of
+  // nodes, well under the level-4 cap of 25^4 ~= 390K) but bounds the pathological high-branching case far
+  // more tightly at shallow depths than a single flat ceiling would. The cap is additionally limited to 20%
+  // of the root's visit count so the walk can never consume a large fraction of the (reused) tree.
+  // RepetitionReconcileStats.HitNodeCap reports the rare case the cap actually bites.
+  private const int RECONCILE_BRANCH_ESTIMATE = 25;
+  private const int RECONCILE_MAX_NODES_ABSOLUTE = 20_000_000;
+
+  private static int NodeWalkCap(int maxDepthPlies, int rootN)
+  {
+    long cap = 1;
+    for (int i = 0; i < maxDepthPlies; i++)
+    {
+      cap *= RECONCILE_BRANCH_ESTIMATE;
+      if (cap >= RECONCILE_MAX_NODES_ABSOLUTE)
+      {
+        cap = RECONCILE_MAX_NODES_ABSOLUTE;
+        break;
+      }
+    }
+
+    // Never walk more than 20% of the root's visits (bounds the walk relative to the reused tree size).
+    return (int)Math.Min(cap, rootN / 5);
+  }
+
+  private bool ReconcileRecursive(GNode node,
+                                  ReadOnlySpan<GraphRootToSearchRootNodeInfo> nodesGraphToSearchRoot,
+                                  int depth, int maxDepthPlies, int nodeWalkCap,
+                                  HashSet<int> visited, HashSet<int> changed,
+                                  ref RepetitionReconcileStats stats)
+  {
+    int idx = node.Index.Index;
+    if (!visited.Add(idx))
+    {
+      // Already fully processed via another parent; report its cached changed status.
+      return changed.Contains(idx);
+    }
+
+    stats.NodesWalked++;
+    if (depth > stats.MaxDepthReached)
+    {
+      stats.MaxDepthReached = depth;
+    }
+
+    bool anyChanged = false;
 
     foreach (GEdge edge in node.ChildEdgesExpanded)
     {
-      if (edge.Type == GEdgeStruct.EdgeType.ChildEdge)
+      if (edge.Type != GEdgeStruct.EdgeType.ChildEdge)
       {
-        // Recurse to deeper levels first (process deepest first)
-        if (depthToProcess > 1)
+        continue;
+      }
+
+      // Descend first (post-order) so a child's Q is refreshed before this node is recomputed.
+      if (depth < maxDepthPlies && !edge.ChildNode.IsNull && stats.NodesWalked < nodeWalkCap)
+      {
+        if (ReconcileRecursive(edge.ChildNode, nodesGraphToSearchRoot, depth + 1, maxDepthPlies, nodeWalkCap, visited, changed, ref stats))
         {
-          GNode childNode = edge.ChildNode;
-
-          // If the child node has multiple parents, we cannot safely propagate
-          // removals upward through this edge because we don't know what fraction
-          // of the child's removed visits came through this specific edge vs other parent edges.
-          bool childHasMultipleParents = childNode.NumParentsMoreThanOne;
-          bool canPropagateFromChild = canPropagateUpward && !childHasMultipleParents;
-
-          pathHashes.Add(childNode.HashStandalone);
-          int removedBelow = RemoveInvalidatedDrawByRepetitionsFromNodeEdges(childNode, nodesGraphToSearchRoot, depthToProcess - 1, pathHashes, canPropagateFromChild);
-          if (removedBelow > 0 && canPropagateFromChild)
-          {
-            madeChangesAnyEdge = true;
-            totalRemovedFromChildren += removedBelow;
-
-            // Propagate the decrement up: this edge's N should be reduced by the amount removed from the subtree below.
-            Debug.Assert(edge.N >= removedBelow);
-            edge.N -= removedBelow;
-          }
-          pathHashes.Remove(childNode.HashStandalone);
+          anyChanged = true;
         }
+      }
+      else if (depth < maxDepthPlies && stats.NodesWalked >= nodeWalkCap)
+      {
+        stats.HitNodeCap = true;
+      }
 
-        // Then process this level (direct repetition on this edge)
-        if (edge.NDrawByRepetition > 0)
+      // Convert this edge if its child board is a history-level repetition not yet fully classified.
+      // (Terminal edges and N==0 edges carry nothing to dilute and are skipped by the guard below.)
+      if (edge.N > 0 && edge.NDrawByRepetition < edge.N)
+      {
+        bool haveSeenRepetition = false;
+        if (MCGSPath.HashFoundInGraphRootPathOrPrehistory(Graph, nodesGraphToSearchRoot,
+                                                          edge.ChildNode.HashStandalone, ref haveSeenRepetition))
         {
-          int removedFromThisEdge = RemoveInvalidatedDrawByRepetitionFromEdge(edge, nodesGraphToSearchRoot, pathHashes, canPropagateUpward);
-          if (removedFromThisEdge > 0)
-          {
-            madeChangesAnyEdge = true;
-            totalRemovedFromChildren += removedFromThisEdge;
-          }
+          stats.VisitMassReconciled += edge.N - edge.NDrawByRepetition;
+          edge.NDrawByRepetition = edge.N;
+          stats.EdgesReconciled++;
+          anyChanged = true;
         }
       }
     }
 
-    if (madeChangesAnyEdge && canPropagateUpward)
+    if (anyChanged)
     {
-      // Decrement this node's N by the total amount removed from all child edges.
-      // Note: NDrawByRepetition is only set on the leaf edge (the edge immediately
-      // leading to the draw by repetition) and is NOT propagated up the path during backup.
-      // Therefore we only decrement N here, not NDrawByRepetition.
-      Debug.Assert(node.NodeRef.N >= totalRemovedFromChildren);
-      node.NodeRef.N -= totalRemovedFromChildren;
-
-      // Trigger immediate recalc/reset of Q since some were removed.
+      // A child edge value collapsed to a draw (or a descendant changed): refresh this node's Q.
       node.ResetNodeQFromChildren(false);
+      changed.Add(idx);
     }
 
-    return totalRemovedFromChildren;
+    return anyChanged;
   }
-
-
-  private int RemoveInvalidatedDrawByRepetitionFromEdge(GEdge edge,
-                                                        ReadOnlySpan<GraphRootToSearchRootNodeInfo> nodesGraphToSearchRoot,
-                                                        HashSet<PosHash64> pathHashes,
-                                                        bool canPropagateUpward)
-  {
-    // Skip if we cannot propagate upward (multiple parents somewhere above).
-    if (!canPropagateUpward)
-    {
-      return 0;
-    }
-
-    bool haveSeenRepetition = false;
-    bool isDrawByRepetition = pathHashes.Contains(edge.ChildNode.HashStandalone)
-                           || MCGSPath.HashFoundInGraphRootPathOrPrehistory(Graph, nodesGraphToSearchRoot,
-                                                                            edge.ChildNode.HashStandalone, ref haveSeenRepetition);
-    if (isDrawByRepetition)
-    {
-//if (edge.NDrawByRepetition != edge.N) Console.Write("+");
-
-      // Convert all to be draw by repetition (no visits removed, just reclassified, no ancestor N update)
-      edge.NDrawByRepetition = edge.N;
-      return 0;
-    }
-    else
-    {
-      int nBeingRemoved = edge.NDrawByRepetition;
-
-//if (nBeingRemoved > 0) Console.Write("-");
-
-      // Update the edge
-      Debug.Assert(edge.N >= nBeingRemoved);
-
-      edge.NDrawByRepetition -= nBeingRemoved;
-      edge.N -= nBeingRemoved;
-
-      return nBeingRemoved;
-    }
-  }
-
-
-
-
-
 
 
   /// <summary>

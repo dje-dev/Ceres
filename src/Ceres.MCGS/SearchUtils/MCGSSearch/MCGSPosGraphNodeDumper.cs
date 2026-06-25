@@ -109,6 +109,13 @@ public static class MCGSPosGraphNodeDumper
     // left unevaluated so it can be NN-evaluated if later reached via a non-repetition path.
     bool isRepDrawPlaceholder = !node.IsEvaluated && !edge.IsNull && edge.NDrawByRepetition > 0;
 
+    // A coalesced child reached via a now-repeating path can be FULLY evaluated (it is also reached via
+    // non-repeating paths elsewhere in the graph) yet THIS edge's every visit completes a repetition
+    // (edge.NDrawByRepetition == edge.N => edge.Q == 0). Show the move as the draw it is rather than the
+    // child node's standalone evaluation (which would mask the forced repetition).
+    bool isFullRepDrawEdge = !edge.IsNull && edge.N > 0 && edge.NDrawByRepetition == edge.N;
+    bool showRepDraw = isRepDrawPlaceholder || isFullRepDrawEdge;
+
     // Flag column: pruning status (F/T/S) overridden by terminal (C/D).
     char flag = ' ';
     if (!node.IsSearchRoot && hasParent && parentNode.IsSearchRoot
@@ -125,7 +132,7 @@ public static class MCGSPosGraphNodeDumper
     }
     if (node.Terminal == GameResult.Checkmate) flag = 'C';
     else if (node.Terminal == GameResult.Draw) flag = 'D';
-    if (isRepDrawPlaceholder) flag = 'R';
+    if (showRepDraw) flag = 'R';
 
     // Rep column: nonblank only when the position repeated earlier in the walk.
     char repChar = ' ';
@@ -178,11 +185,11 @@ public static class MCGSPosGraphNodeDumper
     // Display values: for an unevaluated draw-by-repetition placeholder, substitute the draw
     // (V=0, Q=0, W/D/L = 0/1/0) for the node's sentinel NaNs. For all other rows these equal
     // the underlying node fields exactly, leaving their output unchanged.
-    float vDisp = isRepDrawPlaceholder ? 0f : node.V;
-    double qDisp = isRepDrawPlaceholder ? 0.0 : q;          // == edge.Q (0) for a pure rep draw
-    float winPDisp = isRepDrawPlaceholder ? 0f : (float)node.WinP;
-    float drawPDisp = isRepDrawPlaceholder ? 1f : node.DrawP;
-    float lossPDisp = isRepDrawPlaceholder ? 0f : (float)node.LossP;
+    float vDisp = showRepDraw ? 0f : node.V;
+    double qDisp = showRepDraw ? 0.0 : q;          // == edge.Q (0) for a pure rep draw
+    float winPDisp = showRepDraw ? 0f : (float)node.WinP;
+    float drawPDisp = showRepDraw ? 1f : node.DrawP;
+    float lossPDisp = showRepDraw ? 0f : (float)node.LossP;
 
     int? plyUntilIrreversible = node.PlyUntilPVIsIrreversibleMove();
 
@@ -214,7 +221,7 @@ public static class MCGSPosGraphNodeDumper
     // Tree W/D/L: D taken fresh from children (ComputeDForDisplay), W/L derived from the
     // always-correct Q so the trio is internally consistent (sums to 1) and free of any
     // running-average D staleness at this node.
-    double dDisp = isRepDrawPlaceholder ? 1.0 : node.ComputeDForDisplay();
+    double dDisp = showRepDraw ? 1.0 : node.ComputeDForDisplay();
     writer.Write($"{(qDisp + 1 - dDisp) / 2.0,5:F2}/{dDisp,5:F2}/{(1 - dDisp - qDisp) / 2.0,5:F2} ");
 
     writer.Write($"{100 * node.UncertaintyValue,W_UNC:F0} ");

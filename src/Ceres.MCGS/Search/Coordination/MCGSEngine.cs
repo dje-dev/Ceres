@@ -197,15 +197,61 @@ public partial class MCGSEngine
         runningHash.Add(nodeInfo.ChildHashStandalone96);
       }
 
-      // In position equivalence mode, we need to remove any draw-by-repetition counts
-      // which can be proven to no longer valid after graph truncation.
-      if (MCGSParamsFixed.POSITION_MODE_DEPTH_BACKUP_INVALIDATED_REPETITION > 0
+      // In PositionEquivalence mode a board-coalesced node is reused across game plies. When the current
+      // position repeats a board reached earlier in the game, child edges can carry non-draw visits
+      // accumulated when those moves were NOT yet repetitions, diluting the value of moves that NOW
+      // complete a repetition so the engine walks into (or fails to claim) a draw with its eval frozen.
+      // Reclassify such moves as full draws, from the search root down to the configured depth (1 = the
+      // root's direct children, the dominant decision-determining case). See GNode.ReconcileDrawByRepetitions.
+      int reconcileDepth = Manager.ParamsSearch.RepetitionDrawReconciliationDepth;
+      if (reconcileDepth >= 1
         && Manager.ParamsSearch.EnableGraph
-        && Manager.ParamsSearch.PathTranspositionMode == PathMode.PositionEquivalence
-        && Manager.ParamsSearch.TestFlag
-        )
+        && Manager.ParamsSearch.PathTranspositionMode == PathMode.PositionEquivalence)
       {
-        SearchRootNode.RemoveInvalidatedDrawByRepetitionsFromNodeEdges(MCGSParamsFixed.POSITION_MODE_DEPTH_BACKUP_INVALIDATED_REPETITION, SearchRootPathFromGraphRoot);
+        // Cheap necessary-condition gate (O(rule50)): a reconcilable edge can exist only if some board
+        // already recurs within the spine+prehistory reversible run. When it does not, the whole walk is
+        // provably a no-op and is skipped (most positions - openings, anything soon after a pawn move or
+        // capture, or any unrepeated middlegame - take this path).
+        bool repPossible = MCGSPath.SpinePrehistoryHasRepetitionTarget(Graph, SearchRootPathFromGraphRoot);
+
+        if (reconcileDepth <= 1)
+        {
+          if (repPossible)
+          {
+            SearchRootNode.ReconcileDrawByRepetitions(SearchRootPathFromGraphRoot, 1);
+          }
+        }
+        else
+        {
+          // Deeper reconciliation: time it and emit a per-search stats line. Use the normal console color
+          // unless the pass actually reclassified visit mass, in which case make it yellow to stand out.
+          Stopwatch reconcileTimer = Stopwatch.StartNew();
+          GNode.RepetitionReconcileStats stats = repPossible
+            ? SearchRootNode.ReconcileDrawByRepetitions(SearchRootPathFromGraphRoot, reconcileDepth)
+            : default;
+          reconcileTimer.Stop();
+
+          const bool DEBUG_DUMP_RECONCILE_INFO = false;
+          if (DEBUG_DUMP_RECONCILE_INFO && repPossible)
+          {
+            string msg = $"[RepDrawReconcile] depth={reconcileDepth} rootN={SearchRootNode.N:N0} "
+              + (repPossible
+                  ? $"nodesWalked={stats.NodesWalked:N0} maxDepthReached={stats.MaxDepthReached} "
+                    + $"edgesReconciled={stats.EdgesReconciled:N0} visitMassReconciled={stats.VisitMassReconciled:N0} "
+                  : "skipped (no repetition target in history) ")
+              + $"time={reconcileTimer.Elapsed.TotalMilliseconds:F1}ms"
+              + (stats.HitNodeCap ? " (HIT NODE CAP - walk halted early)" : "");
+
+            if (stats.VisitMassReconciled > 0)
+            {
+              ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, msg);
+            }
+            else
+            {
+              Console.WriteLine(msg);
+            }
+          }
+        }
       }
 
       SearchRootRunningHash = runningHash;
