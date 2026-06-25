@@ -104,44 +104,60 @@ namespace Ceres.Base.OperatingSystem.Windows
     }
 
 
+    // Mirrors the native SYSTEM_LOGICAL_PROCESSOR_INFORMATION (x64 layout).
+    // ProcessorMask is a ULONG_PTR (64 bits on x64); declaring it as a 32-bit value
+    // previously truncated the affinity mask and hid logical processors 32..63.
+    // The union following Relationship is 8-byte aligned, so it begins at offset 16
+    // (not 12) on x64; reading NodeNumber/Flags at offset 12 returned padding.
     [StructLayout(LayoutKind.Explicit)]
     public struct SYSTEM_LOGICAL_PROCESSOR_INFORMATIONx64
     {
       [FieldOffset(0)]
-      public uint ProcessorMask;
+      public nuint ProcessorMask;
       [FieldOffset(8), MarshalAs(UnmanagedType.U4)]
       public RelationProcessorCore Relationship;
-      [FieldOffset(12)]
+      [FieldOffset(16)]
       public byte Flags;
-      [FieldOffset(12)]
+      [FieldOffset(16)]
       public CACHE_DESCRIPTOR Cache;
-      [FieldOffset(12)]
+      [FieldOffset(16)]
       public UInt32 NodeNumber;
-      [FieldOffset(12)]
+      [FieldOffset(16)]
       public UInt64 Reserved1;
-      [FieldOffset(20)]
+      [FieldOffset(24)]
       public UInt64 Reserved2;
     }
 
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern bool GetLogicalProcessorInformation([Out] SYSTEM_LOGICAL_PROCESSOR_INFORMATIONx64[] infos, ref uint infoSize);
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetNumaHighestNodeNumber(out uint HighestNodeNumber);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetNumaNodeProcessorMask(byte Node, out ulong ProcessorMask);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern ushort GetActiveProcessorGroupCount();
+
     public class ProcessorInfo
     {
-      public ProcessorInfo(RelationProcessorCore relationShip, byte flags, uint processorMask)
+      public ProcessorInfo(RelationProcessorCore relationShip, byte flags, ulong processorMask, uint nodeNumber)
       {
         Relationship = relationShip;
         Flags = flags;
         ProcessorMask = processorMask;
+        NodeNumber = nodeNumber;
       }
 
       public RelationProcessorCore Relationship { get; private set; }
       public byte Flags { get; private set; }
-      public uint ProcessorMask { get; private set; }
+      public ulong ProcessorMask { get; private set; }
+      public uint NodeNumber { get; private set; }
 
       public override string ToString()
       {
-        return "<ProcessorInfo " + Relationship + " " + ProcessorMask + " " + Flags + ">";
+        return "<ProcessorInfo " + Relationship + " 0x" + ProcessorMask.ToString("X") + " node=" + NodeNumber + " flags=" + Flags + ">";
       }
     }
 
@@ -158,6 +174,32 @@ namespace Ceres.Base.OperatingSystem.Windows
             socketCount++;
         return socketCount;
       }
+    }
+
+    /// <summary>
+    /// Number of processor groups exposed by Windows. Systems with more than 64 logical
+    /// processors are split into multiple groups; a single-IntPtr ProcessorAffinity mask
+    /// (and the legacy NUMA APIs used here) can only address one group at a time.
+    /// </summary>
+    public static int NumProcessorGroups => GetActiveProcessorGroupCount();
+
+    /// <summary>
+    /// Returns the affinity mask of all logical processors belonging to the
+    /// specified NUMA node (within its processor group).
+    /// </summary>
+    /// <param name="numaNode">zero-based NUMA node number</param>
+    /// <param name="mask">receives the processor affinity mask for the node</param>
+    /// <returns>true if the node exists and a non-empty mask was obtained</returns>
+    public static bool TryGetNumaNodeProcessorMask(int numaNode, out ulong mask)
+    {
+      mask = 0;
+      if (numaNode < 0 || numaNode > byte.MaxValue)
+        return false;
+
+      if (!GetNumaHighestNodeNumber(out uint highestNode) || numaNode > highestNode)
+        return false;
+
+      return GetNumaNodeProcessorMask((byte)numaNode, out mask) && mask != 0;
     }
 
     public static List<ProcessorInfo> GetProcessorInfo64()
@@ -182,7 +224,7 @@ namespace Ceres.Base.OperatingSystem.Windows
       // Converting the data to a list that we can easily interpret.
       List<ProcessorInfo> oList = new List<ProcessorInfo>();
       foreach (SYSTEM_LOGICAL_PROCESSOR_INFORMATIONx64 oInfo in oData)
-        oList.Add(new ProcessorInfo(oInfo.Relationship, oInfo.Flags, oInfo.ProcessorMask));
+        oList.Add(new ProcessorInfo(oInfo.Relationship, oInfo.Flags, (ulong)oInfo.ProcessorMask, oInfo.NodeNumber));
       return oList;
     }
 
@@ -263,7 +305,7 @@ namespace Ceres.Base.OperatingSystem.Windows
       // http://msdn2.microsoft.com/en-us/library/ms683194(VS.85).aspx
       // http://msdn2.microsoft.com/en-us/library/ms686694(VS.85).aspx
 
-      return processors.Select(i => i.Relationship == RelationProcessorCore.RelationProcessorCore).Count();
+      return processors.Count(i => i.Relationship == RelationProcessorCore.RelationProcessorCore);
 #if NOT
         // First counting the number of RelationProcessorPackage lines
         int iCount = oList.Select(i => i.Relationship == RelationProcessorCore.RelationProcessorPackage).Count;

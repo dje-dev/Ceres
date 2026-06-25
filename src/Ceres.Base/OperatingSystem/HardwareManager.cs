@@ -15,6 +15,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.InteropServices;
 
 using Ceres.Base.Misc;
@@ -81,9 +82,6 @@ namespace Ceres.Base.OperatingSystem
       }
     }
 
-    static bool haveAffinitizedSingle = false;
-
-
     /// <summary>
     /// Write diagnostic information to console relating to processor configuration.
     /// </summary>
@@ -112,7 +110,7 @@ namespace Ceres.Base.OperatingSystem
       long managed = GC.GetTotalMemory(forceFullGC);
 
       process.Refresh();
-      long workingSet = process.WorkingSet64;           // resident (physical) bytes — RSS on Linux
+      long workingSet = process.WorkingSet64;           // resident (physical) bytes - RSS on Linux
       long virtualMemory = process.VirtualMemorySize64; // VMSIZE
       long privateBytes = process.PrivateMemorySize64;  // "private bytes" (may be 0 or unreliable on some Unix builds)
       long unmanagedEstimate = System.Math.Max(0L, workingSet - managed);
@@ -156,59 +154,64 @@ namespace Ceres.Base.OperatingSystem
     }
 
 #endif
+    /// <summary>
+    /// Restricts this process to run only on the logical processors belonging to the
+    /// specified NUMA node, reducing cross-node memory traffic. On NUMA hardware this
+    /// can yield meaningful performance improvements (historically up to ~10%).
+    ///
+    /// Unlike the previous implementation (which capped usage at the lowest 32 logical
+    /// processors), this pins to ALL logical processors on the node, so large single-node
+    /// CPUs are fully utilized.
+    ///
+    /// No-op on non-Windows platforms and on Windows systems with more than one processor
+    /// group (where a single ProcessorAffinity mask cannot represent the node).
+    /// </summary>
+    /// <param name="numaNode">zero-based NUMA node to which the process should be pinned</param>
     public static void AffinitizeSingleNUMANode(int numaNode)
     {
+      // The coreinfo.exe utility from Sysinternals is useful for dumping topology under Windows.
+      //
+      // TODO: Someday it would be desirable to allow different logical calculations
+      //       (e.g. distinct chess tree searches) to be placed on distinct sockets,
+      //       rather than restricting all computation to a single node. That would
+      //       require abandoning the TPL / .NET thread pool in favor of our own
+      //       processor-constrained scheduler.
+      // TODO: Extend NUMA-node-aware pinning to Linux (e.g. via libnuma or
+      //       /sys/devices/system/node/nodeN/cpulist) and to multi-processor-group
+      //       Windows systems (via SetThreadGroupAffinity).
+
+      if (!SoftwareManager.IsWindows)
+      {
+        // Leave the process unaffinitized so the OS scheduler can place threads.
+        return;
+      }
+
       try
       {
-        // In non-NUMA situations better to limit number of processors, 
-        // this sometimes dramatically improves performance.
-
-        // The coreinfo.exe from sysinternals is useful for dumping topology info under Windows.
-
-        // TODO: Someday it would be desirable to allow different
-        //       logical calculations (e.g. chess tree searches)
-        //       to be placed on distinct sockets, and not restrict
-        //       all computation to a single socket.
-        //       But then we'd have to abandon use of TPL and .NET thread pool
-        //       completely and use our own versions which were processor constrained.
-
-        int maxProcessors;
-
-        // Default assumption to use all processors.
-        int numProcessors = System.Environment.ProcessorCount;
-
-        // TODO: extend this logic to also cover Linux.
-        bool isKnownMultisocket = SoftwareManager.IsWindows && WindowsHardware.NumCPUSockets > 1;
-        if (isKnownMultisocket)
+        if (WindowsHardware.NumProcessorGroups > 1)
         {
-          // Only use a single socket to improve affinity.
-          // CPUs in multisocket configurations are almost certainly at least 16 processors
-          // and any possible small benefit from going over 16 would almost certainly be
-          // overwhelemed by the increased latency.
-          maxProcessors = System.Math.Max(1, System.Environment.ProcessorCount / WindowsHardware.NumCPUSockets);
-        }
-        else
-        {
-          // Use at most 32 processors, more are almost never going to be helpful.
-          maxProcessors = System.Math.Min(32, System.Environment.ProcessorCount);
+          // A single ProcessorAffinity mask cannot span processor groups (>64 logical
+          // processors); skip rather than pin to an arbitrary subset.
+          Console.WriteLine($"Note: {WindowsHardware.NumProcessorGroups} processor groups detected; "
+                          + "skipping NUMA affinity (group-aware pinning not yet implemented).");
+          return;
         }
 
-        if (System.Environment.ProcessorCount > maxProcessors)
+        if (!WindowsHardware.TryGetNumaNodeProcessorMask(numaNode, out ulong mask))
         {
-          // TODO: Improve the mapping to NUMA nodes.
-          //       They assumption here that the processors are consecutive
-          //       within a NUMA node is not always correct.
-          MaxAvailableProcessors = maxProcessors;
-          long mask = ((long)1 << maxProcessors) - 1;
-
-          Process.GetCurrentProcess().ProcessorAffinity = (IntPtr)mask;
-          haveAffinitizedSingle = true;
+          Console.WriteLine($"Note: could not determine processor mask for NUMA node {numaNode}; "
+                          + "leaving processor affinity unchanged.");
+          return;
         }
+
+        // Pin to every logical processor on the requested NUMA node.
+        Process.GetCurrentProcess().ProcessorAffinity = unchecked((nint)mask);
+        MaxAvailableProcessors = BitOperations.PopCount(mask);
       }
       catch (Exception exc)
       {
-        // Therefore recover gracefully if failed for some reason.
-        Console.WriteLine("Note: failure in call to AffinitizeSingleNUMANode.");
+        // Recover gracefully; affinity is an optimization, not a correctness requirement.
+        Console.WriteLine($"Note: failure in AffinitizeSingleNUMANode for node {numaNode}: {exc.Message}");
       }
     }
   }

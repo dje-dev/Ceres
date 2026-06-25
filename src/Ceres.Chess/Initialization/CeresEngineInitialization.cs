@@ -75,7 +75,12 @@ public static class CeresEngineInitialization
     // In practice we affinitize to use only 32 logical processors
     // which limits typically to a single NUMA node on modern hardware.
     // This yields significant performance improvements on NUMA hardware (up to 10%).
-    HardwareManager.AffinitizeSingleNUMANode(0);
+    // Disabled:
+    //   (1) proper implementation is tricky; for AMD CCDs one really needs to look
+    //       replace NUMA-node with L3-domain-aware pinning (GetLogicalProcessorInformation -> RelationCache level 3).
+    //   (2) logical versus physical processor distinctions and layout need to be further considered
+    //   (3) this complicates tournaments with multiple engines on the same machine,
+    // HardwareManager.AffinitizeSingleNUMANode(0);
 
     // Possibly launch the .NET logging.
     // Note that this is a legacy style of logging and typically no longer used.
