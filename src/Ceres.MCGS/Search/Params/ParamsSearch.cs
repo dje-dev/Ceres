@@ -182,8 +182,10 @@ public record ParamsSearch
   /// However in fact it apparently distorts the relative evaluations being performed 
   /// at the current node and surrounding nodes (e.g. the parent node).
   /// Therefore the weight of large-N pseudotranspositions is tightly constrained.
+  /// 
+  /// NOTE: later testing suggested this feature may not be Elo positive, disabled by default for now.
   /// </summary>
-  public bool EnablePseudoTranspositionBlendingInPositionAndEquivalenceMode = true;
+  public bool EnablePseudoTranspositionBlendingInPositionAndEquivalenceMode = false;
 
   /// <summary>
   /// If pseudotransposition blending is enabled.
@@ -284,7 +286,8 @@ public record ParamsSearch
   //   3.0 --> -42 Elo
   //   5.0 --> -50 Elo
   //  20.0 --> -52 Elo
-  public float TranspositionStopMinSupportRatioPositionAndHistoryMode = 4f;
+  //  (infinite) -> (later testing suggested this mode may be best)
+  public float TranspositionStopMinSupportRatioPositionAndHistoryMode = 99999f; // effectively infinite
 
 
   /// <summary>
