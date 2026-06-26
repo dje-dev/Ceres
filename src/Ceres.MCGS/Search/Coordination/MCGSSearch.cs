@@ -276,7 +276,7 @@ As a workaround, EvaluatorSygyzy will just return as if no hit.
 
 
     // Process graph rewrite if needed (handles memory pressure, low ratio triggers)
-    Graph graphToUse = GraphReuseManager.ProcessGraphRewrite(graphToReuse, searchRootNodeInfo, ref searchRootPathFromGraphRoot, paramsSearch, searchLimitToUse, priorMoves);
+    Graph graphToUse = GraphReuseManager.PrepareGraphToUse(graphToReuse, searchRootNodeInfo, ref searchRootPathFromGraphRoot, paramsSearch, searchLimitToUse, priorMoves);
 
     // If a reusable graph was abandoned, the search will run from a fresh (empty) graph.
     // The allocation above used the (now-discarded) reuse candidate's root N, which with QuickMoves

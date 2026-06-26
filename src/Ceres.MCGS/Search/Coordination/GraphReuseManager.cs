@@ -186,12 +186,12 @@ public static class GraphReuseManager
   /// <param name="paramsSearch">Search parameters (for the memory budget).</param>
   /// <param name="searchLimit">Current search limit (for the time budget).</param>
   /// <param name="priorMoves">Position+history for the new search root.</param>
-  public static Graph ProcessGraphRewrite(Graph graph,
-                                          GraphRootToSearchRootNodeInfo searchRootNodeInfo,
-                                          ref List<GraphRootToSearchRootNodeInfo> searchRootPathFromGraphRoot,
-                                          ParamsSearch paramsSearch,
-                                          SearchLimit searchLimit,
-                                          PositionWithHistory priorMoves)
+  public static Graph PrepareGraphToUse(Graph graph,
+                                        GraphRootToSearchRootNodeInfo searchRootNodeInfo,
+                                        ref List<GraphRootToSearchRootNodeInfo> searchRootPathFromGraphRoot,
+                                        ParamsSearch paramsSearch,
+                                        SearchLimit searchLimit,
+                                        PositionWithHistory priorMoves)
   {
     if (graph == null)
     {
