@@ -51,6 +51,12 @@ namespace Ceres.Chess
     SecondsForAllMoves,
 
     /// <summary>
+    /// Search depth (in plies) to be reached per move (UCI engines only, e.g. "go depth N").
+    /// Unlike time-based limits this is deterministic and independent of machine speed.
+    /// </summary>
+    DepthPerMove,
+
+    /// <summary>
     /// Evaluate all positions possible after one move and play one having best value score.
     /// </summary>
     BestValueMove,

@@ -108,6 +108,11 @@ namespace Ceres.Chess
       return new SearchLimit(SearchLimitType.SecondsPerMove, seconds, searchContinuationSupported);
     }
 
+    public static SearchLimit DepthPerMove(int depth, bool searchContinuationSupported = false)
+    {
+      return new SearchLimit(SearchLimitType.DepthPerMove, depth, searchContinuationSupported);
+    }
+
     public static SearchLimit SecondsForAllMoves(float seconds, float secondsIncrement = 0, int? maxMovesToGo = null, bool searchContinuationSupported = true)
     {
       return new SearchLimit(SearchLimitType.SecondsForAllMoves, seconds, searchContinuationSupported, secondsIncrement, maxMovesToGo);
@@ -306,6 +311,7 @@ namespace Ceres.Chess
         SearchLimitType.NodesForAllMoves => (int)Value,
         SearchLimitType.BestValueMove => 1,
         SearchLimitType.BestActionMove => 1,
+        SearchLimitType.DepthPerMove => null,
         _ => throw new NotImplementedException()
       };
     }
@@ -333,6 +339,7 @@ namespace Ceres.Chess
           SearchLimitType.SecondsForAllMoves => Math.Min(maxTreeNodes, (long)(MAX_NPS * Value) + 1000),
           SearchLimitType.NodesForAllMoves => Math.Min(maxTreeNodes, (long)(Value + 1000)),
           SearchLimitType.BestValueMove => 1,
+          SearchLimitType.DepthPerMove => maxTreeNodes,
           _ => throw new NotImplementedException()
         };
       }
@@ -373,6 +380,7 @@ namespace Ceres.Chess
 
         SearchLimitType.BestValueMove => 1,
         SearchLimitType.BestActionMove => 1,
+        SearchLimitType.DepthPerMove => initialNumNodes,
         _ => throw new NotImplementedException()
       };
     }
@@ -432,6 +440,7 @@ namespace Ceres.Chess
       SearchLimitType.SecondsPerMove => "SM",
       SearchLimitType.BestValueMove => "V",
       SearchLimitType.BestActionMove => "A",
+      SearchLimitType.DepthPerMove => "DM",
       _ => throw new Exception($"Internal error: unsupported SearchLimitType type {Type}")
     };
 
@@ -443,7 +452,8 @@ namespace Ceres.Chess
     public override string ToString()
     {
       string movesToGoPart = MaxMovesToGo.HasValue ? $" Moves { MaxMovesToGo }" : "";
-      string valuePart = IsTimeLimit ? $"{Value,8:F2}s" : $"{Value,12:N0} nodes";
+      string valuePart = Type == SearchLimitType.DepthPerMove ? $"{Value,8:F0} depth"
+                       : IsTimeLimit ? $"{Value,8:F2}s" : $"{Value,12:N0} nodes";
       string incrPart = IsTimeLimit ? $"{ValueIncrement,8:F2}s" : $"{ValueIncrement,12:N0} nodes";
 
       string maxNodes = MaxTreeNodes != null ? $" Nodes max {MaxTreeNodes,12:N0}" : "";

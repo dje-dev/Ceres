@@ -290,6 +290,11 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       return EvalPosition(fenAndMovesString, "nodes", numNodes);
     }
 
+    public UCISearchInfo EvalPositionToDepth(string fenAndMovesString, int depth)
+    {
+      return EvalPosition(fenAndMovesString, "depth", depth);
+    }
+
     public UCISearchInfo EvalPositionRemainingNodes(string fenAndMovesString,
                                                     bool whiteToMove,
                                                     int? movesToGo,
