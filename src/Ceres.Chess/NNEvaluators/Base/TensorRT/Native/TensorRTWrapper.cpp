@@ -19,6 +19,7 @@
 #include <functional>
 #include <cstring>
 #include <cstdlib>
+#include <cstdint>
 #include <atomic>
 #include <unordered_map>
 #include <unordered_set>
@@ -796,6 +797,154 @@ static bool IsSmolgenNormLayer(const char* layerName)
   return name.find("/attention/ln1/") != std::string::npos;
 }
 
+// Read an entire file into memory. Returns false on open/read failure. Used so the ONNX
+// bytes are read from disk exactly once and then reused for both strong-typing detection
+// and the TensorRT parse (parser->parse) -- nets are single-file with embedded weights,
+// so there are no external-data sidecars whose resolution would require parseFromFile.
+static bool ReadEntireFile(const char* path, std::vector<char>& out)
+{
+  std::ifstream in(path, std::ios::binary | std::ios::ate);
+  if (!in) return false;
+  const std::streamsize size = in.tellg();
+  if (size < 0) return false;
+  out.resize(static_cast<size_t>(size));
+  in.seekg(0);
+  if (size > 0 && !in.read(out.data(), size)) return false;
+  return true;
+}
+
+// Helper: detect explicit quantization (QuantizeLinear) in an in-memory ONNX model buffer.
+// TensorRT only honors FP8/FP4 QuantizeLinear/DequantizeLinear in a STRONGLY-TYPED network
+// (INT8 works weakly typed, but FP8/FP4 scale layers are silently ignored otherwise). Such
+// models are therefore built strongly typed, which also means builder precision flags and
+// manual setPrecision norm/softmax marking are skipped -- FP32 norms/softmax must be baked
+// into the ONNX instead.
+//
+// Rather than scanning every byte (which, for the common non-quantized model, means reading
+// the whole weight section just to prove a negative), this walks the ONNX protobuf wire
+// format and inspects NodeProto.op_type directly: ModelProto.graph (field 7) ->
+// GraphProto.node (field 1) -> NodeProto.op_type (field 4). Initializer/weight blobs are
+// skipped via their length prefixes, so cost is proportional to graph structure, not weight
+// size, and an op_type match cannot be spoofed by a tensor or metadata name.
+static bool OnnxNeedsStrongTyping(const void* data, size_t size)
+{
+  // Explicit override (escape hatch): CERES_TRT_STRONGLY_TYPED=0 forces off, =1 forces on.
+  if (const char* e = std::getenv("CERES_TRT_STRONGLY_TYPED"))
+  {
+    if (e[0] == '0') return false;
+    if (e[0] == '1') return true;
+  }
+
+  struct Walker
+  {
+    const uint8_t* const end;
+    bool found;
+
+    // Decode a base-128 varint at c (advancing c). False on truncation/overlong.
+    bool Varint(const uint8_t*& c, uint64_t& v)
+    {
+      v = 0;
+      for (int shift = 0; shift < 64; shift += 7)
+      {
+        if (c >= end) return false;
+        const uint8_t b = *c++;
+        v |= uint64_t(b & 0x7F) << shift;
+        if (!(b & 0x80)) return true;
+      }
+      return false;
+    }
+
+    // Decode a field key into (field number, wire type).
+    bool Tag(const uint8_t*& c, uint32_t& field, uint32_t& wire)
+    {
+      uint64_t key;
+      if (!Varint(c, key)) return false;
+      field = uint32_t(key >> 3);
+      wire = uint32_t(key & 7);
+      return true;
+    }
+
+    // Advance c past one field of the given wire type. False on malformed/overrun.
+    bool Skip(const uint8_t*& c, uint32_t wire)
+    {
+      uint64_t n;
+      switch (wire)
+      {
+        case 0: return Varint(c, n);                                          // varint
+        case 1: if (end - c < 8) return false; c += 8; return true;           // 64-bit
+        case 5: if (end - c < 4) return false; c += 4; return true;           // 32-bit
+        case 2: return Varint(c, n) && uint64_t(end - c) >= n && (c += n, true); // length-delimited
+        default: return false;                                               // groups: unsupported
+      }
+    }
+
+    // NodeProto: look for op_type (field 4) == one of the *QuantizeLinear ops.
+    void ScanNode(const uint8_t* c, const uint8_t* nodeEnd)
+    {
+      while (!found && c < nodeEnd)
+      {
+        uint32_t field, wire;
+        if (!Tag(c, field, wire)) return;
+        if (field == 4 && wire == 2)
+        {
+          uint64_t n;
+          if (!Varint(c, n) || uint64_t(nodeEnd - c) < n) return;
+          if ((n == 14 && memcmp(c, "QuantizeLinear", 14) == 0) ||
+              (n == 16 && memcmp(c, "DequantizeLinear", 16) == 0) ||
+              (n == 21 && memcmp(c, "DynamicQuantizeLinear", 21) == 0))
+          {
+            found = true;
+            return;
+          }
+          c += n;
+        }
+        else if (!Skip(c, wire)) return;
+      }
+    }
+
+    // GraphProto: iterate node submessages (field 1); seek past everything else (weights).
+    void ScanGraph(const uint8_t* c, const uint8_t* graphEnd)
+    {
+      while (!found && c < graphEnd)
+      {
+        uint32_t field, wire;
+        if (!Tag(c, field, wire)) return;
+        if (field == 1 && wire == 2)
+        {
+          uint64_t n;
+          if (!Varint(c, n) || uint64_t(graphEnd - c) < n) return;
+          ScanNode(c, c + n);
+          c += n;
+        }
+        else if (!Skip(c, wire)) return;
+      }
+    }
+
+    // ModelProto: descend into the graph submessage (field 7).
+    void ScanModel(const uint8_t* c)
+    {
+      while (!found && c < end)
+      {
+        uint32_t field, wire;
+        if (!Tag(c, field, wire)) return;
+        if (field == 7 && wire == 2)
+        {
+          uint64_t n;
+          if (!Varint(c, n) || uint64_t(end - c) < n) return;
+          ScanGraph(c, c + n);
+          c += n;
+        }
+        else if (!Skip(c, wire)) return;
+      }
+    }
+  };
+
+  const uint8_t* const base = static_cast<const uint8_t*>(data);
+  Walker w{ base + size, false };
+  w.ScanModel(base);
+  return w.found;
+}
+
 extern "C"
 {
 
@@ -823,13 +972,40 @@ extern "C"
       return nullptr;
     }
 
-    // Create network (kEXPLICIT_BATCH is deprecated in TRT 10+; 0 is equivalent)
+    // Read the ONNX bytes once; reused for strong-typing detection and the parse below.
+    std::vector<char> onnxBlob;
+    if (!ReadEntireFile(onnxPath, onnxBlob))
+    {
+      SetError("Failed to read ONNX file: " + std::string(onnxPath));
+      return nullptr;
+    }
+
+    // Create network. Models with explicit QuantizeLinear (FP8/FP4 QDQ) must be STRONGLY TYPED;
+    // TensorRT ignores FP8/FP4 QDQ scale layers in a weakly-typed network.
+    const bool stronglyTyped = OnnxNeedsStrongTyping(onnxBlob.data(), onnxBlob.size());
+    const uint32_t netFlags = stronglyTyped
+      ? (1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kSTRONGLY_TYPED)) : 0U;
+    if (stronglyTyped)
+      fprintf(stderr, "[TensorRT] QuantizeLinear detected -> building STRONGLY-TYPED network "
+        "(builder precision flags + setPrecision norm/softmax marking skipped; FP32 norms/softmax "
+        "must be baked into the ONNX)\n");
     auto network = std::unique_ptr<nvinfer1::INetworkDefinition>(
-      builder->createNetworkV2(0));
+      builder->createNetworkV2(netFlags));
     if (!network)
     {
       SetError("Failed to create network");
       return nullptr;
+    }
+    // Strongly-typed builds ignore builder precision flags and forbid setPrecision; neutralize
+    // the manual-precision options (FP8 + FP32 norms come from the ONNX itself).
+    TRT_BuildOptions optsStrong;
+    if (stronglyTyped)
+    {
+      optsStrong = *opts;
+      optsStrong.useBest = optsStrong.useFP16 = optsStrong.useBF16 = optsStrong.useFP8 = 0;
+      optsStrong.fp32PostAttentionNorm = optsStrong.fp32PostAttentionNormStrict = 0;
+      optsStrong.fp32SmolgenNorm = optsStrong.fp32Softmax = optsStrong.fp32AllNorms = 0;
+      opts = &optsStrong;
     }
 
     // Create ONNX parser
@@ -841,8 +1017,8 @@ extern "C"
       return nullptr;
     }
 
-    // Parse ONNX file
-    if (!parser->parseFromFile(onnxPath, static_cast<int>(nvinfer1::ILogger::Severity::kWARNING)))
+    // Parse ONNX from the already-read bytes (single-file model, weights embedded).
+    if (!parser->parse(onnxBlob.data(), onnxBlob.size()))
     {
       std::string errors;
       for (int32_t i = 0; i < parser->getNbErrors(); ++i)
@@ -3087,12 +3263,39 @@ extern "C"
       return -4;
     }
 
-    // Create network
-    auto network = std::unique_ptr<nvinfer1::INetworkDefinition>(builder->createNetworkV2(0));
+    // Read the ONNX bytes once; reused for strong-typing detection and the parse below.
+    std::vector<char> onnxBlob;
+    if (!ReadEntireFile(onnxPath, onnxBlob))
+    {
+      SetError("Failed to read ONNX file: " + std::string(onnxPath));
+      return -8;
+    }
+
+    // Create network. Models with explicit QuantizeLinear (FP8/FP4 QDQ) must be STRONGLY TYPED;
+    // TensorRT ignores FP8/FP4 QDQ scale layers in a weakly-typed network.
+    const bool stronglyTyped = OnnxNeedsStrongTyping(onnxBlob.data(), onnxBlob.size());
+    const uint32_t netFlags = stronglyTyped
+      ? (1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kSTRONGLY_TYPED)) : 0U;
+    if (stronglyTyped)
+      fprintf(stderr, "[TensorRT] QuantizeLinear detected -> building STRONGLY-TYPED network "
+        "(builder precision flags + setPrecision norm/softmax marking skipped; FP32 norms/softmax "
+        "must be baked into the ONNX)\n");
+    auto network = std::unique_ptr<nvinfer1::INetworkDefinition>(builder->createNetworkV2(netFlags));
     if (!network)
     {
       SetError("Failed to create network");
       return -5;
+    }
+    // Strongly-typed builds ignore builder precision flags and forbid setPrecision; neutralize
+    // the manual-precision options (FP8 + FP32 norms come from the ONNX itself).
+    TRT_BuildOptions optsStrong;
+    if (stronglyTyped)
+    {
+      optsStrong = *opts;
+      optsStrong.useBest = optsStrong.useFP16 = optsStrong.useBF16 = optsStrong.useFP8 = 0;
+      optsStrong.fp32PostAttentionNorm = optsStrong.fp32PostAttentionNormStrict = 0;
+      optsStrong.fp32SmolgenNorm = optsStrong.fp32Softmax = optsStrong.fp32AllNorms = 0;
+      opts = &optsStrong;
     }
 
     // Parse ONNX
@@ -3103,7 +3306,8 @@ extern "C"
       return -6;
     }
 
-    if (!parser->parseFromFile(onnxPath, static_cast<int>(nvinfer1::ILogger::Severity::kWARNING)))
+    // Parse ONNX from the already-read bytes (single-file model, weights embedded).
+    if (!parser->parse(onnxBlob.data(), onnxBlob.size()))
     {
       std::string errors;
       for (int32_t i = 0; i < parser->getNbErrors(); ++i)
