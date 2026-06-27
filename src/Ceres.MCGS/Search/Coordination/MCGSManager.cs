@@ -350,9 +350,12 @@ public partial class MCGSManager : IDisposable
     LimitManager = limitManager;
 
 
-    // Create a buffer synchronization object so we can prevent 
+    // Create a buffer synchronization object so we can prevent
     // overlapping executors from concurrently using the output buffers.
-    if (!ParamsSearch.Execution.DualEvaluators)
+    // Skip this for a pooled evaluator: it returns freshly allocated result buffers to each caller
+    // (so there is no shared output buffer to protect) and the evaluator instance is shared across
+    // many engines, so a single lock on it would be incorrectly shared (and its count corrupted).
+    if (!ParamsSearch.Execution.DualEvaluators && NNEvaluator0 is not NNEvaluatorPooled)
     {
       NNEvaluator0.BuffersLock = new System.Threading.SemaphoreSlim(1, 1);
     }

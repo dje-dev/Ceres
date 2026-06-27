@@ -113,6 +113,15 @@ namespace Ceres.Chess.NNEvaluators
     const int DEFAULT_BATCH_THRESHOLD = 64;
     const int DEFAULT_DELAY_MS = 3;
 
+    /// <summary>
+    /// Configurable defaults used when the pooled evaluator is built via the factory/def path
+    /// (NNEvaluatorFactory.BuildDeviceCombo), which does not otherwise expose these knobs.
+    /// Set these before building a pooled evaluator to override the batch aggregation behavior.
+    /// Defaults preserve the historical behavior.
+    /// </summary>
+    public static int DefaultBatchSizeThreshold = DEFAULT_BATCH_THRESHOLD;
+    public static float DefaultBatchDelayMS = DEFAULT_DELAY_MS;
+
 
     /// <summary>
     /// Constructor.
@@ -205,10 +214,15 @@ namespace Ceres.Chess.NNEvaluators
       {
         RunEvaluatorThreadLoop(index);
       }
+      catch (OperationCanceledException)
+      {
+        // Normal shutdown via cancellation token.
+      }
       catch (Exception exc)
       {
-        Console.WriteLine("Exception in pooled batch evaluation " + exc);
-        Environment.Exit(3);
+        // Per-batch exceptions are now captured on the batch and rethrown by the caller,
+        // so reaching here indicates an unexpected loop-level failure. Log without killing the process.
+        Console.WriteLine("Exception in pooled batch evaluation worker loop " + exc);
       }
     }
 
@@ -229,12 +243,23 @@ namespace Ceres.Chess.NNEvaluators
       {
         // Try to get a pending batch that this thread can process.
         foreach (NNEvaluatorPoolBatch batchToProcess in pendingPooledBatches.GetConsumingEnumerable(cancelToken))
-        { 
-          // Process the batch.
-          batchToProcess.ProcessPooledBatch(thisEvaluator, RetrieveSupplementalResults);
-
-          // Release any threads that were waiting for this pooled batch.
-          batchToProcess.batchesDoneEvent.Set();
+        {
+          try
+          {
+            // Process the batch.
+            batchToProcess.ProcessPooledBatch(thisEvaluator, RetrieveSupplementalResults);
+          }
+          catch (Exception exc)
+          {
+            // Capture the exception so the waiting caller(s) can rethrow it on their own thread,
+            // rather than terminating the entire process here.
+            batchToProcess.ProcessingException = exc;
+          }
+          finally
+          {
+            // Release any threads that were waiting for this pooled batch.
+            batchToProcess.batchesDoneEvent.Set();
+          }
         }
       }
 
@@ -251,9 +276,12 @@ namespace Ceres.Chess.NNEvaluators
     {
       if (!haveCancelled)
       {
-        base.Shutdown();
-        cancelSource?.Cancel();
+        // Set the flag first to prevent any re-entrancy, then cancel the worker/dispatch
+        // tasks before shutting down the underlying child evaluators.
+        // (Calling base.Shutdown() here would recurse back into DoShutdown -> stack overflow.)
         haveCancelled = true;
+        cancelSource?.Cancel();
+        base.DoShutdown();
       }
     }
 
@@ -279,7 +307,7 @@ namespace Ceres.Chess.NNEvaluators
         lock (lockObj)
         {
           int currentPendingPositions = currentPooledBatch.NumPendingPositions;
-          if (currentPendingPositions > DEFAULT_BATCH_THRESHOLD)
+          if (currentPendingPositions > BatchSizeThreshold)
           {
             Launch();
           }
@@ -305,6 +333,13 @@ namespace Ceres.Chess.NNEvaluators
 
       // Wait until we are signalled that this pooled batch has completed processing
       poolBatch.batchesDoneEvent.Wait();
+
+      // If processing failed, rethrow on this (search) thread rather than having
+      // the worker thread terminate the entire process.
+      if (poolBatch.ProcessingException != null)
+      {
+        throw new Exception("Exception during pooled NN batch evaluation.", poolBatch.ProcessingException);
+      }
 
       Debug.Assert(!float.IsNaN(poolBatch.completedBatches[batchIndex].GetV(0)));
 

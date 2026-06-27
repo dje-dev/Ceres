@@ -180,6 +180,53 @@ public sealed class CUDAUtilizationMetrics : IDisposable
                                     tempC.Min(), tempC.Max(), tempC.Average(), Median(tempC));
   }
 
+
+  /// <summary>
+  /// Number of samples collected so far. May be called while collecting (for live monitoring).
+  /// </summary>
+  public int SampleCount
+  {
+    get
+    {
+      lock (samples)
+      {
+        return samples.Count;
+      }
+    }
+  }
+
+
+  /// <summary>
+  /// Returns statistics computed over samples from the given start index to the most recent.
+  /// Unlike GetStats() this may be called while sampling is in progress (for live monitoring).
+  /// </summary>
+  public CUDAUtilizationStats GetStatsFromIndex(int startIndex)
+  {
+    Sample[] window;
+    lock (samples)
+    {
+      if (startIndex < 0)
+      {
+        startIndex = 0;
+      }
+      if (startIndex >= samples.Count)
+      {
+        return default;
+      }
+      window = new Sample[samples.Count - startIndex];
+      samples.CopyTo(startIndex, window, 0, window.Length);
+    }
+
+    double[] gpuUtil = [.. window.Select(s => (double)s.GpuUtilPct)];
+    double[] memUtil = [.. window.Select(s => (double)s.MemUtilPct)];
+    double[] tempC = [.. window.Select(s => (double)s.TempC)];
+
+    return new CUDAUtilizationStats(gpuUtil.Min(), gpuUtil.Max(), gpuUtil.Average(), Median(gpuUtil),
+                                    memUtil.Min(), memUtil.Max(), memUtil.Average(), Median(memUtil),
+                                    tempC.Min(), tempC.Max(), tempC.Average(), Median(tempC));
+  }
+
+
   private void SamplingLoop()
   {
     while (collecting)

@@ -659,7 +659,7 @@ namespace Ceres.Chess.NNEvaluators
       {
         NNEvaluatorDeviceComboType.Split => new NNEvaluatorSplit(evaluators, fractions, def.MinSplitNumPositions),
         NNEvaluatorDeviceComboType.RoundRobin => new NNEvaluatorRoundRobin(evaluators),
-        NNEvaluatorDeviceComboType.Pooled => new NNEvaluatorPooled(evaluators),
+        NNEvaluatorDeviceComboType.Pooled => new NNEvaluatorPooled(evaluators, NNEvaluatorPooled.DefaultBatchSizeThreshold, NNEvaluatorPooled.DefaultBatchDelayMS),
         NNEvaluatorDeviceComboType.Compare => new NNEvaluatorCompare(evaluators),
         _ => throw new NotImplementedException()
       };
