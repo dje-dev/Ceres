@@ -468,50 +468,6 @@ public partial class MCGSManager : IDisposable
   }
 
 
-  public void RunLoopUntilGraphSize(PositionWithHistory pos, SearchLimit searchLimit)
-  {
-    throw new NotImplementedException(); // old
-#if NOT
-    LastSearchLimit = searchLimit;
-
-    List<MGMove> searchMovesTablebaseRestricted = null;
-    if (searchLimit.SearchMoves != null)
-    {
-      Position startPos = pos.FinalPosition;
-      foreach (Move move in searchLimit.SearchMoves)
-      {
-        searchMovesTablebaseRestricted.Add(MGMoveConverter.MGMoveFromPosAndMove(startPos, move));
-      }
-    }
-
-    TerminationManager = new MCGSFutilityPruning(this, searchLimit.SearchMoves, searchMovesTablebaseRestricted);
-
-    Debug.Assert(searchLimit.Type == SearchLimitType.NodesPerMove);
-    int targetTreeVisits = (int)searchLimit.Value;
-      
-    bool HAS_ACTION = this.NNEvaluator0.HasAction;
-
-    int maxNodes = ParamsSearch.MaxNodes;
-    if (searchLimit.Type == SearchLimitType.NodesPerMove)
-    {
-      maxNodes = Math.Min(ParamsSearch.MaxNodes, (int)searchLimit.Value + 1000);
-    }
-
-    bool useHashTable = ParamsSearch.EnableGraph || ParamsSearch.NonGraphModeEnableTranspositionCopy;
-    Graph graph = new(maxNodes, HAS_ACTION,
-                       ParamsSearch.EnableState,
-                       ParamsSearch.EnableGraph,
-                       useHashTable,
-                       MCGSParamsFixed.TryEnableLargePages,
-                       pos);
-
-    Engine = new MCGSEngine(this, graph);
-    RootMGPos = graph.Store.NodesStore.PositionHistory.FinalPosition.ToMGPosition;
-    Engine.RunLoopUntilTreeSize(targetTreeVisits);
-#endif
-  }
-
-
 
   public static (MGMove, BestMoveInfoMCGS) DoSearch(MCGSManager manager,
                                                     bool verbose, MCGSProgressCallback progressCallback = null,
