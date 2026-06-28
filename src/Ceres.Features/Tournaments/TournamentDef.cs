@@ -192,7 +192,7 @@ namespace Ceres.Features.Tournaments
 
     /// <summary>
     /// If nonzero, enables blunder diagnostic dumps: after each move, if an engine's evaluation
-    /// improved by more than BlunderDumpThresholdCentipawns compared to its prior move (implying
+    /// improved by more than BlunderDumpThresholdQ compared to its prior move (implying
     /// the opponent just blundered), and the node count (N) of that move, the engine's prior move,
     /// and the intervening opponent move are all at least this value, and the opponent is an
     /// in-process Ceres MCGS engine, then the opponent engine's search graph is dumped to a
@@ -201,20 +201,22 @@ namespace Ceres.Features.Tournaments
     public int BlunderDumpThresholdN = 5000;
 
     /// <summary>
-    /// Minimum centipawn improvement in the moving (reference) engine's evaluation (versus its prior
-    /// move) required to flag a candidate blunder, and also the minimum amount by which the blundering
-    /// engine's own evaluation must subsequently fall (on its next move) to confirm the blunder before
-    /// a dump is written (see BlunderDumpThresholdN and BlunderDumpMaxPriorAbsCentipawns).
+    /// Minimum improvement (in units of Q, the win probability in [-1, 1]) in the moving (reference)
+    /// engine's evaluation (versus its prior move) required to flag a candidate blunder, and also the
+    /// minimum amount by which the blundering engine's own Q evaluation must subsequently fall (on its
+    /// next move) to confirm the blunder before a dump is written (see BlunderDumpThresholdN and
+    /// BlunderDumpMaxPriorAbsQ).
     /// </summary>
-    public int BlunderDumpThresholdCentipawns = 100;
+    public float BlunderDumpThresholdQ = 0.12f;
 
     /// <summary>
-    /// Maximum absolute value (in centipawns) of the moving (reference) engine's evaluation BEFORE the
-    /// opponent's move for that move to be eligible as a blunder. If the position was already more
-    /// decisive than this (i.e. already clearly won or lost), the evaluation swing is treated as
-    /// "piling on" in an already-decided game and is ignored. Set very large to disable this filter.
+    /// Maximum absolute value (in units of Q, the win probability in [-1, 1]) of the moving (reference)
+    /// engine's evaluation BEFORE the opponent's move for that move to be eligible as a blunder. If the
+    /// position was already more decisive than this (i.e. already clearly won or lost), the evaluation
+    /// swing is treated as "piling on" in an already-decided game and is ignored. Set to 1.0 (or larger)
+    /// to disable this filter.
     /// </summary>
-    public int BlunderDumpMaxPriorAbsCentipawns = 250;
+    public float BlunderDumpMaxPriorAbsQ = 0.70f;
 
     /// <summary>
     /// The index of the processor group to which the engines should be affinitized. 

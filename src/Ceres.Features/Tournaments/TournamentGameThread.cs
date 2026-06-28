@@ -503,9 +503,9 @@ namespace Ceres.Features.Tournaments
 
     /// <summary>
     /// Returns true if the three most recent moves indicate the opponent played a candidate blunder:
-    /// the moving engine's evaluation improved by more than cpThreshold since its prior move, the
+    /// the moving engine's evaluation improved by more than qThreshold since its prior move, the
     /// position was not already decided before that move (the moving engine's prior evaluation was
-    /// within +/- maxPriorAbsCp of equality), and the node counts (N) of the moving engine's current
+    /// within +/- maxPriorAbsQ of equality), and the node counts (N) of the moving engine's current
     /// and prior moves and the intervening opponent move are all at least thresholdN.
     /// Note: this is only the immediate candidate test; a candidate is not dumped until the blundering
     /// engine confirms the deterioration on its own following move (see CheckForBlunderDump).
@@ -514,18 +514,18 @@ namespace Ceres.Features.Tournaments
     /// <param name="opp">Opponent's intervening move.</param>
     /// <param name="prev">Moving engine's prior move.</param>
     /// <param name="thresholdN">Minimum N required for all three moves.</param>
-    /// <param name="cpThreshold">Minimum centipawn improvement required to trigger.</param>
-    /// <param name="maxPriorAbsCp">Maximum absolute value (cp) of the moving engine's prior evaluation;
+    /// <param name="qThreshold">Minimum Q improvement required to trigger.</param>
+    /// <param name="maxPriorAbsQ">Maximum absolute value (Q) of the moving engine's prior evaluation;
     /// if the position was already more decisive than this it is considered already won/lost and ignored.</param>
-    /// <param name="improvement">Centipawn improvement since the moving engine's prior move.</param>
+    /// <param name="improvement">Q improvement since the moving engine's prior move.</param>
     internal static bool IsBlunderCondition(GameMoveStat cur, GameMoveStat opp, GameMoveStat prev,
-                                            int thresholdN, float cpThreshold, float maxPriorAbsCp, out float improvement)
+                                            int thresholdN, float qThreshold, float maxPriorAbsQ, out float improvement)
     {
       // cur and prev are both by the moving engine (same color), so their evaluations
       // (each from the moving engine's perspective) are directly comparable.
-      improvement = cur.ScoreCentipawns - prev.ScoreCentipawns;
-      return improvement > cpThreshold
-          && Math.Abs(prev.ScoreCentipawns) <= maxPriorAbsCp   // ignore positions already won/lost ("piling on")
+      improvement = cur.ScoreQ - prev.ScoreQ;
+      return improvement > qThreshold
+          && Math.Abs(prev.ScoreQ) <= maxPriorAbsQ   // ignore positions already won/lost ("piling on")
           && cur.FinalN >= thresholdN
           && prev.FinalN >= thresholdN
           && opp.FinalN >= thresholdN;
@@ -541,8 +541,8 @@ namespace Ceres.Features.Tournaments
     {
       public GameEngine BlundererEngine;    // engine that played the suspect move
       public int BlunderPlyNum;             // ply number of the suspect move
-      public float BlunderMoveScoreCp;      // blunderer's own evaluation (cp) of the suspect move
-      public float ReferenceImprovementCp;  // reference engine's evaluation swing across the suspect move
+      public float BlunderMoveScoreQ;       // blunderer's own evaluation (Q) of the suspect move
+      public float ReferenceImprovementQ;   // reference engine's evaluation swing (Q) across the suspect move
       public string Header;                 // pre-built (self-locating) header text
       public string DumpBody;               // captured search-graph diagnostics
     }
@@ -566,12 +566,12 @@ namespace Ceres.Features.Tournaments
       if (pendingBlunder != null && ReferenceEquals(movingEngine, pendingBlunder.BlundererEngine))
       {
         GameMoveStat confirmMove = gameMoveHistory[^1];   // blunderer's next move (same color as the suspect move)
-        float blundererDrop = pendingBlunder.BlunderMoveScoreCp - confirmMove.ScoreCentipawns;
-        if (blundererDrop > Def.BlunderDumpThresholdCentipawns)
+        float blundererDrop = pendingBlunder.BlunderMoveScoreQ - confirmMove.ScoreQ;
+        if (blundererDrop > Def.BlunderDumpThresholdQ)
         {
           string confirmLine =
-              $"Blunderer confirmation: {pendingBlunder.BlundererEngine.ID} own evaluation fell {blundererDrop:F0}cp on its next "
-            + $"move ({pendingBlunder.BlunderMoveScoreCp:F0}cp -> {confirmMove.ScoreCentipawns:F0}cp), confirming the blunder.";
+              $"Blunderer confirmation: {pendingBlunder.BlundererEngine.ID} own evaluation fell {blundererDrop:F3} Q on its next "
+            + $"move (Q {pendingBlunder.BlunderMoveScoreQ:F3} -> Q {confirmMove.ScoreQ:F3}), confirming the blunder.";
 
           string fileName = $"blunder_info_g{gameSequenceNum + 1}_ply{pendingBlunder.BlunderPlyNum}_{SanitizeForFileName(pendingBlunder.BlundererEngine.ID)}.txt";
           string fullPath = Path.Combine(Directory.GetCurrentDirectory(), fileName);
@@ -580,8 +580,8 @@ namespace Ceres.Features.Tournaments
                                     + pendingBlunder.DumpBody);
 
           ConsoleUtils.WriteLineColored(ConsoleColor.Red,
-              $"BLUNDER: engine {pendingBlunder.BlundererEngine.ID} position worse by {pendingBlunder.ReferenceImprovementCp:F0}cp "
-            + $"(self-confirmed {blundererDrop:F0}cp), dumped to {fullPath}");
+              $"BLUNDER: engine {pendingBlunder.BlundererEngine.ID} position worse by {pendingBlunder.ReferenceImprovementQ:F3} Q "
+            + $"(self-confirmed {blundererDrop:F3} Q), dumped to {fullPath}");
         }
         pendingBlunder = null;   // candidate resolved (whether confirmed or rejected)
       }
@@ -596,8 +596,8 @@ namespace Ceres.Features.Tournaments
       GameMoveStat opp = gameMoveHistory[^2];   // opponent's intervening (suspect) move
       GameMoveStat prev = gameMoveHistory[^3];  // moving engine's prior move
 
-      if (!IsBlunderCondition(cur, opp, prev, Def.BlunderDumpThresholdN, Def.BlunderDumpThresholdCentipawns,
-                              Def.BlunderDumpMaxPriorAbsCentipawns, out float improvement))
+      if (!IsBlunderCondition(cur, opp, prev, Def.BlunderDumpThresholdN, Def.BlunderDumpThresholdQ,
+                              Def.BlunderDumpMaxPriorAbsQ, out float improvement))
       {
         return;
       }
@@ -618,13 +618,13 @@ namespace Ceres.Features.Tournaments
       float disagreement = opp.ScoreCentipawns - refViewOfBlunderer;   // blunderer optimism over reference
 
       string header =
-          $"Engine {movingEngine.ID} detected {improvement:F0}cp improvement since its previous move, "
+          $"Engine {movingEngine.ID} detected {improvement:F3} Q improvement since its previous move, "
         + $"diagnostic dump of opponent engine {opponentEngine.ID} follows (move actually played was {opponentBlunderMoveStr})." + Environment.NewLine
         + $"  Game        : {gameSequenceNum + 1} (Round {roundNumber}; {movingEngine.ID} vs {opponentEngine.ID})" + Environment.NewLine
         + $"  Blunderer   : {opponentEngine.ID} ({opp.Side}), played {opponentBlunderMoveStr} at ply {opp.PlyNum}" + Environment.NewLine
         + $"  FEN (before): {opp.Position.FEN}" + Environment.NewLine
         + $"  Reference {movingEngine.ID} eval: {prev.ScoreCentipawns:F0}cp (Q {prev.ScoreQ:F3}) before -> "
-        + $"{cur.ScoreCentipawns:F0}cp (Q {cur.ScoreQ:F3}) after   [swing {improvement:F0}cp]" + Environment.NewLine
+        + $"{cur.ScoreCentipawns:F0}cp (Q {cur.ScoreQ:F3}) after   [swing {improvement:F3} Q]" + Environment.NewLine
         + $"  Blunderer self-eval of the move : {opp.ScoreCentipawns:F0}cp (Q {opp.ScoreQ:F3})" + Environment.NewLine
         + $"  Disagreement (blunderer optimism vs reference): {disagreement:F0}cp   (large => likely engine vision bug)" + Environment.NewLine
         + $"  Nodes (N): reference prev {prev.FinalN:N0}, reference cur {cur.FinalN:N0}, blunder move {opp.FinalN:N0}";
@@ -633,8 +633,8 @@ namespace Ceres.Features.Tournaments
       {
         BlundererEngine = opponentEngine,
         BlunderPlyNum = opp.PlyNum,
-        BlunderMoveScoreCp = opp.ScoreCentipawns,
-        ReferenceImprovementCp = improvement,
+        BlunderMoveScoreQ = opp.ScoreQ,
+        ReferenceImprovementQ = improvement,
         Header = header,
         DumpBody = dump.ToString()
       };
