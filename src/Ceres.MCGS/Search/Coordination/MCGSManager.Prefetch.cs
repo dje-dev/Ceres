@@ -181,7 +181,8 @@ public partial class MCGSManager
     //      Console.WriteLine(searchLimit.HardMaxNumFinalNodes());
     //      searchLimit.HardMaxNumFinalNodes = targetNumVisits + 1000;
 
-    RunLoopUntilGraphSize(pos, SearchLimit.NodesPerMove(targetNumVisits));
+    throw new NotImplementedException("Next line needs remediation");
+    //RunLoopUntilGraphSize(pos, SearchLimit.NodesPerMove(targetNumVisits));
 
     if (debugMode)
     {
