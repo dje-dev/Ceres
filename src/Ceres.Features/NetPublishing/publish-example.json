@@ -1,0 +1,25 @@
+{
+  // Example config for: Ceres PUBLISHNET Config=<this file>
+  // The GitHub token is NOT here — set env var CERESNETS_GITHUB_TOKEN (or GITHUB_TOKEN)
+  // to a Personal Access Token with Contents:write on dje-dev/CeresNets.
+  //
+  // Derived automatically (all uppercased, as CeresNetDownloader requires):
+  //   tag/release = NETID.ToUpper()      e.g. C1-640-34-LEPNED-I8
+  //   asset       = <tag>.zip            e.g. C1-640-34-LEPNED-I8.zip
+  //   inner entry = <tag>.onnx           e.g. C1-640-34-LEPNED-I8.onnx
+  "owner": "dje-dev",
+  "repo": "CeresNets",
+  "netID": "C1-640-34-LEPNED-I8",
+  "title": "Ceres net C1-640-34-LEPNED-I8",
+  "body": "Lepned tune of Ceres net C1-640-34-I8",
+  "sourceOnnxPath": "/mnt/deve/cout/nets/lepdev_c1_640_34_KL30_body32_PONLY_aug_2500up_folded_trt.onnx",
+
+  // draft=false => upload to a draft, verify, then auto-publish.
+  // draft=true  => upload to a draft and stop (you publish manually in the GitHub UI).
+  "draft": false,
+  "prerelease": false,
+
+  // Optional:
+  "maxUploadAttempts": 6,
+  "verifyRoundTrip": false
+}

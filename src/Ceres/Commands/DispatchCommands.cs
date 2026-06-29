@@ -27,6 +27,7 @@ using Ceres.Chess.NNEvaluators;
 using Ceres.MCTS.Params;
 
 using Ceres.Base.OperatingSystem;
+using Ceres.Features.NetPublishing;
 
 #endregion
 
@@ -278,6 +279,14 @@ namespace Ceres.Commands
         string options = keys.GetValue("Options");
         InterprocessCommandManager.EnqueueCommand("graph", options);
       }
+
+      else if (featureName == "PUBLISHNET")
+      {
+        KeyValueSetParsed keys = new KeyValueSetParsed(keyValueArgs, null);
+        string configPath = keys.GetRequiredValue("Config", "PUBLISHNET requires Config=<path to JSON config file>");
+        CeresNetGitHubUploader.Run(configPath);
+        Environment.Exit(0);
+      }
       else if (featureName == "GAME-ANALYZE" || featureName == "GAME-ANALYZE-LC0")
       {
         // Positional args: <pgn file> <move number> <time>.
@@ -324,7 +333,7 @@ namespace Ceres.Commands
       else
       {
         ShowErrorExit("Expected argument to begin with one of the features " +
-                       "UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BACKENDCOMPARE, BENCHMARK, PERFT, GRAPH, GAME-ANALYZE, GAME-ANALYZE-LC0 or SETOPT");
+                       "UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BACKENDCOMPARE, BENCHMARK, PERFT, GRAPH, GAME-ANALYZE, GAME-ANALYZE-LC0, PUBLISHNET or SETOPT");
       }
     }
 
