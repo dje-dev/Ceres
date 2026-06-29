@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 using Ceres.Base.Benchmarking;
 using Ceres.Base.Environment;
@@ -31,6 +32,7 @@ using Ceres.MCTS.Iteration;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.MCTS.GameEngines;
+using Ceres.MCGS.GameEngines;
 using Ceres.Base.Misc;
 using Ceres.Features.Tournaments.Streaming;
 
@@ -149,6 +151,27 @@ namespace Ceres.Features.Tournaments
                                     + Run.Engines[0].ID + "_" + Run.Engines[1].ID + "_" + Def.StartTime.Ticks + ".pgn");
       }
       lock (writePGNLock) File.AppendAllText(pgnFileName, "");
+
+      // If enabled, initialize each in-process Ceres MCGS engine's per-tournament diagnostic move log.
+      // The PGN base name is identical across concurrent threads (and the PGN itself is shared via a
+      // lock), so disambiguate the per-engine move logs by ThreadIndex when more than one thread runs.
+      if (Def.GameLogFiles != GameLogFilesMode.Never)
+      {
+        string pgnBaseNoExt = pgnFileName.EndsWith(".pgn") ? pgnFileName.Substring(0, pgnFileName.Length - 4) : pgnFileName;
+        string threadSuffix = ThreadIndex > 0 ? ".t" + ThreadIndex : "";
+        for (int i = 0; i < Run.Engines.Length; i++)
+        {
+          // For IfLongSearchLimits, only engines whose assigned limit implies a long game are logged.
+          bool enableForEngine = Def.GameLogFiles == GameLogFilesMode.Always
+                                 || SearchLimitImpliesLongGame(Def.Engines[i].SearchLimit);
+          if (enableForEngine && Run.Engines[i] is GameEngineCeresMCGSInProcess mcgsEngine)
+          {
+            string moveLogFileName = pgnBaseNoExt + "." + Run.Engines[i].ID + threadSuffix + ".movelog.txt";
+            mcgsEngine.InitGameLog(moveLogFileName, Def.Engines[i].SearchLimit);
+            Def.Logger.WriteLine($"{Run.Engines[i].ID} MoveLog will be incrementally written to file: {moveLogFileName}");
+          }
+        }
+      }
 
       havePrintedHeaders = false;
 
@@ -443,11 +466,105 @@ namespace Ceres.Features.Tournaments
 
       UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, engine2White, openingIndex, gameSequenceNum, thisResult);
 
+      if (Def.GameLogFiles != GameLogFilesMode.Never)
+      {
+        WriteGameLogFooterIfApplicable(Run.Engine1, true, engine2White, thisResult);
+        WriteGameLogFooterIfApplicable(Run.Engine2, false, engine2White, thisResult);
+      }
+
       // Cooperative pause checkpoint (Ctrl-P): park here after each completed game if a pause is
       // in effect, so all worker threads quiesce at an end-of-game boundary. No-op when not paused.
       Def.parentDef.PauseController?.WaitIfPaused();
 
       return thisResult;
+    }
+
+
+    /// <summary>
+    /// Writes a per-game result footer to the given engine's diagnostic move log, if it is an
+    /// in-process Ceres MCGS engine with logging enabled.
+    /// </summary>
+    private void WriteGameLogFooterIfApplicable(GameEngine engine, bool engineIsEngine1,
+                                                bool engine2White, TournamentGameInfo info)
+    {
+      if (engine is GameEngineCeresMCGSInProcess mcgsEngine)
+      {
+        mcgsEngine.GameLogWriteGameResult(FormatGameLogFooter(engineIsEngine1, engine2White, info));
+      }
+    }
+
+
+    /// <summary>
+    /// Formats the per-game result footer block (from the given engine's perspective) for the move
+    /// log. The game Result is stored from Engine1's perspective, so it is reversed for Engine2.
+    /// </summary>
+    private static string FormatGameLogFooter(bool engineIsEngine1, bool engine2White, TournamentGameInfo info)
+    {
+      TournamentGameResult resultThisPersp = engineIsEngine1
+          ? info.Result
+          : (info.Result == TournamentGameResult.Win ? TournamentGameResult.Loss
+           : info.Result == TournamentGameResult.Loss ? TournamentGameResult.Win
+           : info.Result);
+
+      bool thisIsWhite = engineIsEngine1 ? !engine2White : engine2White;
+      string thisID = thisIsWhite ? info.PlayerWhite : info.PlayerBlack;
+      string oppID = thisIsWhite ? info.PlayerBlack : info.PlayerWhite;
+
+      StringBuilder sb = new StringBuilder();
+      sb.AppendLine("=== GAME RESULT ===");
+      sb.AppendLine($"ThisEngine={thisID} Color={(thisIsWhite ? "White" : "Black")} Result={resultThisPersp} Reason={info.ResultReason}");
+      sb.AppendLine($"Opponent={oppID}");
+      sb.AppendLine($"GameSequenceNum={info.GameSequenceNum} OpeningIndex={info.OpeningIndex} Engine2IsWhite={info.Engine2IsWhite}");
+      sb.AppendLine($"PlayerWhite={info.PlayerWhite} PlayerBlack={info.PlayerBlack}");
+      sb.AppendLine($"StartFEN={info.FEN}");
+      sb.AppendLine($"PlyCount={info.PlyCount} EndCP={info.EndCP}");
+      sb.AppendLine($"SearchLimitWhite={info.SearchLimitWhite} SearchLimitBlack={info.SearchLimitBlack}");
+      sb.AppendLine($"TotalTimeEngine1={info.TotalTimeEngine1} TotalTimeEngine2={info.TotalTimeEngine2}");
+      sb.AppendLine($"RemainingTimeEngine1={info.RemainingTimeEngine1} RemainingTimeEngine2={info.RemainingTimeEngine2}");
+      sb.AppendLine($"TotalNodesEngine1={info.TotalNodesEngine1} TotalNodesEngine2={info.TotalNodesEngine2}");
+      sb.AppendLine($"TotalEvaluationsEngine1={info.TotalEvaluationsEngine1} TotalEvaluationsEngine2={info.TotalEvaluationsEngine2}");
+      sb.AppendLine($"ShouldHaveForfeitedEngine1={info.ShouldHaveForfeitedOnLimitsEngine1} ShouldHaveForfeitedEngine2={info.ShouldHaveForfeitedOnLimitsEngine2}");
+      sb.Append("=== END GAME RESULT ===");
+      return sb.ToString();
+    }
+
+
+    /// <summary>
+    /// Heuristically estimates whether the given search limit implies a "long" game, used by
+    /// GameLogFilesMode.IfLongSearchLimits. Returns true if the estimated total search for the whole
+    /// game exceeds ~1,000,000 nodes or ~5 minutes (300s) of thinking time. Per-move limits are scaled
+    /// by an approximate number of moves per game.
+    /// </summary>
+    private static bool SearchLimitImpliesLongGame(SearchLimit limit)
+    {
+      if (limit == null)
+      {
+        return false;
+      }
+
+      const long NODE_THRESHOLD = 1_000_000;
+      const double SECONDS_THRESHOLD = 5 * 60;   // 5 minutes
+      const int ESTIMATED_MOVES_PER_GAME = 80;   // approximate engine moves (plies) per game
+
+      switch (limit.Type)
+      {
+        case SearchLimitType.NodesForAllMoves:
+        case SearchLimitType.NodesPerTree:
+          return limit.Value > NODE_THRESHOLD;
+
+        case SearchLimitType.NodesPerMove:
+          return limit.Value * ESTIMATED_MOVES_PER_GAME > NODE_THRESHOLD;
+
+        case SearchLimitType.SecondsForAllMoves:
+          return limit.Value + (limit.ValueIncrement * ESTIMATED_MOVES_PER_GAME) > SECONDS_THRESHOLD;
+
+        case SearchLimitType.SecondsPerMove:
+          return limit.Value * ESTIMATED_MOVES_PER_GAME > SECONDS_THRESHOLD;
+
+        default:
+          // BestValueMove, BestActionMove, DepthPerMove, etc. cannot be readily estimated -> not long.
+          return false;
+      }
     }
 
     internal void UpdateStatsAndOutputSummaryFromGameResult(string pgnFileName, bool engine2White, int openingIndex, int gameSequenceNum, TournamentGameInfo thisResult)
@@ -550,11 +667,11 @@ namespace Ceres.Features.Tournaments
     /// <summary>
     /// Detects a likely opponent blunder (a large favorable evaluation swing for the moving/reference
     /// engine across the opponent's last move, from a position that was not already decided) and, once
-    /// the blundering engine confirms the deterioration on its OWN following move, dumps that engine's
-    /// search graph diagnostics to a "blunder_info_*.txt" file in the current working directory.
+    /// the blundering engine confirms the deterioration on its OWN following move, appends that engine's
+    /// search-graph diagnostics as a blunder section in its own diagnostic move-log (no separate file).
+    /// Blunder checking is only performed when the potential blunderer is actively writing a move-log.
     /// Called once per ply; <paramref name="pendingBlunder"/> carries a detected-but-unconfirmed
     /// candidate from one ply to the next (it is reset to null per game by the caller).
-    /// Only in-process Ceres MCGS engines can be dumped; other opponents are skipped.
     /// </summary>
     private void CheckForBlunderDump(int gameSequenceNum, int roundNumber, List<GameMoveStat> gameMoveHistory,
                                      GameEngine movingEngine, GameEngine opponentEngine,
@@ -567,27 +684,36 @@ namespace Ceres.Features.Tournaments
       {
         GameMoveStat confirmMove = gameMoveHistory[^1];   // blunderer's next move (same color as the suspect move)
         float blundererDrop = pendingBlunder.BlunderMoveScoreQ - confirmMove.ScoreQ;
-        if (blundererDrop > Def.BlunderDumpThresholdQ)
+        if (blundererDrop > Def.BlunderDumpThresholdQ
+            && pendingBlunder.BlundererEngine is GameEngineCeresMCGSInProcess blundererMCGS
+            && blundererMCGS.IsGameLogActive)
         {
           string confirmLine =
               $"Blunderer confirmation: {pendingBlunder.BlundererEngine.ID} own evaluation fell {blundererDrop:F3} Q on its next "
             + $"move (Q {pendingBlunder.BlunderMoveScoreQ:F3} -> Q {confirmMove.ScoreQ:F3}), confirming the blunder.";
 
-          string fileName = $"blunder_info_g{gameSequenceNum + 1}_ply{pendingBlunder.BlunderPlyNum}_{SanitizeForFileName(pendingBlunder.BlundererEngine.ID)}.txt";
-          string fullPath = Path.Combine(Directory.GetCurrentDirectory(), fileName);
-          File.WriteAllText(fullPath, pendingBlunder.Header + Environment.NewLine
-                                    + confirmLine + Environment.NewLine + Environment.NewLine
-                                    + pendingBlunder.DumpBody);
+          // Instead of writing a separate blunder file, append the blunder diagnostics as a section in
+          // the blundering engine's own diagnostic move-log (right after its current move's output).
+          blundererMCGS.GameLogAppendBlunder(pendingBlunder.Header + Environment.NewLine
+                                           + confirmLine + Environment.NewLine + Environment.NewLine
+                                           + pendingBlunder.DumpBody);
 
           ConsoleUtils.WriteLineColored(ConsoleColor.Red,
               $"BLUNDER: engine {pendingBlunder.BlundererEngine.ID} position worse by {pendingBlunder.ReferenceImprovementQ:F3} Q "
-            + $"(self-confirmed {blundererDrop:F3} Q), dumped to {fullPath}");
+            + $"(self-confirmed {blundererDrop:F3} Q), details appended to {blundererMCGS.GameLogFileName}");
         }
         pendingBlunder = null;   // candidate resolved (whether confirmed or rejected)
       }
 
       // (2) Detect a new candidate from the three most recent plies.
       if (gameMoveHistory.Count < 3)
+      {
+        return;
+      }
+
+      // Only check/record blunders when the opponent (the potential blunderer) is actively writing a
+      // diagnostic move-log; the blunder section is appended to that log rather than to a separate file.
+      if (!(opponentEngine is GameEngineCeresMCGSInProcess opponentMCGS) || !opponentMCGS.IsGameLogActive)
       {
         return;
       }
@@ -1293,6 +1419,14 @@ namespace Ceres.Features.Tournaments
             }
             catch { }
           };
+        }
+
+        // Make the tournament clock visible to the engine's diagnostic move log (if any). Only the
+        // SecondsForAllMoves limit type has a meaningful running clock; otherwise report none.
+        if (Def.GameLogFiles != GameLogFilesMode.Never && engine is GameEngineCeresMCGSInProcess mcgsClockEngine)
+        {
+          mcgsClockEngine.TournamentClockRemainingSeconds =
+            searchLimit.Type == SearchLimitType.SecondsForAllMoves ? thisMoveSearchLimit.Value : (float?)null;
         }
 
         GameEngineSearchResult engineMove = engine.Search(curPositionAndMoves, thisMoveSearchLimit, gameMoveHistory, progressCb);

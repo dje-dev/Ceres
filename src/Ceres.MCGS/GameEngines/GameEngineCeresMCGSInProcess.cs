@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Threading;
 
 using Ceres.Base.Benchmarking;
@@ -28,6 +29,7 @@ using Ceres.Chess.ExternalPrograms.UCI;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.LC0.Positions;
 using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
 
 using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Defs;
@@ -175,6 +177,25 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   /// </summary>
   public readonly SearchLimit FixedSearchLimit;
 
+  /// <summary>
+  /// If true this engine emits a per-tournament diagnostic "move log" file (default false).
+  /// The tournament path enables logging explicitly via InitGameLog; this flag additionally
+  /// drives standalone (non-tournament) lazy initialization on the first search.
+  /// </summary>
+  public readonly bool EmitGameLog;
+
+  /// <summary>
+  /// Active diagnostic move-log writer (null unless logging is enabled).
+  /// </summary>
+  MCGSGameMoveLog gameLog;
+
+  /// <summary>
+  /// Time remaining on the tournament clock (in seconds) at the start of the current move, or
+  /// null when not playing in a timed tournament. Set by the tournament before each search and
+  /// logged as "TimeRem" on the move line.
+  /// </summary>
+  public float? TournamentClockRemainingSeconds { get; set; }
+
 
   #region Internal data
 
@@ -205,6 +226,7 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   /// <param name="infoLogger">optional action to log info messages</param>
   /// <param name="forcedMoves">optional list of moves to force</param>
   /// <param name="fixedSearchLimit">optional fixed search limit known at engine creation time</param>
+  /// <param name="emitGameLog">if a per-tournament diagnostic move-log file should be written</param>
   public GameEngineCeresMCGSInProcess(string id,
                                       NNEvaluatorDef evaluatorDef,
                                       ParamsSearch searchParams = null,
@@ -216,7 +238,8 @@ public class GameEngineCeresMCGSInProcess : GameEngine
                                       bool disposeGraphAfterSearch = true,
                                       Action<string> infoLogger = null,
                                       List<MGMove> forcedMoves = null,
-                                      SearchLimit fixedSearchLimit = null) : base(id, processorGroupID)
+                                      SearchLimit fixedSearchLimit = null,
+                                      bool emitGameLog = false) : base(id, processorGroupID)
   {
     // Use default settings for search and select params if not specified.
     if (searchParams == null)
@@ -257,6 +280,7 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     InfoLogger = infoLogger;
     ForcedMoves = forcedMoves;
     FixedSearchLimit = fixedSearchLimit;
+    EmitGameLog = emitGameLog;
 
     if (logFileName == null && !string.IsNullOrEmpty(CeresUserSettingsManager.Settings.SearchLogFile))
     {
@@ -315,6 +339,8 @@ public class GameEngineCeresMCGSInProcess : GameEngine
 
     isFirstMoveOfGame = true;
     CurrentGameID = gameID;
+
+    gameLog?.WriteNewGameSeparator(gameID);
   }
 
 
@@ -517,6 +543,25 @@ public class GameEngineCeresMCGSInProcess : GameEngine
       lock (logFileWriteObj)
       {
         File.AppendAllText(SearchLogFileName, dumpInfo.GetStringBuilder().ToString());
+      }
+    }
+
+    // Emit the compact per-move diagnostic game-log line (if enabled). For standalone (non-tournament)
+    // use, lazily initialize on the first search using an auto-derived file name. The write is wrapped
+    // so a logging failure can never disrupt the game.
+    if (gameLog == null && EmitGameLog)
+    {
+      InitGameLog(AutoGameLogFileName(), FixedSearchLimit ?? searchLimit);
+    }
+    if (gameLog != null)
+    {
+      try
+      {
+        gameLog.WriteMoveLine(BuildGameLogMoveLine(result, bestMoveInfo));
+      }
+      catch (Exception exc)
+      {
+        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "Game move log write failed: " + exc.Message);
       }
     }
 
@@ -809,6 +854,16 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   /// </summary>
   public override void Dispose()
   {
+    try
+    {
+      gameLog?.Close();
+    }
+    catch (Exception)
+    {
+      // Ignore: never let move-log teardown disrupt disposal.
+    }
+    gameLog = null;
+
     Search?.Manager.Engine.Graph.Dispose();
     Search?.Manager?.Dispose();
     Search = null;
@@ -817,6 +872,249 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     SelectWorkerPools[0]?.Dispose();
     SelectWorkerPools[1]?.Dispose();
   }
+
+
+  #region Diagnostic game move log
+
+  /// <summary>
+  /// Enables and initializes the diagnostic move-log with an explicit file name and the search
+  /// limit assigned to this engine (used to populate the header). This is the unconditional
+  /// enabler used by the tournament: calling it activates logging regardless of EmitGameLog.
+  /// Intended to be called once, before the first search. A null file name is ignored.
+  /// </summary>
+  public void InitGameLog(string fileName, SearchLimit assignedSearchLimit)
+  {
+    if (fileName == null || gameLog != null)
+    {
+      return;
+    }
+
+    gameLog = new MCGSGameMoveLog(fileName);
+    gameLog.WriteHeader(ID, EvaluatorDef, assignedSearchLimit, SearchParams, SelectParams);
+  }
+
+
+  /// <summary>
+  /// Appends a (preformatted) per-game result footer block to the move-log, if active.
+  /// Supplied by the tournament because the engine cannot reference tournament types.
+  /// </summary>
+  public void GameLogWriteGameResult(string footerText)
+  {
+    gameLog?.AppendGameResultFooter(footerText);
+  }
+
+
+  /// <summary>
+  /// True if a diagnostic move-log is currently being written by this engine.
+  /// </summary>
+  public bool IsGameLogActive => gameLog != null;
+
+
+  /// <summary>
+  /// Full path of the active diagnostic move-log file, or null if none.
+  /// </summary>
+  public string GameLogFileName => gameLog?.FileName;
+
+
+  /// <summary>
+  /// Appends a (preformatted) blunder-diagnostics block to the move-log, if active. Supplied by the
+  /// tournament (which performs blunder detection) because the engine cannot reference tournament types.
+  /// </summary>
+  public void GameLogAppendBlunder(string blunderText)
+  {
+    gameLog?.AppendBlunderSection(blunderText);
+  }
+
+
+  /// <summary>
+  /// Derives a default move-log file name for standalone (non-tournament) use.
+  /// </summary>
+  private string AutoGameLogFileName()
+  {
+    string dir = CeresUserSettingsManager.Settings.DirCeresOutput ?? ".";
+    string safeID = string.IsNullOrEmpty(ID) ? "ceres" : ID;
+    return Path.Combine(dir, "ceres_" + safeID + "_" + DateTime.Now.Ticks + ".movelog.txt");
+  }
+
+
+  /// <summary>
+  /// Builds the compact one-line per-move diagnostic record (scalar fields followed by the
+  /// sorted candidate-move table) for the move log.
+  /// </summary>
+  private string BuildGameLogMoveLine(GameEngineSearchResultCeresMCGS result, BestMoveInfoMCGS bestMoveInfo)
+  {
+    MCGSSearch search = result.Search;
+    MCGSManager manager = search.Manager;
+    GNode root = search.SearchRootNode;
+    MGPosition rootMG = root.CalcPosition();
+    Position rootPos = rootMG.ToPosition;
+
+    int rootN = root.N;
+    long storeN = root.GraphStore.NodesStore.NumUsedNodes;
+    long nnEvals = root.Graph.NNPositionEvaluationsCount;
+    float? timeRem = TournamentClockRemainingSeconds;
+    float limInit = manager.SearchLimitInitial == null ? float.NaN : manager.SearchLimitInitial.Value;
+    double elapsed = manager.TimeElapsedTotalSeconds;
+
+    // Fraction of the per-move allocated budget consumed (limit-type-aware): for time limits this is
+    // elapsed/LimInit; for node limits it is nodes-searched-this-move/LimInit (NumNodesVisitedThisSearch
+    // excludes reused-tree nodes, unlike RootN); otherwise not meaningful.
+    SearchLimitType limitType = manager.SearchLimitInitial == null
+                              ? SearchLimitType.NodesPerMove
+                              : manager.SearchLimitInitial.Type;
+    double budgetFrac;
+    if (!(limInit > 0))
+    {
+      budgetFrac = double.NaN;
+    }
+    else if (limitType == SearchLimitType.SecondsPerMove || limitType == SearchLimitType.SecondsForAllMoves)
+    {
+      budgetFrac = 100.0 * elapsed / limInit;
+    }
+    else if (limitType == SearchLimitType.NodesPerMove || limitType == SearchLimitType.NodesForAllMoves
+             || limitType == SearchLimitType.NodesPerTree)
+    {
+      budgetFrac = 100.0 * manager.NumNodesVisitedThisSearch / limInit;
+    }
+    else
+    {
+      budgetFrac = double.NaN;
+    }
+
+    float nps = manager.EstimatedNPS;
+    double eps = elapsed > 0 ? manager.NumEvalsThisSearch / elapsed : double.NaN;
+    double busyFrac = (!double.IsNaN(manager.TimeDeviceBackendWaitSeconds) && elapsed > 0)
+                      ? manager.TimeDeviceBackendWaitSeconds / elapsed
+                      : double.NaN;
+    float avgDepth = manager.AvgDepth;
+    int selDepth = manager.MaxDepth;
+
+    CultureInfo ci = CultureInfo.InvariantCulture;
+    StringBuilder sb = new();
+    sb.Append("FEN=\"").Append(rootPos.FEN).Append("\", ");
+    sb.Append("RootN=").Append(rootN.ToString(ci)).Append(", ");
+    sb.Append("StoreN=").Append(storeN.ToString(ci)).Append(", ");
+    sb.Append("NNEvals=").Append(nnEvals.ToString(ci)).Append(", ");
+    sb.Append("TimeRem=").Append(FormatSeconds(timeRem)).Append(", ");
+    sb.Append("LimInit=").Append(FormatNumber(limInit, "F2", ci)).Append(", ");
+    sb.Append("Elapsed=").Append(FormatNumber(elapsed, "F3", ci)).Append(", ");
+    sb.Append("BudgetFrac=").Append(FormatNumber(budgetFrac, "F1", ci)).Append("%, ");
+    sb.Append("NPS=").Append(FormatNumber(nps, "F0", ci)).Append(", ");
+    sb.Append("EPS=").Append(FormatNumber(eps, "F0", ci)).Append(", ");
+    sb.Append("BackendBusy=").Append(FormatNumber(busyFrac, "F3", ci)).Append(", ");
+    sb.Append("Depth=").Append(FormatNumber(avgDepth, "F2", ci)).Append(", ");
+    sb.Append("SelDepth=").Append(selDepth.ToString(ci));
+    sb.Append(" | ");
+    sb.Append(BuildGameLogCandidateTable(root, in rootMG, in rootPos, rootN, bestMoveInfo, ci));
+
+    return sb.ToString();
+  }
+
+
+  /// <summary>
+  /// Builds the candidate-move table appended to each move line: each root edge as
+  /// "(SAN, visit%, Q)" sorted by visits descending, with '*' prefixing the played move.
+  /// Reads only edge-level data so terminal/decisive edges (which have no child node) are
+  /// handled correctly.
+  /// </summary>
+  private string BuildGameLogCandidateTable(GNode root, in MGPosition rootMG, in Position rootPos,
+                                            int rootN, BestMoveInfoMCGS bestMoveInfo, CultureInfo ci)
+  {
+    StringBuilder sb = new();
+    bool playedMarked = false;
+    int denom = Math.Max(1, rootN);
+
+    GEdge[] edges = root.NumEdgesExpanded == 0
+                  ? Array.Empty<GEdge>()
+                  : root.EdgesSorted(e => -(double)e.N - 1e-4 * (float)e.P);
+
+    foreach (GEdge edge in edges)
+    {
+      if (!edge.IsExpanded)
+      {
+        continue;
+      }
+
+      MGMove mg = edge.MoveMGFromPos(in rootMG);
+      string san = SANForMove(mg, in rootPos);
+      double visitPct = 100.0 * edge.N / denom;
+      double q = -edge.Q; // convert from child perspective to side-to-move perspective
+
+      bool played = (!bestMoveInfo.BestMoveEdge.IsNull && edge == bestMoveInfo.BestMoveEdge)
+                    || mg == bestMoveInfo.BestMove;
+      if (played)
+      {
+        playedMarked = true;
+      }
+
+      if (sb.Length > 0)
+      {
+        sb.Append(", ");
+      }
+      if (played)
+      {
+        sb.Append('*');
+      }
+      sb.Append('(').Append(san).Append(", ")
+        .Append(visitPct.ToString("F2", ci)).Append("%, ")
+        .Append(q.ToString("F3", ci)).Append(')');
+    }
+
+    // If the played move was not among the enumerated edges (e.g. tablebase / forced / immediate
+    // move, or an empty edge set), prepend a synthetic entry so it is always represented.
+    if (!playedMarked)
+    {
+      string san = SANForMove(bestMoveInfo.BestMove, in rootPos);
+      string token = "*(" + san + ", n/a, " + bestMoveInfo.QOfBest.ToString("F3", ci) + ")";
+      return sb.Length > 0 ? token + ", " + sb.ToString() : token;
+    }
+
+    return sb.ToString();
+  }
+
+
+  /// <summary>
+  /// Returns the SAN ("Qe8") for a move, falling back to coordinate notation if SAN generation fails.
+  /// </summary>
+  private static string SANForMove(MGMove mgMove, in Position pos)
+  {
+    try
+    {
+      return MGMoveConverter.ToMove(mgMove).ToSAN(in pos);
+    }
+    catch (Exception)
+    {
+      return mgMove.MoveStr(MGMoveNotationStyle.Coordinates);
+    }
+  }
+
+
+  /// <summary>
+  /// Formats a clock value as "174s", or "n/a" when absent/NaN.
+  /// </summary>
+  private static string FormatSeconds(float? seconds)
+  {
+    if (!seconds.HasValue || float.IsNaN(seconds.Value))
+    {
+      return "n/a";
+    }
+    return seconds.Value.ToString("F2", CultureInfo.InvariantCulture) + "s";
+  }
+
+
+  /// <summary>
+  /// Formats a numeric value with the given format, or "n/a" when NaN/infinite.
+  /// </summary>
+  private static string FormatNumber(double value, string format, CultureInfo ci)
+  {
+    if (double.IsNaN(value) || double.IsInfinity(value))
+    {
+      return "n/a";
+    }
+    return value.ToString(format, ci);
+  }
+
+  #endregion
 
 
   public void DumpStoreUsageSummary()

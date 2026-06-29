@@ -54,6 +54,32 @@ namespace Ceres.Features.Tournaments
 
 
   /// <summary>
+  /// Controls whether per-engine diagnostic "move log" files are written during a tournament
+  /// (applies only to in-process Ceres MCGS engines).
+  /// </summary>
+  [Serializable]
+  public enum GameLogFilesMode
+  {
+    /// <summary>
+    /// Never write move-log files.
+    /// </summary>
+    Never,
+
+    /// <summary>
+    /// Always write a move-log file for every participating in-process Ceres MCGS engine.
+    /// </summary>
+    Always,
+
+    /// <summary>
+    /// Write a move-log file only for engines whose assigned search limit implies a long game,
+    /// i.e. the estimated total search for the game exceeds ~1,000,000 nodes or ~5 minutes of
+    /// thinking time (heuristic estimate from the SearchLimit).
+    /// </summary>
+    IfLongSearchLimits
+  }
+
+
+  /// <summary>
   /// Defines the parameters of a tournament between chess engines.
   /// </summary>
   [Serializable]
@@ -104,6 +130,14 @@ namespace Ceres.Features.Tournaments
     /// If each move in each game should be output to the log/console.
     /// </summary>
     public bool ShowGameMoves = true;
+
+    /// <summary>
+    /// Controls whether each participating in-process Ceres MCGS engine writes a per-tournament
+    /// diagnostic "move log" text file (header, one line per move, per-game result footers).
+    /// The file shares the PGN base name with a ".{engineID}.movelog.txt" suffix.
+    /// Defaults to IfLongSearchLimits (write only for engines whose limit implies a long game).
+    /// </summary>
+    public GameLogFilesMode GameLogFiles = GameLogFilesMode.IfLongSearchLimits;
 
     /// <summary>
     /// If moves played by reference engine are forced to be same (for same position)
