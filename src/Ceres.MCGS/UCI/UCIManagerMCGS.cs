@@ -1388,7 +1388,8 @@ public partial class UCIManagerMCGS
 
       // Create the engine (to be subsequently reused).
       CeresEngine = new GameEngineCeresMCGSInProcess("CeresV2", EvaluatorDef, ParamsSearch, ParamsSelect,
-                                                        logFileName: searchLogFileName, infoLogger: InfoLogger)
+                                                        logFileName: searchLogFileName, infoLogger: InfoLogger,
+                                                        emitMiniLog: enableMiniLog)
       {
         // Disable verbose move stats from the engine since 
         // this class manages the possibly dumping of verbose move stats itself.

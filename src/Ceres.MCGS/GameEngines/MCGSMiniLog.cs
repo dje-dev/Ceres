@@ -30,7 +30,7 @@ using Ceres.MCGS.Search.Params;
 namespace Ceres.MCGS.GameEngines;
 
 /// <summary>
-/// Writer for a per-tournament diagnostic "move log" text file emitted by a
+/// Writer for a per-tournament diagnostic "minilog" text file emitted by a
 /// GameEngineCeresMCGSInProcess. The file is intended primarily for consumption by
 /// post-processing tools, with brief parser-friendly labels.
 ///
@@ -43,7 +43,7 @@ namespace Ceres.MCGS.GameEngines;
 /// guards all writes with an internal lock so it remains safe even if shared across
 /// engine instances.
 /// </summary>
-public sealed class MCGSGameMoveLog : IDisposable
+public sealed class MCGSMiniLog : IDisposable
 {
   /// <summary>
   /// Order of the scalar tokens emitted on each move line (documented in the header legend).
@@ -85,16 +85,37 @@ public sealed class MCGSGameMoveLog : IDisposable
   const int HTML_REGEN_THROTTLE_INTERVAL = 10;
 
   /// <summary>
-  /// Name of the underlying file being written.
+  /// Name of the underlying text file being written.
   /// </summary>
   public string FileName => fileName;
+
+
+  /// <summary>
+  /// Name of the companion HTML file rendered alongside the text minilog.
+  /// </summary>
+  public string HtmlFileName => HtmlFileNameFor(fileName);
+
+
+  /// <summary>
+  /// Derives the companion HTML file name for a given minilog text file name. The text minilog
+  /// ends in ".minilog.txt"; the HTML rendering replaces the trailing ".txt" with ".html" so the
+  /// companion is named "base.minilog.html" (rather than "base.minilog.txt.html").
+  /// </summary>
+  public static string HtmlFileNameFor(string logFileName)
+  {
+    if (logFileName != null && logFileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+    {
+      return logFileName.Substring(0, logFileName.Length - 4) + ".html";
+    }
+    return logFileName + ".html";
+  }
 
 
   /// <summary>
   /// Constructor. Creates (or truncates) the target file.
   /// </summary>
   /// <param name="fileName">full path of the file to write</param>
-  public MCGSGameMoveLog(string fileName)
+  public MCGSMiniLog(string fileName)
   {
     this.fileName = fileName ?? throw new ArgumentNullException(nameof(fileName));
     writer = new StreamWriter(fileName, append: false) { AutoFlush = false };
@@ -117,7 +138,7 @@ public sealed class MCGSGameMoveLog : IDisposable
       }
       headerWritten = true;
 
-      writer.WriteLine("=== CERES MCGS GAME MOVE LOG ===");
+      writer.WriteLine("=== CERES MCGS MINILOG ===");
       writer.WriteLine("Timestamp: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
 
       // Host / OS / runtime / process information (reuse existing diagnostics helper).
@@ -242,7 +263,7 @@ public sealed class MCGSGameMoveLog : IDisposable
       {
         IsBackground = true,             // never keep the process alive on this worker
         Priority = ThreadPriority.Lowest, // diagnostic-only; must not compete with search threads
-        Name = "MCGSGameMoveLogHtml"
+        Name = "MCGSMiniLogHtml"
       };
       htmlThread.Start();
     }
@@ -260,7 +281,7 @@ public sealed class MCGSGameMoveLog : IDisposable
     {
       try
       {
-        MCGSGameMoveLogHtmlFormatter.WriteHtmlFile(fileName, fileName + ".html");
+        MCGSMiniLogHtmlFormatter.WriteHtmlFile(fileName, HtmlFileNameFor(fileName));
       }
       catch (Exception)
       {
@@ -355,7 +376,7 @@ public sealed class MCGSGameMoveLog : IDisposable
     }
     try
     {
-      MCGSGameMoveLogHtmlFormatter.WriteHtmlFile(fileName, fileName + ".html");
+      MCGSMiniLogHtmlFormatter.WriteHtmlFile(fileName, HtmlFileNameFor(fileName));
     }
     catch (Exception)
     {

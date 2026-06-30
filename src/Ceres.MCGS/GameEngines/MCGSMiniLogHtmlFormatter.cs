@@ -24,15 +24,15 @@ using System.Text.RegularExpressions;
 namespace Ceres.MCGS.GameEngines;
 
 /// <summary>
-/// Formats a raw diagnostic "move log" text file (as produced by <see cref="MCGSGameMoveLog"/>)
+/// Formats a raw diagnostic "minilog" text file (as produced by <see cref="MCGSMiniLog"/>)
 /// into a single, self-contained HTML page (inline CSS, no external dependencies) suitable for
 /// browsing: a collapsible configuration header, a per-game table of move diagnostics, an
 /// expandable candidate-move list per move, and a per-game result footer.
 /// </summary>
-public static class MCGSGameMoveLogHtmlFormatter
+public static class MCGSMiniLogHtmlFormatter
 {
   /// <summary>
-  /// Reads the given raw move-log file and returns a complete standalone HTML document as a string.
+  /// Reads the given raw minilog file and returns a complete standalone HTML document as a string.
   /// </summary>
   public static string FormatToHtml(string logFilePath)
   {
@@ -47,7 +47,7 @@ public static class MCGSGameMoveLogHtmlFormatter
 
 
   /// <summary>
-  /// Reads the given raw move-log file and writes a complete standalone HTML document to the
+  /// Reads the given raw minilog file and writes a complete standalone HTML document to the
   /// specified output path.
   /// </summary>
   public static void WriteHtmlFile(string logFilePath, string htmlOutputPath)
@@ -109,7 +109,7 @@ public static class MCGSGameMoveLogHtmlFormatter
     sb.AppendLine("</head>");
     sb.AppendLine("<body>");
 
-    sb.AppendLine("<h1>Ceres MCGS Move Log</h1>");
+    sb.AppendLine("<h1>Ceres MCGS Minilog</h1>");
     sb.AppendLine("<div class=\"sub\">" + Esc(title) + "</div>");
 
     WriteHeaderSection(sb, header.ToString());
@@ -604,7 +604,7 @@ public static class MCGSGameMoveLogHtmlFormatter
 
 
   // Reads all lines allowing shared read/write access, so the log can be rendered to HTML even
-  // while the producing MCGSGameMoveLog still holds the file open for writing (required on Windows).
+  // while the producing MCGSMiniLog still holds the file open for writing (required on Windows).
   static string[] ReadAllLinesShared(string path)
   {
     List<string> lines = new List<string>();

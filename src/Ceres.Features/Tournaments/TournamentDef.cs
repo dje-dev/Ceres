@@ -54,24 +54,24 @@ namespace Ceres.Features.Tournaments
 
 
   /// <summary>
-  /// Controls whether per-engine diagnostic "move log" files are written during a tournament
+  /// Controls whether per-engine diagnostic "minilog" files are written during a tournament
   /// (applies only to in-process Ceres MCGS engines).
   /// </summary>
   [Serializable]
-  public enum GameLogFilesMode
+  public enum MiniLogFilesMode
   {
     /// <summary>
-    /// Never write move-log files.
+    /// Never write minilog files.
     /// </summary>
     Never,
 
     /// <summary>
-    /// Always write a move-log file for every participating in-process Ceres MCGS engine.
+    /// Always write a minilog file for every participating in-process Ceres MCGS engine.
     /// </summary>
     Always,
 
     /// <summary>
-    /// Write a move-log file only for engines whose assigned search limit implies a long game,
+    /// Write a minilog file only for engines whose assigned search limit implies a long game,
     /// i.e. the estimated total search for the game exceeds ~1,000,000 nodes or ~3 minutes of
     /// thinking time (heuristic estimate from the SearchLimit).
     /// </summary>
@@ -133,11 +133,12 @@ namespace Ceres.Features.Tournaments
 
     /// <summary>
     /// Controls whether each participating in-process Ceres MCGS engine writes a per-tournament
-    /// diagnostic "move log" text file (header, one line per move, per-game result footers).
-    /// The file shares the PGN base name with a ".{engineID}.movelog.txt" suffix.
+    /// diagnostic "minilog" text file (header, one line per move, per-game result footers).
+    /// The file shares the PGN base name with a ".{engineID}.minilog.txt" suffix (with a companion
+    /// ".{engineID}.minilog.html" rendering). Globally gated by CeresUserSettings.EnableMiniLog.
     /// Defaults to IfLongSearchLimits (write only for engines whose limit implies a long game).
     /// </summary>
-    public GameLogFilesMode GameLogFiles = GameLogFilesMode.IfLongSearchLimits;
+    public MiniLogFilesMode MiniLogFiles = MiniLogFilesMode.IfLongSearchLimits;
 
     /// <summary>
     /// If moves played by reference engine are forced to be same (for same position)

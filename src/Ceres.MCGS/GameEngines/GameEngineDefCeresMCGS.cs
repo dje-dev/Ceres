@@ -49,10 +49,10 @@ public class GameEngineDefCeresMCGS : GameEngineDef
 
   /// <summary>
   /// If true, engines created from this definition emit a per-tournament diagnostic
-  /// "move log" file (default false). In a tournament this is also driven by
-  /// TournamentDef.EnableGameLogFiles via the engine's InitGameLog.
+  /// "minilog" file (default false). In a tournament this is also driven by
+  /// TournamentDef.MiniLogFiles via the engine's InitMiniLog.
   /// </summary>
-  public readonly bool EmitGameLog;
+  public readonly bool EmitMiniLog;
 
 
 
@@ -65,14 +65,14 @@ public class GameEngineDefCeresMCGS : GameEngineDef
   /// <param name="selectParams"></param>
   /// <param name="disposeGraphAfterSearch"></param>
   /// <param name="fixedSearchLimit"></param>
-  /// <param name="emitGameLog"></param>
+  /// <param name="emitMiniLog"></param>
   /// <exception cref="ArgumentNullException"></exception>
   public GameEngineDefCeresMCGS(string id, NNEvaluatorDef evaluatorDef,
                                   ParamsSearch searchParams,
                                   ParamsSelect selectParams,
                                   bool disposeGraphAfterSearch = true,
                                   SearchLimit fixedSearchLimit = null,
-                                  bool emitGameLog = false) : base(id)
+                                  bool emitMiniLog = false) : base(id)
   {
     EvaluatorDef = evaluatorDef ?? throw new ArgumentNullException(nameof(evaluatorDef));
 
@@ -80,7 +80,7 @@ public class GameEngineDefCeresMCGS : GameEngineDef
     SelectParams = selectParams;
     DisposeGraphAfterSearch = disposeGraphAfterSearch;
     FixedSearchLimit = fixedSearchLimit;
-    EmitGameLog = emitGameLog;
+    EmitMiniLog = emitMiniLog;
   }
 
 
@@ -89,7 +89,7 @@ public class GameEngineDefCeresMCGS : GameEngineDef
     GameEngineCeresMCGSInProcess ret = new(ID, EvaluatorDef, SearchParams, SelectParams,
                                            disposeGraphAfterSearch: DisposeGraphAfterSearch,
                                            fixedSearchLimit: FixedSearchLimit,
-                                           emitGameLog: EmitGameLog);
+                                           emitMiniLog: EmitMiniLog);
     ret.Warmup();
 
     return ret;

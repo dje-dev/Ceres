@@ -128,10 +128,29 @@ public static class DiagnosticsBlock
     try
     {
       writer.WriteLine($"GC total pause time    : {FormatTimeSpan(GC.GetTotalPauseDuration())}");
+
+      // Longest individual GC pause and the overall pause-time fraction. The runtime does not expose a
+      // process-wide maximum pause, so report the largest single pause observed among the most recent
+      // GC of each kind (ephemeral, full-blocking, background) as an indicative worst-case, alongside
+      // the percentage of elapsed time spent paused for GC (from the latest GC info).
+      TimeSpan longestPause = TimeSpan.Zero;
+      GCKind[] kinds = { GCKind.Ephemeral, GCKind.FullBlocking, GCKind.Background };
+      foreach (GCKind kind in kinds)
+      {
+        foreach (TimeSpan pause in GC.GetGCMemoryInfo(kind).PauseDurations)
+        {
+          if (pause > longestPause)
+          {
+            longestPause = pause;
+          }
+        }
+      }
+      writer.WriteLine($"GC longest pause       : {FormatTimeSpan(longestPause)} (max single pause among most recent GCs)");
+      writer.WriteLine($"GC pause time fraction : {GC.GetGCMemoryInfo().PauseTimePercentage:F2}%");
     }
     catch
     {
-      // GetTotalPauseDuration not available on this runtime; skip silently.
+      // GC pause-timing APIs not available on this runtime; skip silently.
     }
 
     // Per-generation / large-object-heap sizes from the most recent GC.

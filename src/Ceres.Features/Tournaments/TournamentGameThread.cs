@@ -152,23 +152,26 @@ namespace Ceres.Features.Tournaments
       }
       lock (writePGNLock) File.AppendAllText(pgnFileName, "");
 
-      // If enabled, initialize each in-process Ceres MCGS engine's per-tournament diagnostic move log.
+      // If enabled, initialize each in-process Ceres MCGS engine's per-tournament diagnostic minilog.
       // The PGN base name is identical across concurrent threads (and the PGN itself is shared via a
-      // lock), so disambiguate the per-engine move logs by ThreadIndex when more than one thread runs.
-      if (Def.GameLogFiles != GameLogFilesMode.Never)
+      // lock), so disambiguate the per-engine minilogs by ThreadIndex when more than one thread runs.
+      // The global CeresUserSettings.EnableMiniLog switch can suppress minilogs entirely.
+      if (Def.MiniLogFiles != MiniLogFilesMode.Never && CeresUserSettingsManager.Settings.EnableMiniLog)
       {
         string pgnBaseNoExt = pgnFileName.EndsWith(".pgn") ? pgnFileName.Substring(0, pgnFileName.Length - 4) : pgnFileName;
         string threadSuffix = ThreadIndex > 0 ? ".t" + ThreadIndex : "";
         for (int i = 0; i < Run.Engines.Length; i++)
         {
           // For IfLongSearchLimits, only engines whose assigned limit implies a long game are logged.
-          bool enableForEngine = Def.GameLogFiles == GameLogFilesMode.Always
+          bool enableForEngine = Def.MiniLogFiles == MiniLogFilesMode.Always
                                  || SearchLimitImpliesLongGame(Def.Engines[i].SearchLimit);
           if (enableForEngine && Run.Engines[i] is GameEngineCeresMCGSInProcess mcgsEngine)
           {
-            string moveLogFileName = pgnBaseNoExt + "." + Run.Engines[i].ID + threadSuffix + ".movelog.txt";
-            mcgsEngine.InitGameLog(moveLogFileName, Def.Engines[i].SearchLimit);
-            Def.Logger.WriteLine($"{Run.Engines[i].ID} MoveLog will be incrementally written to file: {moveLogFileName}");
+            string miniLogFileName = pgnBaseNoExt + "." + Run.Engines[i].ID + threadSuffix + ".minilog.txt";
+            string miniLogHtmlFileName = MCGSMiniLog.HtmlFileNameFor(miniLogFileName);
+            mcgsEngine.InitMiniLog(miniLogFileName, Def.Engines[i].SearchLimit);
+            Def.Logger.WriteLine($"{Run.Engines[i].ID} Minilog will be incrementally written to file: {miniLogFileName}"
+                               + $" (with HTML rendering: {miniLogHtmlFileName})");
           }
         }
       }
@@ -466,10 +469,10 @@ namespace Ceres.Features.Tournaments
 
       UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, engine2White, openingIndex, gameSequenceNum, thisResult);
 
-      if (Def.GameLogFiles != GameLogFilesMode.Never)
+      if (Def.MiniLogFiles != MiniLogFilesMode.Never && CeresUserSettingsManager.Settings.EnableMiniLog)
       {
-        WriteGameLogFooterIfApplicable(Run.Engine1, true, engine2White, thisResult);
-        WriteGameLogFooterIfApplicable(Run.Engine2, false, engine2White, thisResult);
+        WriteMiniLogFooterIfApplicable(Run.Engine1, true, engine2White, thisResult);
+        WriteMiniLogFooterIfApplicable(Run.Engine2, false, engine2White, thisResult);
       }
 
       // Cooperative pause checkpoint (Ctrl-P): park here after each completed game if a pause is
@@ -481,15 +484,15 @@ namespace Ceres.Features.Tournaments
 
 
     /// <summary>
-    /// Writes a per-game result footer to the given engine's diagnostic move log, if it is an
+    /// Writes a per-game result footer to the given engine's diagnostic minilog, if it is an
     /// in-process Ceres MCGS engine with logging enabled.
     /// </summary>
-    private void WriteGameLogFooterIfApplicable(GameEngine engine, bool engineIsEngine1,
+    private void WriteMiniLogFooterIfApplicable(GameEngine engine, bool engineIsEngine1,
                                                 bool engine2White, TournamentGameInfo info)
     {
       if (engine is GameEngineCeresMCGSInProcess mcgsEngine)
       {
-        mcgsEngine.GameLogWriteGameResult(FormatGameLogFooter(engineIsEngine1, engine2White, info));
+        mcgsEngine.MiniLogWriteGameResult(FormatMiniLogFooter(engineIsEngine1, engine2White, info));
       }
     }
 
@@ -498,7 +501,7 @@ namespace Ceres.Features.Tournaments
     /// Formats the per-game result footer block (from the given engine's perspective) for the move
     /// log. The game Result is stored from Engine1's perspective, so it is reversed for Engine2.
     /// </summary>
-    private static string FormatGameLogFooter(bool engineIsEngine1, bool engine2White, TournamentGameInfo info)
+    private static string FormatMiniLogFooter(bool engineIsEngine1, bool engine2White, TournamentGameInfo info)
     {
       TournamentGameResult resultThisPersp = engineIsEngine1
           ? info.Result
@@ -540,7 +543,7 @@ namespace Ceres.Features.Tournaments
 
     /// <summary>
     /// Heuristically estimates whether the given search limit implies a "long" game, used by
-    /// GameLogFilesMode.IfLongSearchLimits. Returns true if the estimated total search for the whole
+    /// MiniLogFilesMode.IfLongSearchLimits. Returns true if the estimated total search for the whole
     /// game exceeds ~1,000,000 nodes or ~3 minutes (180s) of thinking time. Per-move limits are scaled
     /// by an approximate number of moves per game.
     /// </summary>
@@ -677,8 +680,8 @@ namespace Ceres.Features.Tournaments
     /// Detects a likely opponent blunder (a large favorable evaluation swing for the moving/reference
     /// engine across the opponent's last move, from a position that was not already decided) and, once
     /// the blundering engine confirms the deterioration on its OWN following move, appends that engine's
-    /// search-graph diagnostics as a blunder section in its own diagnostic move-log (no separate file).
-    /// Blunder checking is only performed when the potential blunderer is actively writing a move-log.
+    /// search-graph diagnostics as a blunder section in its own diagnostic minilog (no separate file).
+    /// Blunder checking is only performed when the potential blunderer is actively writing a minilog.
     /// Called once per ply; <paramref name="pendingBlunder"/> carries a detected-but-unconfirmed
     /// candidate from one ply to the next (it is reset to null per game by the caller).
     /// </summary>
@@ -695,21 +698,21 @@ namespace Ceres.Features.Tournaments
         float blundererDrop = pendingBlunder.BlunderMoveScoreQ - confirmMove.ScoreQ;
         if (blundererDrop > Def.BlunderDumpThresholdQ
             && pendingBlunder.BlundererEngine is GameEngineCeresMCGSInProcess blundererMCGS
-            && blundererMCGS.IsGameLogActive)
+            && blundererMCGS.IsMiniLogActive)
         {
           string confirmLine =
               $"Blunderer confirmation: {pendingBlunder.BlundererEngine.ID} own evaluation fell {blundererDrop:F3} Q on its next "
             + $"move (Q {pendingBlunder.BlunderMoveScoreQ:F3} -> Q {confirmMove.ScoreQ:F3}), confirming the blunder.";
 
           // Instead of writing a separate blunder file, append the blunder diagnostics as a section in
-          // the blundering engine's own diagnostic move-log (right after its current move's output).
-          blundererMCGS.GameLogAppendBlunder(pendingBlunder.Header + Environment.NewLine
+          // the blundering engine's own diagnostic minilog (right after its current move's output).
+          blundererMCGS.MiniLogAppendBlunder(pendingBlunder.Header + Environment.NewLine
                                            + confirmLine + Environment.NewLine + Environment.NewLine
                                            + pendingBlunder.DumpBody);
 
           ConsoleUtils.WriteLineColored(ConsoleColor.Red,
               $"BLUNDER: engine {pendingBlunder.BlundererEngine.ID} position worse by {pendingBlunder.ReferenceImprovementQ:F3} Q "
-            + $"(self-confirmed {blundererDrop:F3} Q), details appended to {blundererMCGS.GameLogFileName}");
+            + $"(self-confirmed {blundererDrop:F3} Q), details appended to {blundererMCGS.MiniLogFileName}");
         }
         pendingBlunder = null;   // candidate resolved (whether confirmed or rejected)
       }
@@ -721,8 +724,8 @@ namespace Ceres.Features.Tournaments
       }
 
       // Only check/record blunders when the opponent (the potential blunderer) is actively writing a
-      // diagnostic move-log; the blunder section is appended to that log rather than to a separate file.
-      if (!(opponentEngine is GameEngineCeresMCGSInProcess opponentMCGS) || !opponentMCGS.IsGameLogActive)
+      // diagnostic minilog; the blunder section is appended to that log rather than to a separate file.
+      if (!(opponentEngine is GameEngineCeresMCGSInProcess opponentMCGS) || !opponentMCGS.IsMiniLogActive)
       {
         return;
       }
@@ -1439,7 +1442,7 @@ namespace Ceres.Features.Tournaments
           };
         }
 
-        // Make the tournament clock visible to the engine (used by the diagnostic move log and
+        // Make the tournament clock visible to the engine (used by the diagnostic minilog and
         // available for future use). Only the SecondsForAllMoves limit type has a meaningful running
         // clock; otherwise report none.
         if (engine is GameEngineCeresMCGSInProcess mcgsClockEngine)

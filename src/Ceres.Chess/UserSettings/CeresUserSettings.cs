@@ -209,6 +209,14 @@ namespace Ceres.Chess.UserSettings
     public bool? EnableUncertaintyBoosting { get; set; }
     public string LimitsManagerName { get; set; }
 
+    /// <summary>
+    /// If the diagnostic per-game "minilog" feature is enabled (a text file with a one-line-per-move
+    /// summary plus a companion HTML rendering). When true (the default) a standalone Ceres MCGS engine
+    /// writes a minilog, and tournaments may write per-engine minilogs (subject to TournamentDef.MiniLogFiles).
+    /// When false the feature is suppressed everywhere.
+    /// </summary>
+    public bool EnableMiniLog { get; set; } = false;
+
     #region Tablebases
 
     public string TablebaseDirectory

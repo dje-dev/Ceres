@@ -182,6 +182,12 @@ public partial class UCIManagerMCGS
   /// </summary>
   int[] cudaGraphSizes = [16, 32, 48, 64, 80];
 
+  /// <summary>
+  /// If the diagnostic per-game "minilog" file (and companion HTML rendering) should be written.
+  /// Defaults to the CeresUserSettings.EnableMiniLog value loaded from Ceres.json.
+  /// </summary>
+  bool enableMiniLog = CeresUserSettingsManager.Settings.EnableMiniLog;
+
 
   void ProcessSetOption(string command)
   {
@@ -386,6 +392,12 @@ public partial class UCIManagerMCGS
 
       case "enableactionhead":
         SetBool(value, ref enableActionHead);
+        break;
+
+      case "enableminilog":
+        // Controls whether the diagnostic per-game minilog is written. Reinitialize the engine so
+        // the new setting is reflected (the flag is consumed when the engine is constructed).
+        SetBool(value, ref enableMiniLog);
         break;
 
       case "cudagraphsizes":
@@ -647,6 +659,7 @@ option name ValueTemperature type string default {new ParamsSearch().ValueTemper
 option name FPU type string default {new ParamsSelect().FPUValue}
 option name FPUAtRoot type string default {new ParamsSelect().FPUValueAtRoot}
 option name EnableActionHead type check default false
+option name EnableMiniLog type check default true
 option name SearchLimitMultiplier type string default 1.00
 option name MaxTreeVisits type string default
 option name MaxTreeNodes type string default

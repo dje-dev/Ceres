@@ -178,16 +178,16 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   public readonly SearchLimit FixedSearchLimit;
 
   /// <summary>
-  /// If true this engine emits a per-tournament diagnostic "move log" file (default false).
-  /// The tournament path enables logging explicitly via InitGameLog; this flag additionally
+  /// If true this engine emits a per-tournament diagnostic "minilog" file (default false).
+  /// The tournament path enables logging explicitly via InitMiniLog; this flag additionally
   /// drives standalone (non-tournament) lazy initialization on the first search.
   /// </summary>
-  public readonly bool EmitGameLog;
+  public readonly bool EmitMiniLog;
 
   /// <summary>
-  /// Active diagnostic move-log writer (null unless logging is enabled).
+  /// Active diagnostic minilog writer (null unless logging is enabled).
   /// </summary>
-  MCGSGameMoveLog gameLog;
+  MCGSMiniLog miniLog;
 
   /// <summary>
   /// Time remaining on the tournament clock (in seconds) at the start of the current move, or
@@ -236,7 +236,7 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   /// <param name="infoLogger">optional action to log info messages</param>
   /// <param name="forcedMoves">optional list of moves to force</param>
   /// <param name="fixedSearchLimit">optional fixed search limit known at engine creation time</param>
-  /// <param name="emitGameLog">if a per-tournament diagnostic move-log file should be written</param>
+  /// <param name="emitMiniLog">if a per-tournament diagnostic minilog file should be written</param>
   public GameEngineCeresMCGSInProcess(string id,
                                       NNEvaluatorDef evaluatorDef,
                                       ParamsSearch searchParams = null,
@@ -249,7 +249,7 @@ public class GameEngineCeresMCGSInProcess : GameEngine
                                       Action<string> infoLogger = null,
                                       List<MGMove> forcedMoves = null,
                                       SearchLimit fixedSearchLimit = null,
-                                      bool emitGameLog = false) : base(id, processorGroupID)
+                                      bool emitMiniLog = false) : base(id, processorGroupID)
   {
     // Use default settings for search and select params if not specified.
     if (searchParams == null)
@@ -290,11 +290,11 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     InfoLogger = infoLogger;
     ForcedMoves = forcedMoves;
     FixedSearchLimit = fixedSearchLimit;
-    EmitGameLog = emitGameLog;
+    EmitMiniLog = emitMiniLog;
 
-    // If a diagnostic move-log will be emitted, have the limit manager capture its per-move
-    // allocation reasoning so it can be recorded near each move header (see BuildGameLogMoveLine).
-    if (GameLimitManager != null && emitGameLog)
+    // If a diagnostic minilog will be emitted, have the limit manager capture its per-move
+    // allocation reasoning so it can be recorded near each move header (see BuildMiniLogMoveLine).
+    if (GameLimitManager != null && emitMiniLog)
     {
       GameLimitManager.CaptureDiagnostics = true;
     }
@@ -357,7 +357,7 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     isFirstMoveOfGame = true;
     CurrentGameID = gameID;
 
-    gameLog?.WriteNewGameSeparator(gameID);
+    miniLog?.WriteNewGameSeparator(gameID);
   }
 
 
@@ -563,25 +563,25 @@ public class GameEngineCeresMCGSInProcess : GameEngine
       }
     }
 
-    // Emit the compact per-move diagnostic game-log line (if enabled). For standalone (non-tournament)
+    // Emit the compact per-move diagnostic minilog line (if enabled). For standalone (non-tournament)
     // use, lazily initialize on the first search using an auto-derived file name. The write is wrapped
     // so a logging failure can never disrupt the game.
-    if (gameLog == null && EmitGameLog)
+    if (miniLog == null && EmitMiniLog)
     {
-      InitGameLog(AutoGameLogFileName(), FixedSearchLimit ?? searchLimit);
+      InitMiniLog(AutoMiniLogFileName(), FixedSearchLimit ?? searchLimit);
     }
-    if (gameLog != null)
+    if (miniLog != null)
     {
       try
       {
         // Emit the limits-manager allocation reasoning (if captured) immediately before the move
         // line it governs, so it sits next to that move header (mirrors the inline blunder block).
-        gameLog.AppendLimitsSection(result.Search.Manager.LastGameLimitOutputs?.DiagnosticText);
-        gameLog.WriteMoveLine(BuildGameLogMoveLine(result, bestMoveInfo));
+        miniLog.AppendLimitsSection(result.Search.Manager.LastGameLimitOutputs?.DiagnosticText);
+        miniLog.WriteMoveLine(BuildMiniLogMoveLine(result, bestMoveInfo));
       }
       catch (Exception exc)
       {
-        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "Game move log write failed: " + exc.Message);
+        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "Minilog write failed: " + exc.Message);
       }
     }
 
@@ -876,13 +876,13 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   {
     try
     {
-      gameLog?.Close();
+      miniLog?.Close();
     }
     catch (Exception)
     {
-      // Ignore: never let move-log teardown disrupt disposal.
+      // Ignore: never let minilog teardown disrupt disposal.
     }
-    gameLog = null;
+    miniLog = null;
 
     Search?.Manager.Engine.Graph.Dispose();
     Search?.Manager?.Dispose();
@@ -894,25 +894,25 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   }
 
 
-  #region Diagnostic game move log
+  #region Diagnostic minilog
 
   /// <summary>
-  /// Enables and initializes the diagnostic move-log with an explicit file name and the search
+  /// Enables and initializes the diagnostic minilog with an explicit file name and the search
   /// limit assigned to this engine (used to populate the header). This is the unconditional
-  /// enabler used by the tournament: calling it activates logging regardless of EmitGameLog.
+  /// enabler used by the tournament: calling it activates logging regardless of EmitMiniLog.
   /// Intended to be called once, before the first search. A null file name is ignored.
   /// </summary>
-  public void InitGameLog(string fileName, SearchLimit assignedSearchLimit)
+  public void InitMiniLog(string fileName, SearchLimit assignedSearchLimit)
   {
-    if (fileName == null || gameLog != null)
+    if (fileName == null || miniLog != null)
     {
       return;
     }
 
-    gameLog = new MCGSGameMoveLog(fileName);
-    gameLog.WriteHeader(ID, EvaluatorDef, assignedSearchLimit, SearchParams, SelectParams);
+    miniLog = new MCGSMiniLog(fileName);
+    miniLog.WriteHeader(ID, EvaluatorDef, assignedSearchLimit, SearchParams, SelectParams);
 
-    // Tournament path enables logging here (regardless of EmitGameLog); make sure the limit manager
+    // Tournament path enables logging here (regardless of EmitMiniLog); make sure the limit manager
     // also captures its per-move allocation reasoning for inclusion in the log.
     if (GameLimitManager != null)
     {
@@ -922,53 +922,53 @@ public class GameEngineCeresMCGSInProcess : GameEngine
 
 
   /// <summary>
-  /// Appends a (preformatted) per-game result footer block to the move-log, if active.
+  /// Appends a (preformatted) per-game result footer block to the minilog, if active.
   /// Supplied by the tournament because the engine cannot reference tournament types.
   /// </summary>
-  public void GameLogWriteGameResult(string footerText)
+  public void MiniLogWriteGameResult(string footerText)
   {
-    gameLog?.AppendGameResultFooter(footerText);
+    miniLog?.AppendGameResultFooter(footerText);
   }
 
 
   /// <summary>
-  /// True if a diagnostic move-log is currently being written by this engine.
+  /// True if a diagnostic minilog is currently being written by this engine.
   /// </summary>
-  public bool IsGameLogActive => gameLog != null;
+  public bool IsMiniLogActive => miniLog != null;
 
 
   /// <summary>
-  /// Full path of the active diagnostic move-log file, or null if none.
+  /// Full path of the active diagnostic minilog file, or null if none.
   /// </summary>
-  public string GameLogFileName => gameLog?.FileName;
+  public string MiniLogFileName => miniLog?.FileName;
 
 
   /// <summary>
-  /// Appends a (preformatted) blunder-diagnostics block to the move-log, if active. Supplied by the
+  /// Appends a (preformatted) blunder-diagnostics block to the minilog, if active. Supplied by the
   /// tournament (which performs blunder detection) because the engine cannot reference tournament types.
   /// </summary>
-  public void GameLogAppendBlunder(string blunderText)
+  public void MiniLogAppendBlunder(string blunderText)
   {
-    gameLog?.AppendBlunderSection(blunderText);
+    miniLog?.AppendBlunderSection(blunderText);
   }
 
 
   /// <summary>
-  /// Derives a default move-log file name for standalone (non-tournament) use.
+  /// Derives a default minilog file name for standalone (non-tournament) use.
   /// </summary>
-  private string AutoGameLogFileName()
+  private string AutoMiniLogFileName()
   {
     string dir = CeresUserSettingsManager.Settings.DirCeresOutput ?? ".";
     string safeID = string.IsNullOrEmpty(ID) ? "ceres" : ID;
-    return Path.Combine(dir, "ceres_" + safeID + "_" + DateTime.Now.Ticks + ".movelog.txt");
+    return Path.Combine(dir, "ceres_" + safeID + "_" + DateTime.Now.Ticks + ".minilog.txt");
   }
 
 
   /// <summary>
   /// Builds the compact one-line per-move diagnostic record (scalar fields followed by the
-  /// sorted candidate-move table) for the move log.
+  /// sorted candidate-move table) for the minilog.
   /// </summary>
-  private string BuildGameLogMoveLine(GameEngineSearchResultCeresMCGS result, BestMoveInfoMCGS bestMoveInfo)
+  private string BuildMiniLogMoveLine(GameEngineSearchResultCeresMCGS result, BestMoveInfoMCGS bestMoveInfo)
   {
     MCGSSearch search = result.Search;
     MCGSManager manager = search.Manager;
@@ -1034,7 +1034,7 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     sb.Append("Depth=").Append(FormatNumber(avgDepth, "F2", ci)).Append(", ");
     sb.Append("SelDepth=").Append(selDepth.ToString(ci));
     sb.Append(" | ");
-    sb.Append(BuildGameLogCandidateTable(root, in rootMG, in rootPos, rootN, bestMoveInfo, ci));
+    sb.Append(BuildMiniLogCandidateTable(root, in rootMG, in rootPos, rootN, bestMoveInfo, ci));
 
     return sb.ToString();
   }
@@ -1046,7 +1046,7 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   /// Reads only edge-level data so terminal/decisive edges (which have no child node) are
   /// handled correctly.
   /// </summary>
-  private string BuildGameLogCandidateTable(GNode root, in MGPosition rootMG, in Position rootPos,
+  private string BuildMiniLogCandidateTable(GNode root, in MGPosition rootMG, in Position rootPos,
                                             int rootN, BestMoveInfoMCGS bestMoveInfo, CultureInfo ci)
   {
     StringBuilder sb = new();
