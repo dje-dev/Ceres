@@ -1033,6 +1033,11 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     sb.Append("BackendBusy=").Append(FormatNumber(busyFrac, "F3", ci)).Append(", ");
     sb.Append("Depth=").Append(FormatNumber(avgDepth, "F2", ci)).Append(", ");
     sb.Append("SelDepth=").Append(selDepth.ToString(ci));
+    // Mechanism that selected a played move differing from the most-visited (top-N) move, if any.
+    if (!string.IsNullOrEmpty(bestMoveInfo.SelectionNote))
+    {
+      sb.Append(", Sel=").Append(bestMoveInfo.SelectionNote);
+    }
     sb.Append(" | ");
     sb.Append(BuildMiniLogCandidateTable(root, in rootMG, in rootPos, rootN, bestMoveInfo, ci));
 

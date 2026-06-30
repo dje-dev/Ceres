@@ -245,7 +245,8 @@ public class ManagerChooseBestMoveMCGS
                                         secondBestEdge.Value.N,                   // BestN: N of substituted move
                                         baselineBestMoveInfo.BestMoveEdge.N,      // BestNSecond: N of rejected original best (now "second")
                                         secondBestEdge.Value,                     // BestNEdge: the substituted move
-                                        secondBestEdge.Value);                    // BestQEdge: the substituted move
+                                        secondBestEdge.Value)                     // BestQEdge: the substituted move
+            { SelectionNote = "drp-avoid" };
           }
           else if (DUMP_TO_CONSOLE)
           {
@@ -395,6 +396,11 @@ public class ManagerChooseBestMoveMCGS
         {
           BestMoveInfoMCGS candidateResult = new BestMoveInfoMCGS(BestMoveInfoMCGS.BestMoveReason.SearchResult, position, candidate, (float)-edgesSortedQ[0].Q, childrenSortedN[0].N,
                                       BestNSecond, childrenSortedN[0], edgesSortedQ[0]);
+          // Played move was upgraded away from the most-visited move on the strength of its Q.
+          if (candidate != childrenSortedN[0])
+          {
+            candidateResult.SelectionNote = "best-Q";
+          }
           return TryOverrideWithMoreIrreversibleMove(position,
                    TryOverrideWithRootMinimaxBlend(position, candidateResult, edgesSortedQ, childrenSortedN), edgesSortedQ);
         }
@@ -570,7 +576,8 @@ public class ManagerChooseBestMoveMCGS
                                     currentBest.BestN,
                                     currentBest.BestNSecond,
                                     currentBest.BestNEdge,
-                                    currentBest.BestQEdge);
+                                    currentBest.BestQEdge)
+        { SelectionNote = "irreversible" };
       }
     }
 
@@ -700,7 +707,8 @@ public class ManagerChooseBestMoveMCGS
 
     return new BestMoveInfoMCGS(BestMoveInfoMCGS.BestMoveReason.SearchResult, position, challenger,
                                 currentBest.QMaximal, currentBest.BestN, currentBest.BestNSecond,
-                                currentBest.BestNEdge, currentBest.BestQEdge);
+                                currentBest.BestNEdge, currentBest.BestQEdge)
+    { SelectionNote = "minimax" };
   }
 
 

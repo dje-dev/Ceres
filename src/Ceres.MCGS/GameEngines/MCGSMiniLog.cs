@@ -52,6 +52,8 @@ public sealed class MCGSMiniLog : IDisposable
     "LEGEND (per move line): FEN, RootN, StoreN, NNEvals, TimeRem, OppTimeRem, LimInit, Elapsed, "
     + "BudgetFrac%, NPS, EPS, BackendBusy, Depth, SelDepth | candidate moves as (SAN, visit%, Q) "
     + "sorted by visits descending, '*' prefixes the played move, Q from side-to-move perspective. "
+    + "Sel (present only when the played move was not the most-visited move) names the selection "
+    + "mechanism: best-Q / minimax / irreversible / drp-avoid. "
     + "TimeRem / OppTimeRem are the engine's own and the opponent's remaining game clock (seconds), "
     + "populated only for SecondsForAllMoves play within a Ceres tournament (else n/a). "
     + "LimInit is the per-move allocated budget (seconds for time limits, nodes for node limits); "

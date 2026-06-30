@@ -358,24 +358,44 @@ public static class MCGSMiniLogHtmlFormatter
         sb.Append("<td class=\"" + cls + "\">" + Esc(val) + "</td>");
       }
 
-      // Played move (with Q).
+      // The candidate list is sorted by visits descending, so the top-N (most-visited) move is the
+      // first entry. The played move differs from top-N (for any reason) when it is not that entry.
+      bool playedIsTopN = m.Candidates.Count > 0 && m.Candidates[0].Played;
+      bool anyPlayed = false;
+      foreach (ParsedCandidate c in m.Candidates)
+      {
+        if (c.Played) { anyPlayed = true; break; }
+      }
+      bool playedOverridesTopN = anyPlayed && !playedIsTopN;
+
+      // Played move (with Q). A leading '*' marks a played move that was not the top-N move.
       string playedCell = "-";
       foreach (ParsedCandidate c in m.Candidates)
       {
         if (c.Played)
         {
-          playedCell = "<span class=\"playedmove\">" + Esc(c.San) + "</span> <span class=\"q\">"
+          string star = playedOverridesTopN ? "<span class=\"override\">*</span>" : "";
+          playedCell = star + "<span class=\"playedmove\">" + Esc(c.San) + "</span> <span class=\"q\">"
                        + Esc(c.Q) + "</span>";
           break;
         }
       }
       sb.Append("<td class=\"played\">" + playedCell + "</td>");
 
-      // Candidate list (collapsible).
+      // Candidate list (collapsible), preceded by a brief reasoning line when the played move was not
+      // the top-N move - naming the mechanism if recorded (best-Q / minimax / irreversible / drp-avoid).
       sb.Append("<td class=\"cands\">");
       if (m.Candidates.Count > 0)
       {
         sb.Append("<details><summary>" + m.Candidates.Count + " moves</summary><div class=\"candlist\">");
+        if (playedOverridesTopN)
+        {
+          string mech = m.Scalars.TryGetValue("Sel", out string selVal) && selVal.Length > 0 ? selVal : "—";
+          ParsedCandidate top = m.Candidates[0];
+          sb.Append("<div class=\"reason\">played ≠ top-N · <b>" + Esc(mech)
+                    + "</b> · top-N " + Esc(top.San) + " (" + Esc(top.Visit)
+                    + ", Q " + Esc(top.Q) + ")</div>");
+        }
         foreach (ParsedCandidate c in m.Candidates)
         {
           string badgeCls = c.Played ? "cand played" : "cand";
@@ -669,6 +689,9 @@ public static class MCGSMiniLogHtmlFormatter
   td.num { text-align: right; font-family: ui-monospace, Consolas, monospace; white-space: nowrap; }
   td.budget { color: var(--accent); }
   td.played .playedmove { color: var(--played); font-weight: 700; }
+  td.played .override { color: var(--loss); font-weight: 700; margin-right: 2px; }
+  .candlist .reason { width: 100%; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .candlist .reason b { color: var(--accent); }
   .q { color: var(--muted); }
   td.fen { font-family: ui-monospace, Consolas, monospace; font-size: 13px; color: var(--muted); white-space: nowrap; }
   td.cands details > summary { cursor: pointer; color: var(--accent); white-space: nowrap; }
