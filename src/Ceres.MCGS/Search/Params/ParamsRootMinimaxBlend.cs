@@ -78,7 +78,7 @@ public record ParamsRootMinimaxBlend
   /// candidate are re-evaluated. A value below 2 reduces to the engine's averaged Q
   /// (there is no opponent reply to minimax over), so Depth &gt;= 2 is required for effect.
   /// </summary>
-  public int Depth = 5;
+  public int Depth = 4;
 
   /// <summary>
   /// Blend weight (lambda) between the averaged operator A and the soft-minimax operator C:
@@ -90,7 +90,9 @@ public record ParamsRootMinimaxBlend
 
   /// <summary>
   /// Exponent (p) of the visit-weighted power-mean soft-minimax operator C
-  /// (1 = averaging, larger values approach hard negamax). Secondary sharpness knob.
+  /// (1 = averaging, larger values approach hard negamax). 
+  /// Secondary sharpness knob. 
+  /// At p=8, even sharp refutations only pull the value ~halfway to minimax.
   /// </summary>
   public float SoftmaxP = 8;
 
@@ -99,7 +101,7 @@ public record ParamsRootMinimaxBlend
   /// this absolute band of the baseline chosen move. About 22% of positions exhibit such a
   /// near-equal-Q cluster at the default 0.01.
   /// </summary>
-  public float QGapThreshold = 0.005f;
+  public float QGapThreshold = 0.01f;
 
   /// <summary>
   /// A move is eligible as a tiebreak candidate only if its visit count N is at least this
@@ -111,7 +113,7 @@ public record ParamsRootMinimaxBlend
   /// MinFractionNToUseQ gate is deliberately NOT reused here: for near-equal Q it demands near-full
   /// visit parity (~0.95+) and so would rarely admit a second candidate.
   /// </summary>
-  public float MinCandidateFractionN = 0.25f; // somewhat conservative since minimax is noisy
+  public float MinCandidateFractionN = 0.3f; // somewhat conservative since minimax is noisy
 
   /// <summary>
   /// A challenger replaces the baseline move only if its blended value exceeds the baseline

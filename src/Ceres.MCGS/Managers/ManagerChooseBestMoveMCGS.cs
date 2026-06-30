@@ -698,7 +698,7 @@ public class ManagerChooseBestMoveMCGS
     ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
       $"[ROOT-BLEND {(apply ? "SWITCH" : "would switch")}] {moveA.MoveMG} -> {challenger.MoveMG}  "
     + $"Q: {-moveA.Q:F4} -> {-challenger.Q:F4}  blend: {incumbentBlend:F4} -> {bestBlend:F4}  "
-    + $"(lambda={p.Intensity}, depth={p.Depth}, p={p.SoftmaxP}, candidates={candidates.Count}, {sw.Elapsed.TotalMilliseconds:F2}ms)");
+    + $"(lambda={p.Intensity}, depth={p.Depth}, p={p.SoftmaxP}, candidates={candidates.Count}, {sw.Elapsed.TotalMilliseconds:F2}ms, {position.ToPosition.FEN})");
 
     if (!apply)
     {

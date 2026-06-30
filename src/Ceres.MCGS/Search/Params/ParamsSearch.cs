@@ -133,7 +133,9 @@ public record ParamsSearch
   /// <summary>
   /// Opt-in tiebreak that disambiguates root moves nearly equal in averaged Q by using a
   /// static, depth-bounded soft-minimax blend over the existing search graph (read-only;
-  /// no NN evaluations, no graph mutation). Disabled by default; see ParamsRootMinimaxBlend.
+  /// no NN evaluations, no graph mutation). 
+  /// Disabled by default; see ParamsRootMinimaxBlend.
+  /// Tests showed modest unclear impact on Elo even though root moves changes were not rare.
   /// </summary>
   public ParamsRootMinimaxBlend RootMinimaxBlend = new();
 
