@@ -461,7 +461,7 @@ public sealed class RevaluationSwitchDecision
 /// Note: rollout visits added by the ladder persist in the graph (and into any reused graph for
 /// the following move). This is accepted by design.
 /// </summary>
-public static class PrincipalRevaluation
+public static partial class PrincipalRevaluation
 {
   #region Analysis tunable constants
 

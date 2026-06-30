@@ -60,6 +60,7 @@ public static class ParamsDump
     writer.Write(ObjUtils.FieldValuesDumpString<ParamsSearch>(searchParams1, new ParamsSearch(), differentOnly));
     DumpTimeManagerDifference(true, null, timeManager1);
     writer.Write(ObjUtils.FieldValuesDumpString<ParamsSearchExecution>(paramsSearchExecution1, new ParamsSearchExecution(), differentOnly));
+    writer.Write(ObjUtils.FieldValuesDumpString<ParamsRootMinimaxBlend>(searchParams1.RootMinimaxBlend, new ParamsRootMinimaxBlend(), differentOnly));
 
     writer.WriteLine("\r\n-----------------------------------------------------------------------");
     writer.WriteLine("ENGINE 2 Options Modifications from Engine 1");
@@ -95,6 +96,7 @@ public static class ParamsDump
       writer.Write(ObjUtils.FieldValuesDumpString<ParamsSearch>(searchParams2, searchParams1, differentOnly));
       DumpTimeManagerDifference(differentOnly, timeManager1, timeManager2);
       writer.Write(ObjUtils.FieldValuesDumpString<ParamsSearchExecution>(paramsSearchExecution2, paramsSearchExecution1, differentOnly));
+      writer.Write(ObjUtils.FieldValuesDumpString<ParamsRootMinimaxBlend>(searchParams2.RootMinimaxBlend, searchParams1.RootMinimaxBlend, differentOnly));
     }
 
   }

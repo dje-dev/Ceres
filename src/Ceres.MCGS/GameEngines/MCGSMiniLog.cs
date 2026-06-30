@@ -156,6 +156,9 @@ public sealed class MCGSMiniLog : IDisposable
 
         writer.WriteLine("--- ParamsSearchExecution (all properties) ---");
         writer.Write(ObjUtils.FieldValuesDumpString<ParamsSearchExecution>(searchParams.Execution, new ParamsSearchExecution(), false));
+
+        writer.WriteLine("--- ParamsRootMinimaxBlend (all properties) ---");
+        writer.Write(ObjUtils.FieldValuesDumpString<ParamsRootMinimaxBlend>(searchParams.RootMinimaxBlend, new ParamsRootMinimaxBlend(), false));
       }
 
       if (selectParams != null)

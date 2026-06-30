@@ -131,6 +131,14 @@ public record ParamsSearch
 
 
   /// <summary>
+  /// Opt-in tiebreak that disambiguates root moves nearly equal in averaged Q by using a
+  /// static, depth-bounded soft-minimax blend over the existing search graph (read-only;
+  /// no NN evaluations, no graph mutation). Disabled by default; see ParamsRootMinimaxBlend.
+  /// </summary>
+  public ParamsRootMinimaxBlend RootMinimaxBlend = new();
+
+
+  /// <summary>
   /// Implementation related parameters related to execution of a batch
   /// which are potentially recomputed based on the characterstic of the batch.
   /// </summary>
@@ -788,6 +796,8 @@ public record ParamsSearch
   /// </summary>
   public void Validate()
   {
+    RootMinimaxBlend?.Validate();
+
     if (RedescentScaleByVolatility && !TrackLeafValueVolatility)
     {
       throw new Exception("TrackLeafValueVolatility must be set to true when RedescentScaleByVolatility is true");

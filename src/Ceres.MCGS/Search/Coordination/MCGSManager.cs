@@ -428,6 +428,7 @@ public partial class MCGSManager : IDisposable
     Console.WriteLine(ObjUtils.FieldValuesDumpString<ParamsSearch>(ParamsSearch, new ParamsSearch(), false));
     //DumpTimeManagerDifference(differentOnly, null, timeManager1);
     Console.WriteLine(ObjUtils.FieldValuesDumpString<ParamsSearchExecution>(ParamsSearch.Execution, new ParamsSearchExecution(), false));
+    Console.WriteLine(ObjUtils.FieldValuesDumpString<ParamsRootMinimaxBlend>(ParamsSearch.RootMinimaxBlend, new ParamsRootMinimaxBlend(), false));
   }
 
 

@@ -1228,6 +1228,7 @@ public partial class UCIManagerMCGS
     Console.WriteLine(ObjUtils.FieldValuesDumpString<ParamsSelect>(pendingSelect, new ParamsSelect(), false));
     Console.WriteLine(ObjUtils.FieldValuesDumpString<ParamsSearch>(pendingSearch, new ParamsSearch(), false));
     Console.WriteLine(ObjUtils.FieldValuesDumpString<ParamsSearchExecution>(pendingSearch.Execution, new ParamsSearchExecution(), false));
+    Console.WriteLine(ObjUtils.FieldValuesDumpString<ParamsRootMinimaxBlend>(pendingSearch.RootMinimaxBlend, new ParamsRootMinimaxBlend(), false));
   }
 
 

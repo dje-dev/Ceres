@@ -21,6 +21,7 @@ using Ceres.Base.Misc;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.NNEvaluators.LC0DLL;
 
+using Ceres.MCGS.Analysis;
 using Ceres.MCGS.Graphs;
 using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GNodes;
@@ -78,7 +79,23 @@ public class ManagerChooseBestMoveMCGS
 
 
   /// <summary>
-  /// Calculates the best move to play from root 
+  /// True only for the authoritative best-move calculation whose result is actually selected for
+  /// play, as opposed to the various secondary calculations that compute a best move without it
+  /// being the move played: periodic UCI info lines, PV extraction, the dump-move-stats display
+  /// command, etc.
+  ///
+  /// Those secondary calculations are not the real selection and set updateStatistics=false and/or
+  /// isFinalBestMoveCalc=false; only the genuine selection (MCGSManager search result and
+  /// GameEngine move emission) sets BOTH true. Note isFinalBestMoveCalc alone is insufficient:
+  /// dump-move-stats deliberately passes isFinalBestMoveCalc=true (so its displayed move reflects
+  /// the final overrides) while passing updateStatistics=false; conversely the secondary
+  /// GetBestMove peek passes updateStatistics=true but isFinalBestMoveCalc=false.
+  /// </summary>
+  private bool IsActualMoveSelection => IsFinalBestMoveCalc && UpdateStatistics;
+
+
+  /// <summary>
+  /// Calculates the best move to play from root
   /// given the current state of the search.
   /// </summary>
   public BestMoveInfoMCGS BestMoveCalc
@@ -378,14 +395,16 @@ public class ManagerChooseBestMoveMCGS
         {
           BestMoveInfoMCGS candidateResult = new BestMoveInfoMCGS(BestMoveInfoMCGS.BestMoveReason.SearchResult, position, candidate, (float)-edgesSortedQ[0].Q, childrenSortedN[0].N,
                                       BestNSecond, childrenSortedN[0], edgesSortedQ[0]);
-          return TryOverrideWithMoreIrreversibleMove(position, candidateResult, edgesSortedQ);
+          return TryOverrideWithMoreIrreversibleMove(position,
+                   TryOverrideWithRootMinimaxBlend(position, candidateResult, edgesSortedQ, childrenSortedN), edgesSortedQ);
         }
       }
 
       // We didn't find any moves qualified by Q, fallback to move with highest N
       BestMoveInfoMCGS result = new BestMoveInfoMCGS(BestMoveInfoMCGS.BestMoveReason.SearchResult, position, childrenSortedN[0], (float)-edgesSortedQ[0].Q, childrenSortedN[0].N,
                                   BestNSecond, childrenSortedN[0], edgesSortedQ[0]);
-      return TryOverrideWithMoreIrreversibleMove(position, result, edgesSortedQ);
+      return TryOverrideWithMoreIrreversibleMove(position,
+               TryOverrideWithRootMinimaxBlend(position, result, edgesSortedQ, childrenSortedN), edgesSortedQ);
 
     }
     else
@@ -556,6 +575,132 @@ public class ManagerChooseBestMoveMCGS
     }
 
     return currentBest;
+  }
+
+
+  /// <summary>
+  /// Opt-in tiebreak among root moves that are nearly equal in averaged Q: prefers the move with
+  /// the highest static, depth-bounded soft-minimax blend value over the existing graph
+  /// (see ParamsRootMinimaxBlend and PrincipalRevaluation.BlendedRootChildValues). The pass is
+  /// read-only over the final tree (no NN evaluations, no graph mutation).
+  ///
+  /// Engages only when enabled, at the final best-move calculation, on a normal search result with
+  /// at least MinRootN visits, and only among candidates that (a) lie within QGapThreshold of the
+  /// chosen move in Q and (b) already pass the standard sufficient-N eligibility gate
+  /// (MinFractionNToUseQ) - so it can only reorder moves the chooser already deems sound, never
+  /// promote an under-supported move.
+  ///
+  /// In shadow mode (Enabled but not ApplyToBestMove) it logs what it would have done and returns
+  /// the baseline unchanged.
+  /// </summary>
+  /// <param name="position">The current position.</param>
+  /// <param name="currentBest">The currently chosen best move info.</param>
+  /// <param name="edgesSortedQ">Root edges sorted by Q (best for us first).</param>
+  /// <param name="childrenSortedN">Root edges sorted by N (most visited first).</param>
+  /// <returns>The (possibly substituted) best move info.</returns>
+  private BestMoveInfoMCGS TryOverrideWithRootMinimaxBlend(MGPosition position,
+                                                           BestMoveInfoMCGS currentBest,
+                                                           GEdge[] edgesSortedQ,
+                                                           GEdge[] childrenSortedN)
+  {
+    // Only run for the genuine move selection that is actually played - never for secondary
+    // best-move calculations (UCI info lines, PV extraction, dump-move-stats), which would incur
+    // the cost without affecting play. See IsActualMoveSelection.
+    ParamsRootMinimaxBlend p = Manager.ParamsSearch.RootMinimaxBlend;
+    if (!IsActualMoveSelection || p == null || p.Mode == ParamsRootMinimaxBlend.ModeType.Disabled)
+    {
+      return currentBest;
+    }
+
+    if (Node.N < p.MinRootN
+     || currentBest.Reason != BestMoveInfoMCGS.BestMoveReason.SearchResult)
+    {
+      return currentBest;
+    }
+
+    GEdge moveA = currentBest.BestMoveEdge;
+    if (moveA.IsNull)
+    {
+      return currentBest;
+    }
+
+    System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+
+    // Build the candidate set: the incumbent plus any move whose Q is within QGapThreshold of it
+    // and whose visit count is at least MinCandidateFractionN of the most-visited move's N
+    // ("well supported, not small relative to the largest N"). Restricting to this well-supported,
+    // near-equal-Q neighborhood bounds the tiebreak's reach. (The chooser's own MinFractionNToUseQ
+    // gate is deliberately NOT reused here: for near-equal Q it demands near-full visit parity and
+    // so would almost never admit a second candidate.)
+    int bestN = childrenSortedN[0].N;
+    int minCandidateN = (int)(p.MinCandidateFractionN * bestN);
+
+    List<GEdge> candidates = new() { moveA };
+    foreach (GEdge e in edgesSortedQ)
+    {
+      if (e.IsNull || e == moveA)
+      {
+        continue;
+      }
+
+      // Candidate must be near-equal in Q to the chosen move and well supported
+      // (N not small relative to the most-visited move).
+      if (MathF.Abs((float)(e.Q - moveA.Q)) > p.QGapThreshold)
+      {
+        continue;
+      }
+      if (e.N < minCandidateN)
+      {
+        continue;
+      }
+
+      candidates.Add(e);
+    }
+
+    if (candidates.Count < 2)
+    {
+      return currentBest; // nothing to disambiguate (the common case)
+    }
+
+    // Static, read-only, depth-bounded soft-minimax blend value (our perspective) for each candidate.
+    double[] blend = PrincipalRevaluation.BlendedRootChildValues(candidates, p.Depth, p.Intensity,
+                                                                 p.SoftmaxP, p.CutFraction, p.NCutAbs, Node.N);
+
+    // Candidate 0 is the incumbent; find the highest-blend challenger.
+    double incumbentBlend = blend[0];
+    int bestIdx = 0;
+    double bestBlend = incumbentBlend;
+    for (int i = 1; i < candidates.Count; i++)
+    {
+      if (blend[i] > bestBlend)
+      {
+        bestBlend = blend[i];
+        bestIdx = i;
+      }
+    }
+
+    // Switch only if a challenger beats the incumbent's blended value by at least SwitchMargin.
+    if (bestIdx == 0 || bestBlend <= incumbentBlend + p.SwitchMargin)
+    {
+      return currentBest;
+    }
+
+    GEdge challenger = candidates[bestIdx];
+
+    bool apply = p.Mode == ParamsRootMinimaxBlend.ModeType.Active;
+    ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+      $"[ROOT-BLEND {(apply ? "SWITCH" : "would switch")}] {moveA.MoveMG} -> {challenger.MoveMG}  "
+    + $"Q: {-moveA.Q:F4} -> {-challenger.Q:F4}  blend: {incumbentBlend:F4} -> {bestBlend:F4}  "
+    + $"(lambda={p.Intensity}, depth={p.Depth}, p={p.SoftmaxP}, candidates={candidates.Count}, {sw.Elapsed.TotalMilliseconds:F2}ms)");
+
+    if (!apply)
+    {
+      return currentBest; // shadow mode: report only, do not change the played move
+    }
+
+    return new BestMoveInfoMCGS(BestMoveInfoMCGS.BestMoveReason.SearchResult, position, challenger,
+                                currentBest.QMaximal, currentBest.BestN, currentBest.BestNSecond,
+                                currentBest.BestNEdge, currentBest.BestQEdge);
   }
 
 
