@@ -310,8 +310,8 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
 
   // Hard ceiling on a single move's allocation as a fraction of remaining fixed time, applied as a
   // final anti-flag safety. This is the dominant lever on the low-clock equilibrium in Fischer play:
-  // the clock parks near (increment / this fraction). At 0.70 a 1.5s increment parks near ~2.1s.
-  const float MAX_FRACTION_REMAINING_PER_MOVE = 0.70f;
+  // the clock parks near (increment / this fraction). At 0.50 a 1.5s increment parks near ~3s.
+  const float MAX_FRACTION_REMAINING_PER_MOVE = 0.50f;
 
 
   /// <summary>
