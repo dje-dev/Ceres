@@ -45,6 +45,14 @@ public record ManagerGameLimitOutputs
   public SearchLimit LimitTarget { init; get; }
 
   /// <summary>
+  /// Optional human-readable diagnostic text describing how this allocation was derived
+  /// (inputs, intermediate factors, return path, final value). Populated only when the
+  /// owning manager has CaptureDiagnostics set (or console dumping is enabled); otherwise null.
+  /// Intended for recording in the diagnostic game move-log; has no effect on play.
+  /// </summary>
+  public string DiagnosticText { get; set; }
+
+  /// <summary>
   /// Constructor.
   /// </summary>
   public ManagerGameLimitOutputs(SearchLimit baseTarget)

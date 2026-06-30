@@ -38,6 +38,17 @@ public interface IManagerGameLimit
 
 
   /// <summary>
+  /// If set, the manager should build a human-readable diagnostic string describing how each move's
+  /// allocation was derived and attach it to the outputs (ManagerGameLimitOutputs.DiagnosticText), so
+  /// callers (e.g. the diagnostic game move-log) can record it near the move header. This is
+  /// independent of any console dumping, which is governed separately (and unconditionally) by
+  /// MCGSParamsFixed.DUMP_LIMIT_CALC. Default implementation is a no-op for managers that do not
+  /// produce diagnostics.
+  /// </summary>
+  public bool CaptureDiagnostics { get => false; set { } }
+
+
+  /// <summary>
   /// Method called periodically to determine if an instamove would be
   /// acceptable given the current state.
   /// </summary>

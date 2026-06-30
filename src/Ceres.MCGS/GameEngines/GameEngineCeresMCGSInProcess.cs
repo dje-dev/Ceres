@@ -196,6 +196,16 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   /// </summary>
   public float? TournamentClockRemainingSeconds { get; set; }
 
+  /// <summary>
+  /// Time remaining on the tournament clock (in seconds) for the OPPONENT at the start of the
+  /// current move, or null when not playing in a timed tournament (or the opponent's clock is not
+  /// known, e.g. an external/UCI opponent). Set by the tournament before each search and logged as
+  /// "OppTimeRem" on the move line. Exposed so the engine can (now or in future) reason about the
+  /// opponent's remaining time. Only populated when the opponent is driven by this same in-process
+  /// tournament (a Ceres tournament).
+  /// </summary>
+  public float? TournamentClockRemainingOpponentSeconds { get; set; }
+
 
   #region Internal data
 
@@ -281,6 +291,13 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     ForcedMoves = forcedMoves;
     FixedSearchLimit = fixedSearchLimit;
     EmitGameLog = emitGameLog;
+
+    // If a diagnostic move-log will be emitted, have the limit manager capture its per-move
+    // allocation reasoning so it can be recorded near each move header (see BuildGameLogMoveLine).
+    if (GameLimitManager != null && emitGameLog)
+    {
+      GameLimitManager.CaptureDiagnostics = true;
+    }
 
     if (logFileName == null && !string.IsNullOrEmpty(CeresUserSettingsManager.Settings.SearchLogFile))
     {
@@ -557,6 +574,9 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     {
       try
       {
+        // Emit the limits-manager allocation reasoning (if captured) immediately before the move
+        // line it governs, so it sits next to that move header (mirrors the inline blunder block).
+        gameLog.AppendLimitsSection(result.Search.Manager.LastGameLimitOutputs?.DiagnosticText);
         gameLog.WriteMoveLine(BuildGameLogMoveLine(result, bestMoveInfo));
       }
       catch (Exception exc)
@@ -891,6 +911,13 @@ public class GameEngineCeresMCGSInProcess : GameEngine
 
     gameLog = new MCGSGameMoveLog(fileName);
     gameLog.WriteHeader(ID, EvaluatorDef, assignedSearchLimit, SearchParams, SelectParams);
+
+    // Tournament path enables logging here (regardless of EmitGameLog); make sure the limit manager
+    // also captures its per-move allocation reasoning for inclusion in the log.
+    if (GameLimitManager != null)
+    {
+      GameLimitManager.CaptureDiagnostics = true;
+    }
   }
 
 
@@ -953,6 +980,7 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     long storeN = root.GraphStore.NodesStore.NumUsedNodes;
     long nnEvals = root.Graph.NNPositionEvaluationsCount;
     float? timeRem = TournamentClockRemainingSeconds;
+    float? oppTimeRem = TournamentClockRemainingOpponentSeconds;
     float limInit = manager.SearchLimitInitial == null ? float.NaN : manager.SearchLimitInitial.Value;
     double elapsed = manager.TimeElapsedTotalSeconds;
 
@@ -996,6 +1024,7 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     sb.Append("StoreN=").Append(storeN.ToString(ci)).Append(", ");
     sb.Append("NNEvals=").Append(nnEvals.ToString(ci)).Append(", ");
     sb.Append("TimeRem=").Append(FormatSeconds(timeRem)).Append(", ");
+    sb.Append("OppTimeRem=").Append(FormatSeconds(oppTimeRem)).Append(", ");
     sb.Append("LimInit=").Append(FormatNumber(limInit, "F2", ci)).Append(", ");
     sb.Append("Elapsed=").Append(FormatNumber(elapsed, "F3", ci)).Append(", ");
     sb.Append("BudgetFrac=").Append(FormatNumber(budgetFrac, "F1", ci)).Append("%, ");

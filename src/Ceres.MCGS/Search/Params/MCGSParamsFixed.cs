@@ -39,6 +39,15 @@ public static class MCGSParamsFixed
 
   public const bool DUMP_EARLY_SMOOTHING_BOOST = false;
 
+  /// <summary>
+  /// If true, the game limit manager (ManagerGameLimitCeresMCGS) emits one
+  /// comprehensive line per move to the console showing every input and
+  /// intermediate factor that produced the time/nodes allocation, the return
+  /// path taken, and the final allocated value (with the binding clamp, if any).
+  /// Intended as a debugging/analysis convenience; has no effect on play.
+  /// </summary>
+  public const bool DUMP_LIMIT_CALC = false;
+
   public const bool LOG_LIVE_STATS = false;
 
   /// <summary>

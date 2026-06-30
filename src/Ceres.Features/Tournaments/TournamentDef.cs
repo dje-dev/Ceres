@@ -72,7 +72,7 @@ namespace Ceres.Features.Tournaments
 
     /// <summary>
     /// Write a move-log file only for engines whose assigned search limit implies a long game,
-    /// i.e. the estimated total search for the game exceeds ~1,000,000 nodes or ~5 minutes of
+    /// i.e. the estimated total search for the game exceeds ~1,000,000 nodes or ~3 minutes of
     /// thinking time (heuristic estimate from the SearchLimit).
     /// </summary>
     IfLongSearchLimits

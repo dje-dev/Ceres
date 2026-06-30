@@ -16,6 +16,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Threading;
 
 using Ceres.Base.Misc;
 using Ceres.Chess;
@@ -48,9 +49,11 @@ public sealed class MCGSGameMoveLog : IDisposable
   /// Order of the scalar tokens emitted on each move line (documented in the header legend).
   /// </summary>
   public const string BODY_LEGEND =
-    "LEGEND (per move line): FEN, RootN, StoreN, NNEvals, TimeRem, LimInit, Elapsed, "
+    "LEGEND (per move line): FEN, RootN, StoreN, NNEvals, TimeRem, OppTimeRem, LimInit, Elapsed, "
     + "BudgetFrac%, NPS, EPS, BackendBusy, Depth, SelDepth | candidate moves as (SAN, visit%, Q) "
     + "sorted by visits descending, '*' prefixes the played move, Q from side-to-move perspective. "
+    + "TimeRem / OppTimeRem are the engine's own and the opponent's remaining game clock (seconds), "
+    + "populated only for SecondsForAllMoves play within a Ceres tournament (else n/a). "
     + "LimInit is the per-move allocated budget (seconds for time limits, nodes for node limits); "
     + "BudgetFrac is the percent of that budget used this move (elapsed/LimInit for time limits, "
     + "nodes-this-search/LimInit for node limits). "
@@ -62,6 +65,24 @@ public sealed class MCGSGameMoveLog : IDisposable
 
   bool headerWritten;
   bool closed;
+
+  // Background HTML regeneration. The (cheap, incremental) text log is written on the calling
+  // (game-playing) thread, but the full HTML rebuild at each game end is offloaded to a dedicated
+  // low-priority background thread so the main thread is never blocked and the rebuild never steals
+  // cycles from search. Regenerations are coalesced: at most one runs at a time per log, and if
+  // further game-ends arrive while one is in flight a single follow-up pass is queued, so the final
+  // HTML always reflects the latest state and a slow render can never overwrite a newer one.
+  readonly object htmlLock = new();
+  Thread htmlThread;        // the currently running regeneration worker (null when idle)
+  bool htmlRegenQueued;     // another regeneration was requested while the worker was running
+
+  int gamesCompleted;       // number of game-result footers written (guarded by lockObj)
+
+  // For the first HTML_REGEN_EVERY_GAME_THRESHOLD games the HTML is regenerated after every game;
+  // beyond that it is regenerated only every HTML_REGEN_THROTTLE_INTERVAL-th game, to bound the
+  // cumulative rebuild cost over long tournaments. Close always produces the final complete HTML.
+  const int HTML_REGEN_EVERY_GAME_THRESHOLD = 100;
+  const int HTML_REGEN_THROTTLE_INTERVAL = 10;
 
   /// <summary>
   /// Name of the underlying file being written.
@@ -180,16 +201,102 @@ public sealed class MCGSGameMoveLog : IDisposable
       writer.WriteLine(footerText);
       writer.Flush();
 
-      // Regenerate the standalone HTML rendering alongside the log (same directory) at the end of
-      // each game, so an up-to-date view is always available. Never let this disrupt the game.
+      gamesCompleted++;
+
+      // Regenerate the standalone HTML rendering alongside the log so an up-to-date view is available.
+      // Regenerate after every game until the throttle threshold, then only every Nth game thereafter
+      // (the final, complete HTML is always produced by Close regardless). The rebuild runs on a
+      // low-priority background worker so the game-playing thread is never blocked by it.
+      bool shouldRegenerate = gamesCompleted <= HTML_REGEN_EVERY_GAME_THRESHOLD
+                           || (gamesCompleted % HTML_REGEN_THROTTLE_INTERVAL) == 0;
+      if (shouldRegenerate)
+      {
+        RequestHtmlRegeneration();
+      }
+    }
+  }
+
+
+  /// <summary>
+  /// Requests a background regeneration of the HTML rendering. If a regeneration is already running,
+  /// a single follow-up pass is queued so the final output reflects the latest log state (rather than
+  /// starting overlapping renders that could finish out of order). Never throws.
+  /// </summary>
+  void RequestHtmlRegeneration()
+  {
+    lock (htmlLock)
+    {
+      if (closed)
+      {
+        return; // Close performs the final, authoritative regeneration.
+      }
+
+      if (htmlThread != null && htmlThread.IsAlive)
+      {
+        htmlRegenQueued = true; // coalesce into one follow-up pass after the current render
+        return;
+      }
+
+      htmlRegenQueued = false;
+      htmlThread = new Thread(RunHtmlRegenerationLoop)
+      {
+        IsBackground = true,             // never keep the process alive on this worker
+        Priority = ThreadPriority.Lowest, // diagnostic-only; must not compete with search threads
+        Name = "MCGSGameMoveLogHtml"
+      };
+      htmlThread.Start();
+    }
+  }
+
+
+  /// <summary>
+  /// Background worker: regenerates the HTML, then keeps going while follow-up passes were requested
+  /// during the prior render. Exactly one instance of this loop runs at a time per log instance, so
+  /// renders never overlap and the last pass always observes the most recently written log state.
+  /// </summary>
+  void RunHtmlRegenerationLoop()
+  {
+    while (true)
+    {
       try
       {
         MCGSGameMoveLogHtmlFormatter.WriteHtmlFile(fileName, fileName + ".html");
       }
       catch (Exception)
       {
-        // Ignore HTML generation failures.
+        // Never let HTML generation disrupt the tournament; just skip this pass.
       }
+
+      lock (htmlLock)
+      {
+        if (!htmlRegenQueued)
+        {
+          htmlThread = null;
+          return;
+        }
+        htmlRegenQueued = false; // consume the queued request and render again
+      }
+    }
+  }
+
+
+  /// <summary>
+  /// Appends a (preformatted) limits-manager diagnostics block, delimited by markers so post-processors
+  /// can locate it, and flushes. Emitted inline immediately before the move whose budget it describes
+  /// (the allocation is computed before the move is searched), so it appears next to that move header.
+  /// </summary>
+  public void AppendLimitsSection(string limitsText)
+  {
+    lock (lockObj)
+    {
+      if (closed || string.IsNullOrEmpty(limitsText))
+      {
+        return;
+      }
+      writer.WriteLine("=== LIMITS ===");
+      writer.WriteLine(limitsText);
+      writer.WriteLine("=== END LIMITS ===");
+      writer.Flush();
     }
   }
 
@@ -228,6 +335,31 @@ public sealed class MCGSGameMoveLog : IDisposable
       closed = true;
       writer.Flush();
       writer.Dispose();
+    }
+
+    // Wait for any in-flight background HTML regeneration to finish first (so it cannot overwrite
+    // the file with a stale render after we exit), then do one final synchronous regeneration to
+    // guarantee the HTML reflects the fully written log.
+    Thread pending;
+    lock (htmlLock)
+    {
+      pending = htmlThread;
+    }
+    try
+    {
+      pending?.Join();
+    }
+    catch (Exception)
+    {
+      // Ignore failures from the background regeneration.
+    }
+    try
+    {
+      MCGSGameMoveLogHtmlFormatter.WriteHtmlFile(fileName, fileName + ".html");
+    }
+    catch (Exception)
+    {
+      // Ignore HTML generation failures.
     }
   }
 

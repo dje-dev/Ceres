@@ -31,6 +31,13 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
 {
   public readonly float Aggressiveness;
 
+  /// <summary>
+  /// If set, every ComputeMoveAllocation builds a diagnostic string (attached to the outputs)
+  /// describing how the allocation was derived, so it can be recorded in the game move-log.
+  /// Independent of MCGSParamsFixed.DUMP_LIMIT_CALC, which separately governs console dumping.
+  /// </summary>
+  public bool CaptureDiagnostics { get; set; }
+
   const int EARLY_SMOOTHING_MAX_ADJUSTS = 3;
   const float EARLY_SMOOTHING_BOOST = 1.3f;
 
@@ -81,8 +88,8 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
     {
       < 150_000 => 12,
       < 500_000 => 15,
-      < 2_000_000 => 19,
-      < 5_000_000 => 22,
+      < 2_000_000 => 20,
+      < 5_000_000 => 24,
       _ => 25
     };
 
@@ -104,12 +111,43 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
 
 
   /// <summary>
+  /// Mutable bag of intermediate values captured during a single ComputeMoveAllocation
+  /// call when MCGSParamsFixed.DUMP_LIMIT_CALC is enabled, used to emit a comprehensive
+  /// per-move diagnostic line. Fields left at their float.NaN sentinel were not reached
+  /// on the return path actually taken (e.g. the per-move factor breakdown is skipped on
+  /// the last-move / panic / near-exhaustion shortcuts).
+  /// </summary>
+  sealed class LimitCalcTrace
+  {
+    // FractionOfBasePerMoveToUse breakdown.
+    public float GraphReuseShrinkage = float.NaN;
+    public float FactorWinningness   = float.NaN;
+    public bool  CourtesyApplied;
+    public float FactorFirstMove     = float.NaN;
+    public float StartDivisor        = float.NaN;
+    public float BaseDivisor         = float.NaN;
+    public float BaseMultiplier      = float.NaN;
+    public bool  EarlyGameExtension;
+    public float FractionOfBase      = float.NaN;
+
+    // ComputeMoveAllocation breakdown.
+    public float BaseValueToUse          = float.NaN;
+    public float FractionOfIncrementToUse = float.NaN;
+    public float TotalValuePreSmoothing  = float.NaN;
+    public bool  EarlySmoothingBoostApplied;
+    public string Path = "normal";
+    public float ExtensionFraction = float.NaN;
+    public bool  ClampedByMaxFraction;
+  }
+
+
+  /// <summary>
   /// Determines what fraction of the base move should
   /// be consumed for this move.
   /// </summary>
   /// <param name="inputs"></param>
   /// <returns></returns>
-  float FractionOfBasePerMoveToUse(ManagerGameLimitInputs inputs, bool earlyGameExtension)
+  float FractionOfBasePerMoveToUse(ManagerGameLimitInputs inputs, bool earlyGameExtension, LimitCalcTrace trace = null)
   {
     int priorRootN = inputs.PriorMoveStats != null && inputs.PriorMoveStats.Count > 1 ? inputs.PriorMoveStats[^2].FinalN : 0;
     int thisRootN = inputs.RootN;
@@ -153,13 +191,16 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
     // When we are behind then it's worth taking a gamble and using more time
     // but when we are ahead, take a little less time to be sure we don't err in time pressure.
     float factorWinningness;
+    bool courtesyApplied = false;
     if (courtesyEligible && inputs.RootQ >= COURTESY_Q_700CP)
     {
       factorWinningness = COURTESY_MULT_700CP;  // absolutely won (~+700cp): play faster
+      courtesyApplied = true;
     }
     else if (courtesyEligible && inputs.RootQ >= COURTESY_Q_400CP)
     {
       factorWinningness = COURTESY_MULT_400CP;  // clearly won (~+400cp): play a little faster
+      courtesyApplied = true;
     }
     else
     {
@@ -231,6 +272,19 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
               * factorWinningness
               * factorFirstMove;
 
+    if (trace != null)
+    {
+      trace.GraphReuseShrinkage = graphReuseShrinkageMultiplier;
+      trace.FactorWinningness   = factorWinningness;
+      trace.CourtesyApplied     = courtesyApplied;
+      trace.FactorFirstMove     = factorFirstMove;
+      trace.StartDivisor        = startDivisor;
+      trace.BaseDivisor         = baseDivisor;
+      trace.BaseMultiplier      = adjustedBaseMultiplier;
+      trace.EarlyGameExtension  = earlyGameExtension;
+      trace.FractionOfBase      = ret;
+    }
+
     return ret;
   }
 
@@ -253,6 +307,11 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
   const float EXTENSION_FRACTION_PANIC = 0.0f;
   const float EXTENSION_FRACTION_NEAR_EXHAUSTION = 0.2f;
   const float EXTENSION_FRACTION_NORMAL = 0.6f;
+
+  // Hard ceiling on a single move's allocation as a fraction of remaining fixed time, applied as a
+  // final anti-flag safety. This is the dominant lever on the low-clock equilibrium in Fischer play:
+  // the clock parks near (increment / this fraction). At 0.70 a 1.5s increment parks near ~2.1s.
+  const float MAX_FRACTION_REMAINING_PER_MOVE = 0.70f;
 
 
   /// <summary>
@@ -325,6 +384,10 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
       UpdateEarlySmoothingState(inputs);
     }
 
+    // Only incur the cost of capturing intermediates / formatting the diagnostic string when it
+    // will actually be consumed: console dumping (DUMP_LIMIT_CALC) or move-log capture.
+    LimitCalcTrace trace = (MCGSParamsFixed.DUMP_LIMIT_CALC || CaptureDiagnostics) ? new LimitCalcTrace() : null;
+
     // Check if the early game extension mode should be enabled.
     bool earlyGameExtensionMode = false;
     if (inputs.TargetLimitType == SearchLimitType.SecondsPerMove // TODO: Extend this to NodesPerMove?
@@ -342,18 +405,40 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
       }
     }
 
-    ManagerGameLimitOutputs Return(float value, float extensionFraction)
-      => new ManagerGameLimitOutputs(new SearchLimit(inputs.TargetLimitType,
-                                                     SearchLimit.TypeIsNodesLimit(inputs.TargetLimitType) ? Math.Max(1, value) : value,
+    ManagerGameLimitOutputs Return(float value, float extensionFraction, string path = "normal")
+    {
+      float finalValue = SearchLimit.TypeIsNodesLimit(inputs.TargetLimitType) ? Math.Max(1, value) : value;
+      var outputs = new ManagerGameLimitOutputs(new SearchLimit(inputs.TargetLimitType,
+                                                     finalValue,
                                                      fractionExtensibleIfNeeded: extensionFraction,
                                                      maxTreeNodes: inputs.MaxTreeNodesSelf,
                                                      maxTreeVisits: inputs.MaxTreeVisitsSelf));
+      if (trace != null)
+      {
+        trace.Path = path;
+        trace.ExtensionFraction = extensionFraction;
+
+        // Build the diagnostic string once. Attach it to the outputs so the move-log can record it,
+        // and (only when explicitly enabled) also echo it to the console.
+        string diag = BuildLimitCalcString(inputs, trace, finalValue);
+        outputs.DiagnosticText = diag;
+
+        if (MCGSParamsFixed.DUMP_LIMIT_CALC)
+        {
+          ConsoleColor savedColor = Console.ForegroundColor;
+          Console.ForegroundColor = ConsoleColor.Cyan;
+          Console.WriteLine("\r\n" + diag);
+          Console.ForegroundColor = savedColor;
+        }
+      }
+      return outputs;
+    }
 
     // If this is the last move to go, use almost all available time.
     // TODO: but can a player carry forward time on a clock? Then this doesn't make sense.
     if (inputs.MaxMovesToGo.HasValue && inputs.MaxMovesToGo < 2)
     {
-      return Return(inputs.RemainingFixedSelf * 0.98f, 0);
+      return Return(inputs.RemainingFixedSelf * 0.98f, 0, "last-move");
     }
 
     float incrementMeaningfulThreshold = SearchLimit.TypeIsNodesLimit(inputs.TargetLimitType) ? 1 : 0.01f;
@@ -362,17 +447,21 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
     if (Panic(inputs))
     {
       float multiplier = hasMeaningfulIncrement ? 0.50f : 0.01f;
-      return Return(inputs.RemainingFixedSelf * multiplier, EXTENSION_FRACTION_PANIC);
+      return Return(inputs.RemainingFixedSelf * multiplier, EXTENSION_FRACTION_PANIC, "panic");
     }
     else if (NearExhaustion(inputs))
     {
       float multiplier = hasMeaningfulIncrement ? 0.70f : 0.03f;
-      return Return(inputs.RemainingFixedSelf * multiplier, EXTENSION_FRACTION_NEAR_EXHAUSTION);
+      return Return(inputs.RemainingFixedSelf * multiplier, EXTENSION_FRACTION_NEAR_EXHAUSTION, "near-exhaustion");
     }
 
     // Note that per the UCI specification, the RemainingFixedSelf already includes any increment.
     float remainingExcludingIncrement = inputs.RemainingFixedSelf - inputs.IncrementSelf;
-    float baseValueToUse = remainingExcludingIncrement * FractionOfBasePerMoveToUse(inputs, earlyGameExtensionMode);
+    float baseValueToUse = remainingExcludingIncrement * FractionOfBasePerMoveToUse(inputs, earlyGameExtensionMode, trace);
+    if (trace != null)
+    {
+      trace.BaseValueToUse = baseValueToUse;
+    }
 
     float fractionOfIncrementToUse = 0;
     if (inputs.IncrementSelf > 0)
@@ -381,18 +470,26 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
       bool isLowTimeIncrement = inputs.TargetLimitType == SearchLimitType.SecondsPerMove && inputs.IncrementSelf < 0.5f;
 
       // Possibly use a lower fraction of the increment if little left in reserve.
+      // For normal increments we now spend nearly the full increment even when the base-time
+      // reserve is small, so in low-clock Fischer play the equilibrium clock parks lower (~2s with
+      // a 1.5s increment) rather than ~4s. Tiny increments (isLowTimeIncrement) stay conservative.
       fractionOfIncrementToUse = numIncrementsAvailableTime switch
       {
         < 0.0f => 0.05f, // possibly already in technical forfeit!
-        < 1.0f => isLowTimeIncrement ? 0.30f : 0.50f,
-        < 2.0f => isLowTimeIncrement ? 0.75f : 0.90f,
-        < 3.0f => isLowTimeIncrement ? 0.90f : 0.95f, // if at least 2 increments are available we don't need to hold much back
+        < 1.0f => isLowTimeIncrement ? 0.30f : 0.97f,
+        < 2.0f => isLowTimeIncrement ? 0.75f : 0.98f,
+        < 3.0f => isLowTimeIncrement ? 0.90f : 0.98f,
         _ => 0.98f,
       };
     }
 
     // Try to use almost all of the increment plus part of base time remaining.
     float totalValueUse = baseValueToUse + inputs.IncrementSelf * fractionOfIncrementToUse;
+    if (trace != null)
+    {
+      trace.FractionOfIncrementToUse = fractionOfIncrementToUse;
+      trace.TotalValuePreSmoothing = totalValueUse;
+    }
 
     // Prevent totalValueFromUse being zero or negative.
     if (SearchLimit.TypeIsNodesLimit(inputs.TargetLimitType))
@@ -416,25 +513,80 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
       bool isEarlyUnsmooth = baselineValid
                           && inputs.RootN < earlySmothingBaselineFrac * earlySmoothingBaselineN;
 
-      if (MCGSParamsFixed.DUMP_EARLY_SMOOTHING_BOOST && canStillAdjust && isEarlyUnsmooth)
+      if (canStillAdjust && isEarlyUnsmooth)
       {
         earlySmoothingAdjustsApplied++;
         totalValueUse *= EARLY_SMOOTHING_BOOST;
+        if (trace != null)
+        {
+          trace.EarlySmoothingBoostApplied = true;
+        }
 
-        ConsoleColor savedColor = Console.ForegroundColor;
-        Console.ForegroundColor = ConsoleColor.Yellow;
-        int earlySmoothingMoves = EarlySmoothingWindowMoves(earlySmoothingBaselineN);
-        Console.WriteLine($"\r\n[GameLimitEarlySmoothing] boost x{EARLY_SMOOTHING_BOOST:F2}  "
-                        + $"RootN={inputs.RootN} < {earlySmothingBaselineFrac:F2}*baseline({earlySmoothingBaselineN})"
-                        + $"={earlySmothingBaselineFrac * earlySmoothingBaselineN:F0}  "
-                        + $"adj {earlySmoothingAdjustsApplied}/{EARLY_SMOOTHING_MAX_ADJUSTS}  "
-                        + $"window {earlySmoothingMoves - earlySmoothingMovesRemaining}/{earlySmoothingMoves}");
-        Console.ForegroundColor = savedColor;
+        // DUMP_EARLY_SMOOTHING_BOOST gates only the diagnostic console output, not the boost itself.
+        if (MCGSParamsFixed.DUMP_EARLY_SMOOTHING_BOOST)
+        {
+          ConsoleColor savedColor = Console.ForegroundColor;
+          Console.ForegroundColor = ConsoleColor.Yellow;
+          int earlySmoothingMoves = EarlySmoothingWindowMoves(earlySmoothingBaselineN);
+          Console.WriteLine($"\r\n[GameLimitEarlySmoothing] boost x{EARLY_SMOOTHING_BOOST:F2}  "
+                          + $"RootN={inputs.RootN} < {earlySmothingBaselineFrac:F2}*baseline({earlySmoothingBaselineN})"
+                          + $"={earlySmothingBaselineFrac * earlySmoothingBaselineN:F0}  "
+                          + $"adj {earlySmoothingAdjustsApplied}/{EARLY_SMOOTHING_MAX_ADJUSTS}  "
+                          + $"window {earlySmoothingMoves - earlySmoothingMovesRemaining}/{earlySmoothingMoves}");
+          Console.ForegroundColor = savedColor;
+        }
       }
     }
 
-    // But never spend more than 35% of fixed time remaining
-    // (since the increment is not earned until after the move is made).
-    return Return(MathF.Min(totalValueUse, inputs.RemainingFixedSelf * 0.35f), EXTENSION_FRACTION_NORMAL);
+    // But never spend more than MAX_FRACTION_REMAINING_PER_MOVE of fixed time remaining
+    // (final anti-flag safety; see the constant's note on the resulting low-clock equilibrium).
+    float maxFractionCap = inputs.RemainingFixedSelf * MAX_FRACTION_REMAINING_PER_MOVE;
+    if (trace != null)
+    {
+      trace.ClampedByMaxFraction = totalValueUse > maxFractionCap;
+    }
+    return Return(MathF.Min(totalValueUse, maxFractionCap), EXTENSION_FRACTION_NORMAL);
+  }
+
+
+  /// <summary>
+  /// Builds one comprehensive multi-line diagnostic block describing how the allocation for this
+  /// move was derived (inputs, intermediate factors, return path, final value). Called only when
+  /// diagnostics are being captured (move-log) or dumped (console); never on the hot path otherwise.
+  /// </summary>
+  string BuildLimitCalcString(ManagerGameLimitInputs inputs, LimitCalcTrace trace, float finalValue)
+  {
+    bool isNodes = SearchLimit.TypeIsNodesLimit(inputs.TargetLimitType);
+    string unit = isNodes ? "nodes" : "sec";
+
+    // Render a float that may be NaN (i.e. not reached on the path taken) as "n/a".
+    static string F(float v, string fmt = "F3") => float.IsNaN(v) ? "n/a" : v.ToString(fmt);
+
+    System.Text.StringBuilder sb = new();
+
+    sb.AppendLine($"[LimitCalc] path={trace.Path}  type={inputs.TargetLimitType}  "
+                + $"=> ALLOC {F(finalValue)} {unit}  extFrac={F(trace.ExtensionFraction, "F2")}"
+                + (trace.ClampedByMaxFraction ? "  [clamped@35%fixed]" : ""));
+
+    sb.AppendLine($"           in: rootN={inputs.RootN} rootQ={F(inputs.RootQ, "F4")} "
+                + $"remFixed={F(inputs.RemainingFixedSelf)} incr={F(inputs.IncrementSelf)} "
+                + $"pieces={inputs.StartPos.PieceCount} firstMove={inputs.IsFirstMoveOfGame} "
+                + $"movesToGo={(inputs.MaxMovesToGo.HasValue ? inputs.MaxMovesToGo.Value.ToString() : "-")} "
+                + $"quickMove={inputs.QuickMoveEnabled}");
+
+    sb.AppendLine($"           frac: aggr={Aggressiveness:F3} reuseShrink={F(trace.GraphReuseShrinkage)} "
+                + $"baseMult={F(trace.BaseMultiplier)}(early={trace.EarlyGameExtension}) "
+                + $"startDiv={F(trace.StartDivisor, "F2")} baseDiv={F(trace.BaseDivisor, "F2")} "
+                + $"winFactor={F(trace.FactorWinningness, "F2")}(courtesy={trace.CourtesyApplied}) "
+                + $"firstMoveFactor={F(trace.FactorFirstMove, "F2")} => fracOfBase={F(trace.FractionOfBase, "F4")}");
+
+    sb.Append($"           build: baseVal={F(trace.BaseValueToUse)} "
+                + $"incrFrac={F(trace.FractionOfIncrementToUse, "F2")} "
+                + $"preSmoothTotal={F(trace.TotalValuePreSmoothing)} "
+                + $"smoothBoost={trace.EarlySmoothingBoostApplied} "
+                + $"[smoothState baselineN={earlySmoothingBaselineN} "
+                + $"windowLeft={earlySmoothingMovesRemaining} adj={earlySmoothingAdjustsApplied}]");
+
+    return sb.ToString();
   }
 }

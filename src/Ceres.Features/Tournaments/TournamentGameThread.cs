@@ -521,6 +521,15 @@ namespace Ceres.Features.Tournaments
       sb.AppendLine($"SearchLimitWhite={info.SearchLimitWhite} SearchLimitBlack={info.SearchLimitBlack}");
       sb.AppendLine($"TotalTimeEngine1={info.TotalTimeEngine1} TotalTimeEngine2={info.TotalTimeEngine2}");
       sb.AppendLine($"RemainingTimeEngine1={info.RemainingTimeEngine1} RemainingTimeEngine2={info.RemainingTimeEngine2}");
+
+      // Same totals mapped to this-engine / opponent perspective for convenient consumption by the
+      // HTML renderer (which shows them in the per-game header).
+      float thisTotalTime = engineIsEngine1 ? info.TotalTimeEngine1 : info.TotalTimeEngine2;
+      float oppTotalTime = engineIsEngine1 ? info.TotalTimeEngine2 : info.TotalTimeEngine1;
+      float thisRemainingTime = engineIsEngine1 ? info.RemainingTimeEngine1 : info.RemainingTimeEngine2;
+      float oppRemainingTime = engineIsEngine1 ? info.RemainingTimeEngine2 : info.RemainingTimeEngine1;
+      sb.AppendLine($"ThisTotalTime={thisTotalTime} ThisRemainingTime={thisRemainingTime} "
+                  + $"OppTotalTime={oppTotalTime} OppRemainingTime={oppRemainingTime}");
       sb.AppendLine($"TotalNodesEngine1={info.TotalNodesEngine1} TotalNodesEngine2={info.TotalNodesEngine2}");
       sb.AppendLine($"TotalEvaluationsEngine1={info.TotalEvaluationsEngine1} TotalEvaluationsEngine2={info.TotalEvaluationsEngine2}");
       sb.AppendLine($"ShouldHaveForfeitedEngine1={info.ShouldHaveForfeitedOnLimitsEngine1} ShouldHaveForfeitedEngine2={info.ShouldHaveForfeitedOnLimitsEngine2}");
@@ -532,7 +541,7 @@ namespace Ceres.Features.Tournaments
     /// <summary>
     /// Heuristically estimates whether the given search limit implies a "long" game, used by
     /// GameLogFilesMode.IfLongSearchLimits. Returns true if the estimated total search for the whole
-    /// game exceeds ~1,000,000 nodes or ~5 minutes (300s) of thinking time. Per-move limits are scaled
+    /// game exceeds ~1,000,000 nodes or ~3 minutes (180s) of thinking time. Per-move limits are scaled
     /// by an approximate number of moves per game.
     /// </summary>
     private static bool SearchLimitImpliesLongGame(SearchLimit limit)
@@ -543,7 +552,7 @@ namespace Ceres.Features.Tournaments
       }
 
       const long NODE_THRESHOLD = 1_000_000;
-      const double SECONDS_THRESHOLD = 5 * 60;   // 5 minutes
+      const double SECONDS_THRESHOLD = 3 * 60;   // 3 minutes
       const int ESTIMATED_MOVES_PER_GAME = 80;   // approximate engine moves (plies) per game
 
       switch (limit.Type)
@@ -1277,10 +1286,14 @@ namespace Ceres.Features.Tournaments
         GameMoveStat moveStat;
         if (engine2ToMove)
         {
+          // Opponent (engine1) remaining clock as of the start of this move (time-limited play only).
+          float? oppRemaining1 = searchLimitEngine1.Type == SearchLimitType.SecondsForAllMoves
+                               ? RemainingTime(searchLimitEngine1, movesEngine1, timeEngine1Tot) : (float?)null;
           info = DoMove(engine2, engineCheckAgainstEngine2,
                         gameMoveHistory, searchLimitWithIncrementsEngine2, scoresEngine2,
                         ref nodesEngine2Tot, ref visitsEngine2Tot, ref timeEngine2Tot, ref evalsEngine2Tot,
-                        ref backendWaitEngine2Tot, ref backendSearchEngine2Tot, ref numNodesForcedDeterministic);
+                        ref backendWaitEngine2Tot, ref backendSearchEngine2Tot, ref numNodesForcedDeterministic,
+                        oppRemaining1);
           movesEngine2++;
 
           if (engine2IsWhite)
@@ -1296,10 +1309,14 @@ namespace Ceres.Features.Tournaments
         }
         else
         {
+          // Opponent (engine2) remaining clock as of the start of this move (time-limited play only).
+          float? oppRemaining2 = searchLimitEngine2.Type == SearchLimitType.SecondsForAllMoves
+                               ? RemainingTime(searchLimitEngine2, movesEngine2, timeEngine2Tot) : (float?)null;
           info = DoMove(engine1, null,
                         gameMoveHistory, searchLimitWithIncrementsEngine1, scoresEngine1,
                         ref nodesEngine1Tot, ref visitsEngine1Tot, ref timeEngine1Tot, ref evalsEngine1Tot,
-                        ref backendWaitEngine1Tot, ref backendSearchEngine1Tot, ref numNodesForcedDeterministic);
+                        ref backendWaitEngine1Tot, ref backendSearchEngine1Tot, ref numNodesForcedDeterministic,
+                        oppRemaining2);
           movesEngine1++;
           if (engine2IsWhite)
           {
@@ -1344,7 +1361,8 @@ namespace Ceres.Features.Tournaments
                                  ref long totalNodesUsed, ref long totalVisitsUsed, ref float totalTimeUsed,
                                  ref long totalEvalsUsed,
                                  ref double totalBackendWaitUsed, ref double totalBackendSearchUsed,
-                                 ref int numNodesForcedDeterministic)
+                                 ref int numNodesForcedDeterministic,
+                                 float? opponentRemainingTime)
       {
         SearchLimit thisMoveSearchLimit = searchLimit.Type switch
         {
@@ -1421,12 +1439,17 @@ namespace Ceres.Features.Tournaments
           };
         }
 
-        // Make the tournament clock visible to the engine's diagnostic move log (if any). Only the
-        // SecondsForAllMoves limit type has a meaningful running clock; otherwise report none.
-        if (Def.GameLogFiles != GameLogFilesMode.Never && engine is GameEngineCeresMCGSInProcess mcgsClockEngine)
+        // Make the tournament clock visible to the engine (used by the diagnostic move log and
+        // available for future use). Only the SecondsForAllMoves limit type has a meaningful running
+        // clock; otherwise report none.
+        if (engine is GameEngineCeresMCGSInProcess mcgsClockEngine)
         {
           mcgsClockEngine.TournamentClockRemainingSeconds =
             searchLimit.Type == SearchLimitType.SecondsForAllMoves ? thisMoveSearchLimit.Value : (float?)null;
+
+          // Also expose the opponent's remaining clock (computed by the caller, who tracks both
+          // sides' time). Null unless this is a timed Ceres tournament with a known opponent clock.
+          mcgsClockEngine.TournamentClockRemainingOpponentSeconds = opponentRemainingTime;
         }
 
         GameEngineSearchResult engineMove = engine.Search(curPositionAndMoves, thisMoveSearchLimit, gameMoveHistory, progressCb);

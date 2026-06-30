@@ -62,9 +62,10 @@ public static class MCGSGameMoveLogHtmlFormatter
     ("RootN", "RootN"),
     ("StoreN", "StoreN"),
     ("NNEvals", "NNEvals"),
+    ("NFirst%", "NFirst%"),
     ("TimeRem", "TimeRem"),
+    ("OppTimeRem", "OppTimeRem"),
     ("LimInit", "LimInit"),
-    ("Elapsed", "Elapsed"),
     ("Budget%", "BudgetFrac"),
     ("NPS", "NPS"),
     ("EPS", "EPS"),
@@ -72,6 +73,9 @@ public static class MCGSGameMoveLogHtmlFormatter
     ("Depth", "Depth"),
     ("SelD", "SelDepth"),
   };
+
+  // Scalar columns whose displayed value is reformatted with thousands separators.
+  static readonly System.Collections.Generic.HashSet<string> ThousandsKeys = new() { "RootN", "StoreN" };
 
   static readonly Regex CandidateRegex = new Regex(@"\*?\([^()]*\)", RegexOptions.Compiled);
 
@@ -173,14 +177,16 @@ public static class MCGSGameMoveLogHtmlFormatter
 
   static void WriteGameSection(StringBuilder sb, int gameNumber, string gameID, List<string> body)
   {
-    // Parse the game body in order into rows (move lines and inline blunder blocks) plus the footer.
-    List<(bool IsBlunder, string Text)> rows = new List<(bool IsBlunder, string Text)>();
+    // Parse the game body in order into rows (move lines and inline blunder / limits blocks) plus
+    // the footer. Row Kind is one of "move", "blunder", "limits".
+    List<(string Kind, string Text)> rows = new List<(string Kind, string Text)>();
     List<string> footerLines = new List<string>();
     int moveCount = 0;
 
     bool inFooter = false;
     bool inBlunder = false;
-    List<string> blunderLines = null;
+    bool inLimits = false;
+    List<string> blockLines = null;
     foreach (string l in body)
     {
       if (inFooter)
@@ -197,13 +203,28 @@ public static class MCGSGameMoveLogHtmlFormatter
       {
         if (l.StartsWith("=== END BLUNDER ==="))
         {
-          rows.Add((true, string.Join("\n", blunderLines)));
+          rows.Add(("blunder", string.Join("\n", blockLines)));
           inBlunder = false;
-          blunderLines = null;
+          blockLines = null;
         }
         else
         {
-          blunderLines.Add(l);
+          blockLines.Add(l);
+        }
+        continue;
+      }
+
+      if (inLimits)
+      {
+        if (l.StartsWith("=== END LIMITS ==="))
+        {
+          rows.Add(("limits", string.Join("\n", blockLines)));
+          inLimits = false;
+          blockLines = null;
+        }
+        else
+        {
+          blockLines.Add(l);
         }
         continue;
       }
@@ -216,11 +237,16 @@ public static class MCGSGameMoveLogHtmlFormatter
       else if (l.StartsWith("=== BLUNDER ==="))
       {
         inBlunder = true;
-        blunderLines = new List<string>();
+        blockLines = new List<string>();
+      }
+      else if (l.StartsWith("=== LIMITS ==="))
+      {
+        inLimits = true;
+        blockLines = new List<string>();
       }
       else if (l.StartsWith("FEN="))
       {
-        rows.Add((false, l));
+        rows.Add(("move", l));
         moveCount++;
       }
     }
@@ -231,8 +257,26 @@ public static class MCGSGameMoveLogHtmlFormatter
     string result = FindFooterValue(footerText, "Result");
     if (result.Length > 0)
     {
+      // Per-engine total time spent and time remaining (this engine vs opponent), if recorded.
+      string thisID = FindFooterValue(footerText, "ThisEngine");
+      string oppID = FindFooterValue(footerText, "Opponent");
+      string thisTotal = FindFooterValue(footerText, "ThisTotalTime");
+      string thisRem = FindFooterValue(footerText, "ThisRemainingTime");
+      string oppTotal = FindFooterValue(footerText, "OppTotalTime");
+      string oppRem = FindFooterValue(footerText, "OppRemainingTime");
+
+      string timeSummary = "";
+      if (thisTotal.Length > 0 || oppTotal.Length > 0)
+      {
+        timeSummary = " &nbsp;&mdash;&nbsp; <span class=\"timesummary\">"
+                    + Esc(thisID.Length > 0 ? thisID : "Ceres") + ": " + FormatFooterSeconds(thisTotal)
+                    + " used, " + FormatFooterSeconds(thisRem) + " left &nbsp;&middot;&nbsp; "
+                    + Esc(oppID.Length > 0 ? oppID : "opponent") + ": " + FormatFooterSeconds(oppTotal)
+                    + " used, " + FormatFooterSeconds(oppRem) + " left</span>";
+      }
+
       sb.AppendLine("<div class=\"resultline\">Result: <span class=\"" + ResultClass(result) + "\">"
-                    + Esc(result) + "</span> &nbsp; (" + moveCount + " moves logged)</div>");
+                    + Esc(result) + "</span> &nbsp; (" + moveCount + " moves logged)" + timeSummary + "</div>");
     }
 
     WriteMovesTable(sb, rows);
@@ -247,7 +291,7 @@ public static class MCGSGameMoveLogHtmlFormatter
   }
 
 
-  static void WriteMovesTable(StringBuilder sb, List<(bool IsBlunder, string Text)> rows)
+  static void WriteMovesTable(StringBuilder sb, List<(string Kind, string Text)> rows)
   {
     if (rows.Count == 0)
     {
@@ -255,11 +299,11 @@ public static class MCGSGameMoveLogHtmlFormatter
       return;
     }
 
-    int totalCols = 2 + ScalarColumns.Length + 3;
+    int totalCols = 1 + ScalarColumns.Length + 3;
 
     sb.AppendLine("<div class=\"tablewrap\">");
     sb.AppendLine("<table class=\"moves\">");
-    sb.Append("<thead><tr><th>#</th><th>STM</th>");
+    sb.Append("<thead><tr><th>#</th>");
     foreach ((string label, string key) in ScalarColumns)
     {
       sb.Append("<th>" + Esc(label) + "</th>");
@@ -268,10 +312,12 @@ public static class MCGSGameMoveLogHtmlFormatter
     sb.AppendLine();
     sb.AppendLine("<tbody>");
 
+    // RootN of the first logged move in the game, used to compute NFirst% (RootN relative to move 1).
+    long firstRootN = -1;
     int ply = 0;
-    foreach ((bool isBlunder, string text) in rows)
+    foreach ((string kind, string text) in rows)
     {
-      if (isBlunder)
+      if (kind == "blunder")
       {
         // Blunder diagnostics: a plain fixed-font text block spanning the full table width.
         sb.Append("<tr class=\"blunderrow\"><td colspan=\"" + totalCols + "\">");
@@ -281,16 +327,33 @@ public static class MCGSGameMoveLogHtmlFormatter
         continue;
       }
 
+      if (kind == "limits")
+      {
+        // Limits-manager allocation reasoning for the move that follows: a fixed-font text block
+        // spanning the full table width (collapsed by default to keep the table compact).
+        sb.Append("<tr class=\"limitsrow\"><td colspan=\"" + totalCols + "\">");
+        sb.Append("<details><summary class=\"limitssummary\">LIMITS allocation (click to expand)</summary>");
+        sb.Append("<pre class=\"limits\">" + Esc(text) + "</pre></details>");
+        sb.AppendLine("</td></tr>");
+        continue;
+      }
+
       ply++;
       ParsedMove m = ParseMoveLine(text);
 
+      // Capture the first move's (positive) RootN as the baseline for NFirst%.
+      if (firstRootN < 0 && m.Scalars.TryGetValue("RootN", out string firstRootNStr)
+          && long.TryParse(firstRootNStr, out long parsedFirstRootN) && parsedFirstRootN > 0)
+      {
+        firstRootN = parsedFirstRootN;
+      }
+
       sb.Append("<tr>");
       sb.Append("<td class=\"num\">" + ply + "</td>");
-      sb.Append("<td>" + Esc(m.SideToMove) + "</td>");
 
       foreach ((string label, string key) in ScalarColumns)
       {
-        string val = m.Scalars.TryGetValue(key, out string v) ? v : "";
+        string val = FormatScalarCell(key, m, firstRootN);
         string cls = key == "BudgetFrac" ? "num budget" : "num";
         sb.Append("<td class=\"" + cls + "\">" + Esc(val) + "</td>");
       }
@@ -347,6 +410,44 @@ public static class MCGSGameMoveLogHtmlFormatter
     public string Visit = "";
     public string Q = "";
     public bool Played;
+  }
+
+
+  // Produces the display string for one scalar column cell, applying per-column formatting:
+  // NFirst% is derived (RootN relative to the first move's RootN), node columns get thousands
+  // separators, and Depth is rounded to the nearest integer. Other columns pass through verbatim.
+  static string FormatScalarCell(string key, ParsedMove m, long firstRootN)
+  {
+    System.Globalization.CultureInfo ci = System.Globalization.CultureInfo.InvariantCulture;
+
+    if (key == "NFirst%")
+    {
+      if (firstRootN > 0 && m.Scalars.TryGetValue("RootN", out string rootNStr)
+          && long.TryParse(rootNStr, out long rootN))
+      {
+        long pct = (long)Math.Round(100.0 * rootN / firstRootN, MidpointRounding.AwayFromZero);
+        return pct.ToString(ci) + "%";
+      }
+      return "";
+    }
+
+    string val = m.Scalars.TryGetValue(key, out string v) ? v : "";
+    if (val.Length == 0)
+    {
+      return "";
+    }
+
+    if (ThousandsKeys.Contains(key) && long.TryParse(val, out long n))
+    {
+      return n.ToString("N0", ci);
+    }
+
+    if (key == "Depth" && double.TryParse(val, System.Globalization.NumberStyles.Float, ci, out double d))
+    {
+      return ((long)Math.Round(d, MidpointRounding.AwayFromZero)).ToString(ci);
+    }
+
+    return val;
   }
 
 
@@ -438,6 +539,23 @@ public static class MCGSGameMoveLogHtmlFormatter
       }
     }
     return "";
+  }
+
+
+  // Formats a raw footer seconds value (e.g. "161.2334") as "161.23s"; returns "n/a" when absent
+  // and the raw text when unparseable.
+  static string FormatFooterSeconds(string raw)
+  {
+    if (string.IsNullOrEmpty(raw))
+    {
+      return "n/a";
+    }
+    if (double.TryParse(raw, System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out double secs))
+    {
+      return secs.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) + "s";
+    }
+    return raw;
   }
 
 
@@ -536,6 +654,7 @@ public static class MCGSGameMoveLogHtmlFormatter
   pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px;
         overflow-x: auto; font-family: ui-monospace, Consolas, monospace; font-size: 13.5px; line-height: 1.4; }
   .resultline { margin: 4px 0 8px 0; }
+  .resultline .timesummary { color: var(--muted); font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
   .resultline .win { color: var(--win); font-weight: 700; }
   .resultline .loss { color: var(--loss); font-weight: 700; }
   .resultline .draw { color: var(--draw); font-weight: 700; }
@@ -544,7 +663,7 @@ public static class MCGSGameMoveLogHtmlFormatter
   table.moves { border-collapse: collapse; width: 100%; font-size: 14px; }
   table.moves thead th { position: sticky; top: 0; background: #1d2230; color: var(--txt);
                          text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-  table.moves thead th:nth-child(1), table.moves thead th:nth-child(2) { text-align: left; }
+  table.moves thead th:nth-child(1) { text-align: left; }
   table.moves td { padding: 4px 8px; border-bottom: 1px solid #20242e; vertical-align: top; }
   table.moves tbody tr:nth-child(odd) { background: #13161d; }
   td.num { text-align: right; font-family: ui-monospace, Consolas, monospace; white-space: nowrap; }
@@ -561,6 +680,10 @@ public static class MCGSGameMoveLogHtmlFormatter
   .blundersummary { color: var(--loss); font-weight: 700; cursor: pointer; }
   pre.blunder { background: #140d0d; border-color: #5a2a2a; font-family: Consolas, ui-monospace, monospace;
                 font-size: 12px; margin: 6px 0 2px 0; }
+  tr.limitsrow td { background: #101a26; }
+  .limitssummary { color: var(--accent); font-weight: 700; cursor: pointer; }
+  pre.limits { background: #0c141d; border-color: #244055; font-family: Consolas, ui-monospace, monospace;
+               font-size: 12px; margin: 6px 0 2px 0; }
 </style>";
   }
 }
