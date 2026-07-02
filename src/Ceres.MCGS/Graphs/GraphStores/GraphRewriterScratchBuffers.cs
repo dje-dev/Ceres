@@ -24,6 +24,18 @@ using Ceres.Chess.MoveGen;
 namespace Ceres.MCGS.Graphs.GraphStores;
 
 /// <summary>
+/// Interleaved compact mirror of a node's Q and D (16 bytes) used by Phase 5a. Storing Q and D adjacent
+/// means one random child lookup touches a single cache line for both values (vs two separate arrays,
+/// which would be two line touches per lookup).
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct DenseQD
+{
+  public double Q;
+  public double D;
+}
+
+/// <summary>
 /// Manages reusable native memory buffers for GraphRewriter, eliminating
 /// managed array allocations that cause LOH fragmentation.
 /// Buffers grow on demand and are never shrunk. Each Graph holds one instance.
@@ -42,6 +54,11 @@ public sealed unsafe class GraphRewriterScratchBuffers : IDisposable
   int* visitedPtr;
   int* frontierAPtr;
   int* frontierBPtr;
+  // Compact "hot" mirrors of node N and (Q,D) used by Phase 5a to keep the random child lookups in a
+  // small (L3-resident) array instead of missing to DRAM on the 64-byte node struct. Q and D are
+  // interleaved so each child lookup touches a single cache line for both.
+  int* denseNPtr;
+  DenseQD* denseQDPtr;
   MGPosition* positionsPtr;
   PosHash96MultisetRunning* runningHashesPtr;
 
@@ -139,6 +156,8 @@ public sealed unsafe class GraphRewriterScratchBuffers : IDisposable
   public int* VisitedPtr => visitedPtr;
   public int* FrontierAPtr => frontierAPtr;
   public int* FrontierBPtr => frontierBPtr;
+  public int* DenseNPtr => denseNPtr;
+  public DenseQD* DenseQDPtr => denseQDPtr;
   public MGPosition* PositionsPtr => positionsPtr;
   public PosHash96MultisetRunning* RunningHashesPtr => runningHashesPtr;
 
@@ -168,6 +187,8 @@ public sealed unsafe class GraphRewriterScratchBuffers : IDisposable
       NativeMemory.Free(visitedPtr);
       NativeMemory.Free(frontierAPtr);
       NativeMemory.Free(frontierBPtr);
+      NativeMemory.Free(denseNPtr);
+      NativeMemory.Free(denseQDPtr);
       NativeMemory.Free(positionsPtr);
       NativeMemory.Free(runningHashesPtr);
     }
@@ -177,6 +198,8 @@ public sealed unsafe class GraphRewriterScratchBuffers : IDisposable
     visitedPtr = (int*)NativeMemory.Alloc((nuint)requiredCapacity, (nuint)sizeof(int));
     frontierAPtr = (int*)NativeMemory.Alloc((nuint)requiredCapacity, (nuint)sizeof(int));
     frontierBPtr = (int*)NativeMemory.Alloc((nuint)requiredCapacity, (nuint)sizeof(int));
+    denseNPtr = (int*)NativeMemory.Alloc((nuint)requiredCapacity, (nuint)sizeof(int));
+    denseQDPtr = (DenseQD*)NativeMemory.Alloc((nuint)requiredCapacity, (nuint)sizeof(DenseQD));
     positionsPtr = (MGPosition*)NativeMemory.Alloc((nuint)requiredCapacity, (nuint)sizeof(MGPosition));
     runningHashesPtr = (PosHash96MultisetRunning*)NativeMemory.Alloc((nuint)requiredCapacity, (nuint)sizeof(PosHash96MultisetRunning));
   }
@@ -197,6 +220,8 @@ public sealed unsafe class GraphRewriterScratchBuffers : IDisposable
     if (visitedPtr != null) { NativeMemory.Free(visitedPtr); visitedPtr = null; }
     if (frontierAPtr != null) { NativeMemory.Free(frontierAPtr); frontierAPtr = null; }
     if (frontierBPtr != null) { NativeMemory.Free(frontierBPtr); frontierBPtr = null; }
+    if (denseNPtr != null) { NativeMemory.Free(denseNPtr); denseNPtr = null; }
+    if (denseQDPtr != null) { NativeMemory.Free(denseQDPtr); denseQDPtr = null; }
     if (positionsPtr != null) { NativeMemory.Free(positionsPtr); positionsPtr = null; }
     if (runningHashesPtr != null) { NativeMemory.Free(runningHashesPtr); runningHashesPtr = null; }
 

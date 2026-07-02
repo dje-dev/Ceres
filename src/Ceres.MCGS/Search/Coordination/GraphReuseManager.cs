@@ -397,7 +397,8 @@ public static class GraphReuseManager
         $"  EXTRACT timings (ms): bfs={ex.EnumerateSeconds * 1000:F1}, "
       + $"copy={ex.CopySeconds * 1000:F1} [{(ex.UsedParallelCopy ? "parallel" : "serial")}], "
       + $"finalize={ex.FinalizeSeconds * 1000:F1} "
-      + $"(p5_parents={f.Phase5Parents * 1000:F1}, p5a_N/Q/D={f.Phase5aNodeN * 1000:F1}, "
+      + $"(p5_parents={f.Phase5Parents * 1000:F1}, "
+      + $"p5a(scale={f.Phase5aScale * 1000:F1}, fixup={f.Phase5aFixup * 1000:F1} [{f.Phase5aFixupPasses} pass], qd={f.Phase5aQD * 1000:F1}), "
       + $"p5b_root={f.Phase5bRoot * 1000:F1}, p6_dicts={f.Phase6Dicts * 1000:F1}, "
       + $"p6c_siblings={f.Phase6cSiblings * 1000:F1}, p7_cleanup={f.Phase7Cleanup * 1000:F1})");
     }

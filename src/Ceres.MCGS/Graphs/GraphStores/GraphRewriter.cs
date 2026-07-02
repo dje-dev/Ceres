@@ -807,8 +807,16 @@ public static unsafe class GraphRewriter
   /// Per-phase timing breakdown (seconds) for the shared finalize tail, returned by
   /// <see cref="FinalizeAfterCopy"/> for diagnostics.
   /// </summary>
-  public record FinalizePhaseTimings(double Phase5Parents, double Phase5aNodeN, double Phase5bRoot,
-                                     double Phase6Dicts, double Phase6cSiblings, double Phase7Cleanup);
+  public record FinalizePhaseTimings(double Phase5Parents,
+                                     double Phase5aScale, double Phase5aFixup, double Phase5aQD, int Phase5aFixupPasses,
+                                     double Phase5bRoot, double Phase6Dicts, double Phase6cSiblings, double Phase7Cleanup);
+
+
+  /// <summary>
+  /// Sub-phase timing (seconds) within Phase 5a, plus the fixup pass count. Returned by
+  /// <see cref="Phase5aRecalculateNodeN(Graph, int, int*, out Phase5aTimings)"/>.
+  /// </summary>
+  internal record Phase5aTimings(double Scale, double Fixup, double QD, int FixupPasses);
 
 
   internal static FinalizePhaseTimings FinalizeAfterCopy(Graph graph, int numReachable, PositionWithHistory newPriorMoves)
@@ -832,7 +840,7 @@ public static unsafe class GraphRewriter
     double t1 = sw.Elapsed.TotalSeconds;
 
     // Phase 5a: Recalculate node N (from incoming edge N) and Q/D (bottom-up from edges).
-    Phase5aRecalculateNodeN(graph, numReachable, scratch.GeneralAPtr);
+    Phase5aRecalculateNodeN(graph, numReachable, scratch.GeneralAPtr, out Phase5aTimings p5a);
     double t2 = sw.Elapsed.TotalSeconds;
 
     // Phase 5b: Set root flags / cached pointers / history.
@@ -854,7 +862,9 @@ public static unsafe class GraphRewriter
     graph.Store.IsRewriting = false;
 
     // Phase 5 timing includes the (small) scratch EnsureCapacity zeroing performed above.
-    return new FinalizePhaseTimings(t1, t2 - t1, t3 - t2, t4 - t3, t5 - t4, t6 - t5);
+    // Phase 5a is broken out into scale / fixup / Q-D sub-timings (plus fixup pass count).
+    return new FinalizePhaseTimings(t1, p5a.Scale, p5a.Fixup, p5a.QD, p5a.FixupPasses,
+                                    t3 - t2, t4 - t3, t5 - t4, t6 - t5);
   }
 
 
@@ -2055,8 +2065,26 @@ public static unsafe class GraphRewriter
   /// edge.N values by iteratively capping edge.N to child.N until convergence.
   /// </summary>
   static void Phase5aRecalculateNodeN(Graph graph, int numRetained, int* incomingN)
+    => Phase5aRecalculateNodeN(graph, numRetained, incomingN, out _);
+
+
+  /// <summary>
+  /// Timed variant of <see cref="Phase5aRecalculateNodeN(Graph, int, int*)"/> that splits Phase 5a into
+  /// scale / fixup / Q-D and returns the fixup pass count.
+  ///
+  /// The fixup and Q/D passes are memory-latency-bound on random child lookups scattered across the
+  /// 64-byte node store (which far exceeds L3 on large graphs, so each lookup misses to DRAM). To keep
+  /// those lookups L3-resident, node N/Q/D are mirrored into compact "dense" arrays (4/8/8 bytes each);
+  /// the passes read the mirror and dual-write both the node struct and the mirror. Same computation,
+  /// bit-identical results.
+  /// </summary>
+  static void Phase5aRecalculateNodeN(Graph graph, int numRetained, int* incomingN, out Phase5aTimings timings)
   {
     int numTotalRetained = numRetained + 1;
+    GraphRewriterScratchBuffers scratch = graph.RewriterScratchBuffers;
+    int* denseN = scratch.DenseNPtr;
+    DenseQD* denseQD = scratch.DenseQDPtr;
+    Stopwatch p5aSW = Stopwatch.StartNew();
 
     // Process root first: its N = sum(child edge N) + 1 (no incoming edges after rewrite).
     {
@@ -2089,6 +2117,18 @@ public static unsafe class GraphRewriter
       }
     }
 
+    // Populate the compact N/Q/D mirrors from the node store (one sequential-strided sweep). The random
+    // child lookups in the fixup / Q-D passes then hit these small L3-resident arrays instead of missing
+    // to DRAM on the full 64-byte node struct.
+    for (int i = GraphStore.ROOT_NODE_INDEX; i < numTotalRetained; i++)
+    {
+      ref GNodeStruct nr = ref graph.NodesBufferOS[i];
+      denseN[i] = nr.N;
+      denseQD[i].Q = nr.Q;
+      denseQD[i].D = nr.D;
+    }
+    double scaleSec = p5aSW.Elapsed.TotalSeconds;
+
     // Fixup pass: cap edge.N to child.N for all edges, recompute node.N.
     // In a DAG with transpositions, a higher-index node can have an edge to a
     // lower-index node. Processing high-to-low means the lower node's N hasn't
@@ -2097,8 +2137,12 @@ public static unsafe class GraphRewriter
     // The number of passes needed equals the longest back-edge chain in the DAG;
     // 3 is insufficient for large graphs (100K+ nodes). Since all values are
     // non-negative integers that can only decrease, convergence is guaranteed.
+    // child.N is read from the denseN mirror; node.N writes are mirrored into denseN so the two stay
+    // identical throughout (bit-identical to reading node.N directly).
+    int fixupPasses = 0;
     for (int pass = 0; pass < 100; pass++)
     {
+      fixupPasses = pass + 1;
       bool anyChange = false;
       for (int i = numTotalRetained - 1; i >= GraphStore.ROOT_NODE_INDEX; i--)
       {
@@ -2140,7 +2184,7 @@ public static unsafe class GraphRewriter
 
           if (edge.Type == GEdgeStruct.EdgeType.ChildEdge && !edge.ChildNodeIndex.IsNull)
           {
-            int childN = graph.NodesBufferOS[edge.ChildNodeIndex.Index].N;
+            int childN = denseN[edge.ChildNodeIndex.Index];
             if (edge.N > childN)
             {
               edge.N = childN;
@@ -2162,6 +2206,7 @@ public static unsafe class GraphRewriter
         if (nodeRef.N != newN)
         {
           nodeRef.N = newN;
+          denseN[i] = newN;
           anyChange = true;
         }
       }
@@ -2171,6 +2216,7 @@ public static unsafe class GraphRewriter
         break;
       }
     }
+    double fixupSec = p5aSW.Elapsed.TotalSeconds - scaleSec;
 
     // Q and D recomputation pass: bottom-up, compute Q and D from edges.
     // After fixup convergence, edge.N values are final. This pass computes
@@ -2220,8 +2266,9 @@ public static unsafe class GraphRewriter
         ref GEdgeStruct edge = ref cachedEdgeSpan2[offsetInBlock];
         if (edge.Type == GEdgeStruct.EdgeType.ChildEdge && !edge.ChildNodeIndex.IsNull)
         {
-          double childQ = graph.NodesBufferOS[edge.ChildNodeIndex.Index].Q;
-          double childD = graph.NodesBufferOS[edge.ChildNodeIndex.Index].D;
+          DenseQD cqd = denseQD[edge.ChildNodeIndex.Index];
+          double childQ = cqd.Q;
+          double childD = cqd.D;
           if (!double.IsNaN(childQ))
           {
             edge.QChild = childQ;
@@ -2280,7 +2327,15 @@ public static unsafe class GraphRewriter
           nodeRef2.Q = 0;
         }
       }
+
+      // Mirror the recomputed Q/D so a parent processed later (lower index) reads the fresh value,
+      // matching the serial pass's in-place read semantics exactly.
+      denseQD[i].Q = nodeRef2.Q;
+      denseQD[i].D = nodeRef2.D;
     }
+    double qdSec = p5aSW.Elapsed.TotalSeconds - scaleSec - fixupSec;
+
+    timings = new Phase5aTimings(scaleSec, fixupSec, qdSec, fixupPasses);
   }
 
 
