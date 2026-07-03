@@ -113,12 +113,6 @@ public unsafe partial struct GNodeStruct
   /// </summary>
   public double D;
 
-  /// <summary>
-  /// Fortress probability metric stored as packed byte.
-  /// Values 0-254 map to [0.0, 1.0], value 255 represents NaN.
-  /// </summary>
-  public byte FortressPByte;
-
 
   /// <summary>
   /// Number of children which have been expanded 
@@ -237,17 +231,6 @@ public unsafe partial struct GNodeStruct
   }
 
 
-  /// <summary>
-  /// Fortress probability metric: minimum (1 - P(NEVER)) over all pawn squares.
-  /// Low values indicate a pawn unlikely to ever move, suggesting fortress-like structure.
-  /// Encoded: 0-254 maps to [0.0, 1.0], 255 represents NaN.
-  /// </summary>
-  public float FortressP
-  {
-    readonly get => FortressPByte == 255 ? float.NaN : FortressPByte * (1.0f / 254.0f);
-    set => FortressPByte = float.IsNaN(value) ? (byte)255 : (byte)Math.Round(Math.Clamp(value, 0f, 1f) * 254.0f);
-  }
-
 
   //    public NodeIndex NodeHashSibling;
 
@@ -276,6 +259,7 @@ public unsafe partial struct GNodeStruct
   private byte repDrawFractionByte;
 
   public byte UnusedByte;
+  public byte UnusedByte2;
 
   /// <summary>
   /// Fraction of this node's visits which terminated at a history-sensitive

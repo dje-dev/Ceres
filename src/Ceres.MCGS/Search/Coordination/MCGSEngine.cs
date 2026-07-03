@@ -945,7 +945,6 @@ public partial class MCGSEngine
     nodeRef.M = (byte)MathF.Round(evalResult.M, 0);
     nodeRef.UncertaintyValue = evalResult.UncertaintyV;
     nodeRef.UncertaintyPolicy = evalResult.UncertaintyP;
-    nodeRef.FortressP = evalResult.FortressP.ToFloat;
 
     Debug.Assert(evalResult.GameResult.IsTerminal() || Math.Abs(nodeRef.V) <= 1);
 

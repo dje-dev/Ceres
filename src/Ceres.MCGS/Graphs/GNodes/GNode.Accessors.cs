@@ -86,12 +86,6 @@ public readonly partial struct GNode : IComparable<GNode>, IEquatable<GNode>
   public readonly double LeafValueVolatilityDebiased => NodeRef.LeafValueVolatility.RunningStdDevDebiased(N);
 
   /// <summary>
-  /// Fortress probability metric: minimum P(NEVER) over all pawn squares.
-  /// High values indicate a pawn unlikely to ever move, suggesting fortress-like structure.
-  /// </summary>
-  public readonly float FortressP => NodeRef.FortressP;
-
-  /// <summary>
   /// Number of policy moves (children)
   /// Possibly this set of moves is incomplete due to either:
   ///   - implementation decision to "throw away" lowest probability moves to save storage, or
