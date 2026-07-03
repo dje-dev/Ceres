@@ -552,11 +552,15 @@ public sealed class EnginePool : IDisposable
         // Dynamic inference with actual batch size using oversized buffers
         engine.InferHostDynamic(cachedHalfInputBuffer, cachedOutputBuffer, actualPositions, inputElements, outputElements);
 
-        // Copy output from cached buffer   copy only the unaligned per-position data
+        // Copy output from cached buffer   copy only the unaligned per-position data.
+        // Clamp to the destination bounds (see the byte-input path and the static path): warmup/benchmark
+        // `output` is a dummy sized from the leader pool and never consumed; a non-leader GPU's span can
+        // exceed it in a multi-GPU makespan split. Production inference uses the *WithHandler paths.
         int unalignedElements = actualPositions * OutputElementsPerPosition;
-        if (unalignedElements > 0)
+        int copyElements = Math.Min(unalignedElements, output.Length - outputOffset);
+        if (copyElements > 0)
         {
-          Array.Copy(cachedOutputBuffer, 0, output, outputOffset, unalignedElements);
+          Array.Copy(cachedOutputBuffer, 0, output, outputOffset, copyElements);
         }
       }
       else
@@ -627,11 +631,17 @@ public sealed class EnginePool : IDisposable
         // Dynamic inference with actual batch size using oversized buffers
         engine.InferHostBytesDynamic(cachedByteInputBuffer, cachedOutputBuffer, actualPositions, inputElements, outputElements);
 
-        // Copy output from cached buffer   copy only the unaligned per-position data
+        // Copy output from cached buffer   copy only the unaligned per-position data.
+        // Clamp to the destination bounds (mirrors the static path below): ProcessBytes is only used for
+        // warmup/benchmark timing, where `output` is a dummy buffer sized from the leader pool
+        // (pools[0]) and whose result is never consumed. In a multi-GPU makespan split a non-leader
+        // GPU's aligned per-position span can exceed that dummy buffer; without this clamp the copy
+        // overflows the destination. Production inference uses the *WithHandler paths (exact sizes).
         int unalignedElements = actualPositions * OutputElementsPerPosition;
-        if (unalignedElements > 0)
+        int copyElements = Math.Min(unalignedElements, output.Length - outputOffset);
+        if (copyElements > 0)
         {
-          Array.Copy(cachedOutputBuffer, 0, output, outputOffset, unalignedElements);
+          Array.Copy(cachedOutputBuffer, 0, output, outputOffset, copyElements);
         }
       }
       else
