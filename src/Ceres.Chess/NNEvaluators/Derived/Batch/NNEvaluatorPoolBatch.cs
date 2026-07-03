@@ -108,12 +108,14 @@ namespace Ceres.Chess.NNEvaluators
       bool hasMoves = false;
       bool hasHashes = false;
       bool hasPliesSincePerSquare = false;
+      bool hasPositionsBuffer = false;
       foreach (EncodedPositionBatchFlat scanBatch in pendingBatches)
       {
         if (scanBatch.Positions != null) { hasPositions = true; }
         if (scanBatch.Moves != null) { hasMoves = true; }
         if (scanBatch.PositionHashes != null) { hasHashes = true; }
         if (scanBatch.LastMovePlies != null) { hasPliesSincePerSquare = true; }
+        if (scanBatch.PositionsBuffer != null && scanBatch.PositionsBuffer.Length > 0) { hasPositionsBuffer = true; }
       }
 
       MGPosition[] positions = hasPositions ? new MGPosition[numPositions] : null;
@@ -121,6 +123,11 @@ namespace Ceres.Chess.NNEvaluators
       byte[] pliesSinceLastSquare = hasPliesSincePerSquare ? new byte[numPositions * 64] : null;
 
       MGMoveList[] moves = hasMoves ? new MGMoveList[numPositions] : null;
+
+      // The raw encoded positions (needed by TPG/Ceres nets that re-convert positions at eval time, e.g.
+      // when EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS is set) must also be carried through the
+      // aggregation, otherwise the combined batch's PositionsBuffer is empty and TPG conversion throws.
+      EncodedPositionWithHistory[] positionsBuffer = hasPositionsBuffer ? new EncodedPositionWithHistory[numPositions] : null;
 
       int nextSourceBitmapIndex = 0;
       int nextSourceValueIndex = 0;
@@ -159,6 +166,11 @@ namespace Ceres.Chess.NNEvaluators
           Array.Copy(thisBatch.Moves, 0, moves, nextPositionIndex, numPos);
         }
 
+        if (hasPositionsBuffer && thisBatch.PositionsBuffer != null && thisBatch.PositionsBuffer.Length > 0)
+        {
+          Array.Copy(thisBatch.PositionsBuffer, 0, positionsBuffer, nextPositionIndex, numPos);
+        }
+
         nextPositionIndex += numPos;
       }
 
@@ -182,6 +194,12 @@ namespace Ceres.Chess.NNEvaluators
       if (hasMoves)
       {
         fullBatch.Moves = moves;
+      }
+
+      if (hasPositionsBuffer)
+      {
+        // PositionsBuffer is a settable field on the concrete type (get-only on the interface).
+        ((EncodedPositionBatchFlat)fullBatch).PositionsBuffer = positionsBuffer;
       }
 
       return fullBatch;
