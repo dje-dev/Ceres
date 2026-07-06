@@ -987,6 +987,15 @@ namespace Ceres.Chess.MoveGen
       }
     }
 
+
+    /// <summary>
+    /// Returns the bitboard of all squares attacked by one side
+    /// (public wrapper over the internal attack generators).
+    /// </summary>
+    public static BitBoard AttackedSquares(in MGPosition pos, bool byBlack)
+      => byBlack? GenBlackAttacks(pos) : GenWhiteAttacks(pos);
+
+
     static BitBoard GenWhiteAttacks(MGPosition Z)
     {
       BitBoard Occupied = Z.A | Z.B | Z.C;
