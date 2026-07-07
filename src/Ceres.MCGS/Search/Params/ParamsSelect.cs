@@ -460,7 +460,7 @@ public record ParamsSelect
   /// Default int.MaxValue (never bypass on the high side).  
   /// Affects selection only; the V_bar backup (if active) is unchanged.
   /// </summary>
-  public int CBGPUCT_PUCTAboveN = 50;
+  public int CBGPUCT_PUCTAboveN = int.MaxValue;// 50;
 
   /// <summary>
   /// Prior strength K for the SELECT support-shrinkage in ScoreCalc - the select-phase
@@ -671,14 +671,20 @@ public record ParamsSelect
 
   /// <summary>
   /// Multiplicative scale on lambda_N for the BACKUP phase.
+  /// Backup lambda is an estimation problem: V̄ = E_π̄[q̂] is a soft-max operator, 
+  /// and the question is what temperature makes it the best estimator of the true max_a θ_a given noisy q̂'s.
+  /// The backup interpolates mean (λ=∞) to max (λ=0), and both ends are biased: 
+  ///   - max of noisy estimates is optimistically biased by roughly σ·√(2·ln k) 
+  ///     (winner's curse, k = # contending children with noise σ), 
+  ///   - mean is pessimistically biased at any node with one good move among weak ones 
   /// </summary>
-  public float CBGPUCT_BackupLambdaC = 0.75f; // use 1.0 for AlphaZero schedule
+  public float CBGPUCT_BackupLambdaC = 1.25f;  // 0.75f;
 
   /// <summary>
   /// Exponent on (sum N_a) in the Pow lambda_N schedule for the BACKUP phase.
   /// Smaller values cause more rapid decay of lambda_N and thus weaker regularization of Q higher visit counts.
   /// </summary>
-  public float CBGPUCT_BackupLambdaExp = 0.45f; // use 0.5 for AlphaZero schedule
+  public float CBGPUCT_BackupLambdaExp = 0.5f;
 
 
   /// <summary>
@@ -701,7 +707,7 @@ public record ParamsSelect
   /// When fraction &gt; 0 some visits may not be placeable (all children over-quota);
   /// MCGSSelect absorbs those visits at the parent.
   /// </summary>
-  public float CBGPUCT_SelectCrossParentNFraction = 0.3f;
+  public float CBGPUCT_SelectCrossParentNFraction = 0; // 0.3f;
 
   /// <summary>
   /// Convenience predicate: true iff any cross-parent N contribution is folded into
