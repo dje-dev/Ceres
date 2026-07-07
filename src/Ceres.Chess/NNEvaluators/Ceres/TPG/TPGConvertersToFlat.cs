@@ -264,12 +264,10 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       EncodedPositionBatchFlat ebf = batch as EncodedPositionBatchFlat;
       bool EMIT_PLY_SINCE = ebf?.LastMovePlies != null;
 
-      // TODO: Consider possibly restoring the commented out code below 
-      //       to efficiently decode the two top positions into TPGRecord
-      //       instead of having to setting EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true
-      //       and incurring all that overhead.
-      //       If do this, the regression/equivalency test can to be to compare
-      //       this version computed here against the new more efficient code.
+      // NOTE: The RETAIN_POSITION_INTERNALS overhead is now avoided for evaluators advertising
+      //       InputTypes.CompactHistories: ConvertPositionsToRawSquareBytes prefers the compact
+      //       batch.CompactHistories records (per row) over PositionsBuffer, so only
+      //       not-yet-migrated callers still rely on the retained buffer.
       // TODO: someday handle since ply, does that need to be passed in from the search engine?
 
       byte[] moveBytesAll;

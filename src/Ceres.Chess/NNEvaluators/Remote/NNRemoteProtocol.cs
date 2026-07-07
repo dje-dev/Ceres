@@ -91,8 +91,10 @@ namespace Ceres.Chess.NNEvaluators.Remote
 
     /// <summary>
     /// Protocol version for handshake compatibility checking.
+    /// Version 2: batch input flags gained HasCompactHistories (and position histories
+    ///            became requiredInputs-gated rather than presence-based).
     /// </summary>
-    public const int PROTOCOL_VERSION = 1;
+    public const int PROTOCOL_VERSION = 2;
 
     /// <summary>
     /// Minimum payload size to attempt compression (bytes).

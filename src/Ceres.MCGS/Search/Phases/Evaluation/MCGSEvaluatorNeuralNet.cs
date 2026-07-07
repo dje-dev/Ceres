@@ -321,6 +321,12 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
         Batch.LastMovePlies = new byte[Batch.MaxBatchSize * 64];
       }
 
+      bool useCompactHistories = Evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.CompactHistories);
+      if (useCompactHistories && (Batch.CompactHistories == null || Batch.CompactHistories.Length < paths.Count))
+      {
+        Batch.CompactHistories = new MGPositionHistoryCompact[Batch.MaxBatchSize];
+      }
+
       if (EvaluatorDef.PositionTransform == NNEvaluatorDef.PositionTransformType.Mirror)
       {
         throw new NotImplementedException("Mirroring temporarily disabled.");
@@ -330,9 +336,10 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
       const int NUM_ITEMS_PER_THREAD = 48;
       ParallelOptions parallelOptions = ParallelUtils.ParallelOptions(paths.Count, NUM_ITEMS_PER_THREAD);
 
+      MGPositionHistoryCompact[] compactHistoriesArray = useCompactHistories ? Batch.CompactHistories : null;
       Parallel.For(0, paths.Count, parallelOptions, delegate (int i)
       {
-        SetEncodedBoardPositionFromPath(paths[i], ref rawPosArray[i], FillInHistory);
+        SetEncodedBoardPositionFromPath(paths[i], ref rawPosArray[i], FillInHistory, compactHistoriesArray, i);
 
         if (engine.NeedsPlySinceLastMove)
         {
@@ -375,7 +382,11 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
         Debug.Assert(!FillInHistory || !rawPosArray[0].HistoryPositionIsEmpty(EncodedPositionBatchFlat.NUM_HISTORY_POSITIONS - 1));
 
         const bool SET_POSITIONS = false; // we assume this is already done (if needed)
-        Batch.Set(rawPosArray, paths.Count, SET_POSITIONS, fillInHistoryPlanes: FILL_EMPTY_PLANES);
+
+        // When compact histories are populated the consumer no longer needs PositionsBuffer,
+        // so suppress the large per-batch retained copy (otherwise defer to the global flag).
+        Batch.Set(rawPosArray, paths.Count, SET_POSITIONS, fillInHistoryPlanes: FILL_EMPTY_PLANES,
+                  retainPositionsBuffer: useCompactHistories ? false : null);
         //          Batch.States = states;
       }
 
@@ -915,7 +926,10 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
   /// <param name="path"></param>
   /// <param name="boardsHistory"></param>
   /// <param name="historyFillIn">if missing history planes should be filled in with the oldest position</param>
-  public unsafe void SetEncodedBoardPositionFromPath(MCGSPath path, ref EncodedPositionWithHistory boardsHistory, bool historyFillIn)
+  /// <param name="compactHistories">optional array of compact history records to also populate (at batchIndex)</param>
+  /// <param name="batchIndex">index within compactHistories to populate</param>
+  public unsafe void SetEncodedBoardPositionFromPath(MCGSPath path, ref EncodedPositionWithHistory boardsHistory, bool historyFillIn,
+                                                     MGPositionHistoryCompact[] compactHistories = null, int batchIndex = 0)
   {
     PositionWithHistory RootPreHistory = path.Graph.Store.PositionHistory;
 
@@ -1014,6 +1028,13 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
     // N.B. Repetition flags are not computed here; they are already present on the source positions
     //      (prehistory: PositionWithHistoryHashes constructor; path visits: select phase via
     //      HashFoundInHistoryOrPrehistory, a full-path lookback with irreversibility cutoff).
+
+    // Optionally capture the compact history record (a single span copy).
+    // Must happen here since positionsPopulatedMG is backed by a ThreadStatic buffer.
+    if (compactHistories != null && numUsablePositions > 0)
+    {
+      compactHistories[batchIndex].SetFrom(positionsPopulatedMG, historyFillIn);
+    }
 
     // Fill in boards history with the gathered positions
     boardsHistory.SetFromSequentialPositions(positionsPopulatedMG, historyFillIn);

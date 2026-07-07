@@ -263,7 +263,9 @@ public class NNEvaluatorTensorRT : NNEvaluator
     return Math.Min(MaxBatchSize, pool.PaddedBatchCapacity(numPositions));
   }
 
-  public override InputTypes InputsRequired => InputTypes.Positions | InputTypes.Boards | InputTypes.Moves | (HasState ? InputTypes.State : 0);
+  public override InputTypes InputsRequired => InputTypes.Positions | InputTypes.Boards | InputTypes.Moves
+                                             | (HasState ? InputTypes.State : 0)
+                                             | (NetType == ONNXNetExecutor.NetTypeEnum.TPG ? InputTypes.CompactHistories : 0);
 
 
 
@@ -2609,7 +2611,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                               referenceEvaluator: referenceEvaluator as NNEvaluatorTensorRT);
     trtNativeEngine.Options = options;
 
-    EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
+    EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // Legacy fallback for callers not populating CompactHistories
 
     if (netType == ONNXNetExecutor.NetTypeEnum.TPG)
     {

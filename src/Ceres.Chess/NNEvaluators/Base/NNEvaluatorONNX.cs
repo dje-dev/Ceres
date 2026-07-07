@@ -82,7 +82,9 @@ public class NNEvaluatorONNX : NNEvaluator
   /// <summary>
   /// Types of input(s) required by the evaluator.
   /// </summary>
-  public override InputTypes InputsRequired => InputTypes.Positions | InputTypes.Boards | InputTypes.Moves | (HasState ? InputTypes.State : 0);
+  public override InputTypes InputsRequired => InputTypes.Positions | InputTypes.Boards | InputTypes.Moves
+                                             | (HasState ? InputTypes.State : 0)
+                                             | (Type == ONNXNetExecutor.NetTypeEnum.TPG ? InputTypes.CompactHistories : 0);
 
 
   /// <summary>
@@ -536,8 +538,24 @@ public class NNEvaluatorONNX : NNEvaluator
       lock (Executor)
       {
         // Do not use state if we are lacking early history (seems the net does not expect that).
-        Predicate<int> shouldUseStateForPos = i => batch.PositionsBuffer.Span[i].BoardsHistory.History_1
-                                                != batch.PositionsBuffer.Span[i].BoardsHistory.History_2;
+        Predicate<int> shouldUseStateForPos = i =>
+        {
+          if (!batch.CompactHistories.IsEmpty && batch.CompactHistories.Span[i].IsPopulated)
+          {
+            // Equivalent of the History_1 != History_2 test below:
+            // under history fill-in, boards 1 and 2 are identical unless at least 3 real
+            // positions exist; without fill-in, board 2 is nonempty already with 2 positions.
+            ref readonly MGPositionHistoryCompact ch = ref batch.CompactHistories.Span[i];
+            return ch.NumPositions >= (ch.FillInHistory ? 3 : 2);
+          }
+          else if (!batch.PositionsBuffer.IsEmpty)
+          {
+            return batch.PositionsBuffer.Span[i].BoardsHistory.History_1
+                != batch.PositionsBuffer.Span[i].BoardsHistory.History_2;
+          }
+
+          throw new Exception("State-enabled evaluator requires CompactHistories or PositionsBuffer on the batch");
+        };
         int numPositionsInBatchSentToExecutor = numPos < Executor.MinBatchSize ? Executor.MinBatchSize : numPos;
 
         if (HasSquaresByteInput)

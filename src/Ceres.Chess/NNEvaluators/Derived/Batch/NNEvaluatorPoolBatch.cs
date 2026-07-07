@@ -109,6 +109,7 @@ namespace Ceres.Chess.NNEvaluators
       bool hasHashes = false;
       bool hasPliesSincePerSquare = false;
       bool hasPositionsBuffer = false;
+      bool hasCompactHistories = false;
       foreach (EncodedPositionBatchFlat scanBatch in pendingBatches)
       {
         if (scanBatch.Positions != null) { hasPositions = true; }
@@ -116,6 +117,7 @@ namespace Ceres.Chess.NNEvaluators
         if (scanBatch.PositionHashes != null) { hasHashes = true; }
         if (scanBatch.LastMovePlies != null) { hasPliesSincePerSquare = true; }
         if (scanBatch.PositionsBuffer != null && scanBatch.PositionsBuffer.Length > 0) { hasPositionsBuffer = true; }
+        if (scanBatch.CompactHistories != null && scanBatch.CompactHistories.Length > 0) { hasCompactHistories = true; }
       }
 
       MGPosition[] positions = hasPositions ? new MGPosition[numPositions] : null;
@@ -128,6 +130,11 @@ namespace Ceres.Chess.NNEvaluators
       // when EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS is set) must also be carried through the
       // aggregation, otherwise the combined batch's PositionsBuffer is empty and TPG conversion throws.
       EncodedPositionWithHistory[] positionsBuffer = hasPositionsBuffer ? new EncodedPositionWithHistory[numPositions] : null;
+
+      // Compact history records are likewise carried through; rows originating from batches
+      // without them remain default (NumPositions == 0) and consumers fall back to
+      // that row's PositionsBuffer entry.
+      MGPositionHistoryCompact[] compactHistories = hasCompactHistories ? new MGPositionHistoryCompact[numPositions] : null;
 
       int nextSourceBitmapIndex = 0;
       int nextSourceValueIndex = 0;
@@ -171,6 +178,11 @@ namespace Ceres.Chess.NNEvaluators
           Array.Copy(thisBatch.PositionsBuffer, 0, positionsBuffer, nextPositionIndex, numPos);
         }
 
+        if (hasCompactHistories && thisBatch.CompactHistories != null && thisBatch.CompactHistories.Length > 0)
+        {
+          Array.Copy(thisBatch.CompactHistories, 0, compactHistories, nextPositionIndex, numPos);
+        }
+
         nextPositionIndex += numPos;
       }
 
@@ -200,6 +212,11 @@ namespace Ceres.Chess.NNEvaluators
       {
         // PositionsBuffer is a settable field on the concrete type (get-only on the interface).
         ((EncodedPositionBatchFlat)fullBatch).PositionsBuffer = positionsBuffer;
+      }
+
+      if (hasCompactHistories)
+      {
+        ((EncodedPositionBatchFlat)fullBatch).CompactHistories = compactHistories;
       }
 
       return fullBatch;

@@ -141,6 +141,16 @@ namespace Ceres.Chess.MoveGen.Converters
     /// <returns></returns>
     public static Position PositionFromMGChessPosition(in MGPosition mgPos)
     {
+      return PositionFromMGChessPosition(in mgPos, includeRepetitionCount: false);
+    }
+
+
+    /// <summary>
+    /// Converts MGPosition to Position, optionally carrying MGPosition.RepetitionCount
+    /// through to the resulting PositionMiscInfo (historically it was always dropped).
+    /// </summary>
+    public static Position PositionFromMGChessPosition(in MGPosition mgPos, bool includeRepetitionCount)
+    {
       Position pos = default;
       byte pieceCount = 0;
       ulong occupied = mgPos.A | mgPos.B | mgPos.C; // all squares occupied by something
@@ -188,7 +198,8 @@ namespace Ceres.Chess.MoveGen.Converters
       SideType sideToMove = mgPos.BlackToMove ? SideType.Black : SideType.White;
       PositionMiscInfo miscInfo = new PositionMiscInfo(mgPos.WhiteCanCastle, mgPos.WhiteCanCastleLong,
                               mgPos.BlackCanCastle, mgPos.BlackCanCastleLong,
-                              sideToMove, mgPos.Rule50Count, 0,
+                              sideToMove, mgPos.Rule50Count,
+                              includeRepetitionCount ? mgPos.RepetitionCount : 0,
                               mgPos.MoveNumber, enPassantColIndex, mgPos.rookInfo);
 
       pos.SetMiscInfo(miscInfo);

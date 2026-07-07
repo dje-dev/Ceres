@@ -90,6 +90,18 @@ namespace Ceres.Chess.LC0.Batches
     }
 
     /// <summary>
+    /// Optionally the compact per-position history records
+    /// (preferred over PositionsBuffer by TPG conversion).
+    /// </summary>
+    Memory<MGPositionHistoryCompact> CompactHistories
+    {
+      get
+      {
+        return default;
+      }
+    }
+
+    /// <summary>
     /// Number of positions actually used within the batch
     /// </summary>
     int NumPos { get; }

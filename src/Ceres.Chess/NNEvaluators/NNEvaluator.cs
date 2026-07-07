@@ -84,6 +84,7 @@ namespace Ceres.Chess.NNEvaluators
       Positions = 8,
       LastMovePlies = 16,
       State = 32,
+      CompactHistories = 64,
 
       All = Boards | Hashes | Moves | Positions | State,
       AllWithLastMovePlies = Boards | Hashes | Moves | Positions | LastMovePlies
@@ -1367,10 +1368,27 @@ return true;
 
         // Build the child batch for the selected indices.
         _batchBuilder = new EncodedPositionBatchBuilder(_positions.NumPos, InputTypes.All);
+        Span<Position> historyPositionsScratch = stackalloc Position[MGPositionHistoryCompact.MAX_POSITIONS];
         foreach (int i in _selectedIndices)
         {
-          // Convert the parent's position to a PositionWithHistory.
-          PositionWithHistory parentPWH = _positions.PositionsBuffer.Span[i].ToPositionWithHistory(8);
+          // Convert the parent's position to a PositionWithHistory
+          // (from the compact history record if available, else from PositionsBuffer).
+          PositionWithHistory parentPWH;
+          if (!_positions.CompactHistories.IsEmpty && _positions.CompactHistories.Span[i].IsPopulated)
+          {
+            ref readonly MGPositionHistoryCompact ch = ref _positions.CompactHistories.Span[i];
+            Span<Position> historyPositions = historyPositionsScratch.Slice(0, ch.NumPositions);
+            for (int k = 0; k < ch.NumPositions; k++)
+            {
+              historyPositions[k] = MGChessPositionConverter.PositionFromMGChessPosition(in ch.Positions[k],
+                                                                                         includeRepetitionCount: true);
+            }
+            parentPWH = new PositionWithHistory(historyPositions, firstPositionMayBeMissingEnPassant: true);
+          }
+          else
+          {
+            parentPWH = _positions.PositionsBuffer.Span[i].ToPositionWithHistory(8);
+          }
           CompressedPolicyVector childPolicy = _parentEvaluations.Policies.Span[i];
 
           (EncodedMove Move, float Probability) thisPolicyMove = childPolicy.PolicyInfoAtIndex(0);

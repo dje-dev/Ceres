@@ -15,6 +15,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -188,11 +189,16 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       }
 
       // Get all positions from input batch.
-      // TODO: Improve efficiency, these array materializations are expensive.
+      // Prefer the compact history records (populated when the evaluator advertises
+      // InputTypes.CompactHistories) over the much larger PositionsBuffer.
+      // Selection is per row: merged pooled batches can mix rows having only one of the two.
+      Memory<MGPositionHistoryCompact> compactHistories = positions.CompactHistories;
       Memory<EncodedPositionWithHistory> positionsFlat = positions.PositionsBuffer;
-      if (positions.PositionsBuffer.IsEmpty)
+      if (compactHistories.IsEmpty && positionsFlat.IsEmpty)
       {
-        throw new Exception("PositionsBuffer not initialized, EncodedPositionBatchFlat.RETAIN_POSITIONS_INTERNALS needs to be set true");
+        throw new Exception("Neither CompactHistories nor PositionsBuffer initialized "
+                          + "(evaluator must advertise InputTypes.CompactHistories "
+                          + "or EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS must be set true)");
       }
 
       // mgPos is unused by the sole caller (passes `out _`); skip the expensive
@@ -214,11 +220,18 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
         {
           Span<byte> thesePliesSinceLastMove = havePlies ? pliesSinceLastMoveAll.Span.Slice(i * 64, 64) : default;
 
+          bool useCompact = !compactHistories.IsEmpty && compactHistories.Span[i].IsPopulated;
+          if (!useCompact && (positionsFlat.IsEmpty || i >= positionsFlat.Length))
+          {
+            throw new Exception($"Position {i} has neither a populated CompactHistories record nor a PositionsBuffer entry");
+          }
+
           float thisQNegativeBlunders;
           float thisQPositiveBlunders;
           if (positions.EngineIsWhite is not null)
           {
-            bool isWhite = positionsFlat.Span[i].FinalPosition.IsWhite;
+            bool isWhite = useCompact ? !compactHistories.Span[i].CurrentPosition.BlackToMove
+                                      : positionsFlat.Span[i].FinalPosition.IsWhite;
             thisQNegativeBlunders = isWhite ? qNegativeBlunders : qPositiveBlunders;
             thisQPositiveBlunders = isWhite ? qPositiveBlunders : qNegativeBlunders;
           }
@@ -231,9 +244,18 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
           // Convert to sequence of TPGSquareRecord.
           // This is done using unsafe code in situ in the raw squareBytesAl array for performance.
           Span<TPGSquareRecord> squaresSpan = new Span<TPGSquareRecord>(ptrSquareBytes, 64);
-          ConvertToTPGRecordSquares(in positionsFlat.Span[i], includeHistory, squaresSpan,
-                                    thesePliesSinceLastMove, lastMovePliesEnabled,
-                                    thisQNegativeBlunders, thisQPositiveBlunders);
+          if (useCompact)
+          {
+            ConvertToTPGRecordSquaresFromCompactHistory(in compactHistories.Span[i], includeHistory, squaresSpan,
+                                                        thesePliesSinceLastMove, lastMovePliesEnabled,
+                                                        thisQNegativeBlunders, thisQPositiveBlunders);
+          }
+          else
+          {
+            ConvertToTPGRecordSquares(in positionsFlat.Span[i], includeHistory, squaresSpan,
+                                      thesePliesSinceLastMove, lastMovePliesEnabled,
+                                      thisQNegativeBlunders, thisQPositiveBlunders);
+          }
 
           if (legalMoveIndices != null)
           {
@@ -540,6 +562,129 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
                                      qNegativeBlunders, qPositiveBlunders);
     }
 
+
+    /// <summary>
+    /// Equivalent of ConvertToTPGRecordSquares operating directly on a compact history record,
+    /// avoiding the EncodedPositionWithHistory encode/decode round-trip (and thereby the need
+    /// to retain PositionsBuffer on the batch). Produces bit-identical output.
+    ///
+    /// Reconstruction rules (mirroring SetFromSequentialPositions + GetHistoryPosition exactly):
+    ///  - real slots k in [0, N):    position N-1-k, perspective-normalized so slot parity
+    ///                               alternates starting from white at slot 0;
+    ///  - missing slots k in [N, 8): under fill-in the encoded planes are verbatim copies of the
+    ///                               oldest real board (decoding to a constant copy of slot N-1),
+    ///                               otherwise the legacy fill cascade yields alternating
+    ///                               perspective-reversals of the previous slot;
+    ///  - en passant is dropped when only a single position is present, matching the legacy
+    ///    board-diff derivation which cannot see en passant without a prior board.
+    /// </summary>
+    public static void ConvertToTPGRecordSquaresFromCompactHistory(in MGPositionHistoryCompact history,
+                                                                   bool includeHistory,
+                                                                   Span<TPGSquareRecord> squares,
+                                                                   Span<byte> pliesSinceLastPieceMoveBySquare,
+                                                                   bool emitPlySinceLastMovePerSquare,
+                                                                   float qNegativeBlunders,
+                                                                   float qPositiveBlunders)
+    {
+      int numPositions = history.NumPositions;
+      Debug.Assert(numPositions >= 1 && numPositions <= MGPositionHistoryCompact.MAX_POSITIONS);
+
+      ReadOnlySpan<MGPosition> mgPositions = history.Positions;
+      Span<Position> historyPositions = stackalloc Position[MGPositionHistoryCompact.MAX_POSITIONS];
+
+      for (int k = 0; k < numPositions; k++)
+      {
+        Position pos = MGChessPositionConverter.PositionFromMGChessPosition(in mgPositions[numPositions - 1 - k],
+                                                                            includeRepetitionCount: true);
+
+        if (k == 0 && numPositions == 1 && pos.MiscInfo.EnPassantRightsPresent)
+        {
+          // The legacy path derives en passant for the current position by diffing against the
+          // prior history board; with no real prior board it always yields no-en-passant.
+          // Deliberately preserve that behavior (dropping the en passant right).
+          PositionMiscInfo cleared = new PositionMiscInfo(pos.MiscInfo.WhiteCanOO, pos.MiscInfo.WhiteCanOOO,
+                                                          pos.MiscInfo.BlackCanOO, pos.MiscInfo.BlackCanOOO,
+                                                          pos.MiscInfo.SideToMove, pos.MiscInfo.Move50Count,
+                                                          pos.MiscInfo.RepetitionCount, pos.MiscInfo.MoveNum,
+                                                          PositionMiscInfo.EnPassantFileIndexEnum.FileNone,
+                                                          pos.MiscInfo.RookInfo);
+          pos.SetMiscInfo(cleared);
+          pos.SetShortHash();
+        }
+
+        // Put position in same perspective as final position (slot 0), alternating by parity.
+        if (pos.IsWhite != (k % 2 == 0))
+        {
+          pos = pos.Reversed;
+        }
+
+        historyPositions[k] = pos;
+      }
+
+      for (int k = numPositions; k < MGPositionHistoryCompact.MAX_POSITIONS; k++)
+      {
+        historyPositions[k] = history.FillInHistory ? historyPositions[numPositions - 1]
+                                                    : historyPositions[k - 1].Reversed;
+      }
+
+      if (!includeHistory)
+      {
+        for (int k = 1; k < MGPositionHistoryCompact.MAX_POSITIONS; k++)
+        {
+          historyPositions[k] = historyPositions[0];
+        }
+      }
+
+      TPGSquareRecord.WritePosPieces(in historyPositions[0], in historyPositions[1], in historyPositions[2], in historyPositions[3],
+                                     in historyPositions[4], in historyPositions[5], in historyPositions[6], in historyPositions[7],
+                                     squares, pliesSinceLastPieceMoveBySquare, emitPlySinceLastMovePerSquare,
+                                     qNegativeBlunders, qPositiveBlunders);
+
+#if DEBUG
+      // Permanent sampled cross-check (~1/1000 positions): recompute via the legacy
+      // encode+decode path and verify bit-identical TPG square output.
+      if ((ulong)history.CurrentPosition.A % 997 == 3)
+      {
+        DebugCrossCheckCompactVersusLegacy(in history, includeHistory, squares,
+                                           pliesSinceLastPieceMoveBySquare, emitPlySinceLastMovePerSquare,
+                                           qNegativeBlunders, qPositiveBlunders);
+      }
+#endif
+    }
+
+
+#if DEBUG
+    /// <summary>
+    /// Verifies the compact-history conversion against the legacy
+    /// SetFromSequentialPositions + ConvertToTPGRecordSquares path (DEBUG only, sampled).
+    /// </summary>
+    static void DebugCrossCheckCompactVersusLegacy(in MGPositionHistoryCompact history,
+                                                   bool includeHistory,
+                                                   ReadOnlySpan<TPGSquareRecord> compactSquares,
+                                                   Span<byte> pliesSinceLastPieceMoveBySquare,
+                                                   bool emitPlySinceLastMovePerSquare,
+                                                   float qNegativeBlunders,
+                                                   float qPositiveBlunders)
+    {
+      Span<MGPosition> mgCopy = stackalloc MGPosition[history.NumPositions];
+      ((ReadOnlySpan<MGPosition>)history.Positions).Slice(0, history.NumPositions).CopyTo(mgCopy);
+
+      EncodedPositionWithHistory legacyEncoded = default;
+      legacyEncoded.SetFromSequentialPositions(mgCopy, history.FillInHistory);
+
+      Span<TPGSquareRecord> legacySquares = stackalloc TPGSquareRecord[64];
+      ConvertToTPGRecordSquares(in legacyEncoded, includeHistory, legacySquares,
+                                pliesSinceLastPieceMoveBySquare, emitPlySinceLastMovePerSquare,
+                                qNegativeBlunders, qPositiveBlunders);
+
+      if (!MemoryMarshal.AsBytes(legacySquares).SequenceEqual(MemoryMarshal.AsBytes(compactSquares.Slice(0, 64))))
+      {
+        throw new Exception("ConvertToTPGRecordSquaresFromCompactHistory mismatch vs legacy path: "
+                          + $"numPositions={history.NumPositions} fillIn={history.FillInHistory} "
+                          + $"currentPos={history.CurrentPosition.ToPosition.FEN}");
+      }
+    }
+#endif
 
 
     /// <summary>

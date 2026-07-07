@@ -41,8 +41,10 @@ namespace Ceres.Chess.LC0.Batches
   public class EncodedPositionBatchFlat : IEncodedPositionBatchFlat
   {
     /// <summary>
-    /// Retains some additional data structures related to positions,
-    /// consumes a lot of memory but may be needed for some formats (TPG?).
+    /// Legacy: retains the source EncodedPositionWithHistory array in PositionsBuffer
+    /// (a large per-batch allocation) for consumers such as TPG conversion.
+    /// Only needed by callers not yet populating CompactHistories
+    /// (evaluators advertising InputTypes.CompactHistories use that instead).
     /// </summary>
     public static bool RETAIN_POSITION_INTERNALS = false;
 
@@ -127,6 +129,13 @@ namespace Ceres.Chess.LC0.Batches
     /// this field optionally holds the origin data array.
     /// </summary>
     public EncodedPositionWithHistory[] PositionsBuffer;
+
+    /// <summary>
+    /// Optionally the compact per-position history records (preferred over
+    /// PositionsBuffer by TPG conversion; populated when the evaluator
+    /// advertises InputTypes.CompactHistories).
+    /// </summary>
+    public MGPositionHistoryCompact[] CompactHistories;
 
     public bool PositionsUseSecondaryEvaluator { get; set; }
 
@@ -295,12 +304,15 @@ namespace Ceres.Chess.LC0.Batches
     //       There is no highly efficient way to centralize this. 
     // Since this is a performance-critical method, we leave both of these in place.
 
-    public void Set(ReadOnlySpan<EncodedPositionWithHistory> positions, int numToProcess, bool setPositions, bool fillInHistoryPlanes = false)
+    public void Set(ReadOnlySpan<EncodedPositionWithHistory> positions, int numToProcess, bool setPositions, bool fillInHistoryPlanes = false,
+                    bool? retainPositionsBuffer = null)
     {
       NumPos = numToProcess;
       TrainingType = EncodedPositionType.PositionOnly;
 
-      if (RETAIN_POSITION_INTERNALS)
+      // Callers which populate CompactHistories pass false here to avoid this
+      // large per-batch allocation; null defers to the legacy global flag.
+      if (retainPositionsBuffer ?? RETAIN_POSITION_INTERNALS)
       {
         PositionsBuffer = positions.Slice(0, numToProcess).ToArray();
       }
@@ -480,11 +492,12 @@ namespace Ceres.Chess.LC0.Batches
     }
 
     public EncodedPositionBatchFlat(ReadOnlySpan<EncodedPositionWithHistory> positions, int numToProcess,
-                                    bool setPositions, bool fillInHistoryPlanes = false)
+                                    bool setPositions, bool fillInHistoryPlanes = false,
+                                    bool? retainPositionsBuffer = null)
     {
       MaxBatchSize = (int)MathUtils.RoundedUp(numToProcess, BATCH_SIZE_ALIGNMENT);
       Init(EncodedPositionType.PositionOnly);
-      Set(positions, numToProcess, setPositions, fillInHistoryPlanes);
+      Set(positions, numToProcess, setPositions, fillInHistoryPlanes, retainPositionsBuffer);
     }
 
     public EncodedPositionBatchFlat(ReadOnlySpan<EncodedTrainingPosition> positions, int numToProcess, EncodedPositionType trainingType, bool setPositions)
@@ -1343,6 +1356,8 @@ namespace Ceres.Chess.LC0.Batches
     Memory<Half[]> IEncodedPositionBatchFlat.States { get => States.AsMemory(); set => States = value.ToArray(); }
 
     Memory<EncodedPositionWithHistory> IEncodedPositionBatchFlat.PositionsBuffer { get => PositionsBuffer; }
+
+    Memory<MGPositionHistoryCompact> IEncodedPositionBatchFlat.CompactHistories { get => CompactHistories; }
 
     #endregion
 

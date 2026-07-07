@@ -237,9 +237,15 @@ namespace Ceres.Chess.NNEvaluators.Remote
       EngineNetworkID = engineNetID;
       Description = $"Remote({hostname}:{port})";
 
-      // Ceres/TPG networks need PositionsBuffer populated in batches.
-      // Set the global flag so batch constructors retain position internals.
-      EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true;
+      // Ceres/TPG networks (which advertise CompactHistories) need position histories
+      // in the batches they receive. Client-side producers feeding a remote evaluator
+      // do not populate CompactHistories, so set the global flag ensuring batch
+      // constructors retain PositionsBuffer as the legacy fallback the serializer ships.
+      // (LC0-net servers need neither, so avoid the retention overhead entirely.)
+      if (cachedInputsRequired.HasFlag(InputTypes.CompactHistories))
+      {
+        EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true;
+      }
     }
 
 

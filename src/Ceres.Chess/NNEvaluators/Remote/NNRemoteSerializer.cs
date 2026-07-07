@@ -40,6 +40,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
     HasStates = 1 << 2,
     HasLastMovePlies = 1 << 3,
     HasPositionsBuffer = 1 << 4,
+    HasCompactHistories = 1 << 5,
   }
 
 
@@ -88,6 +89,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
            + numPositions * 64                               // LastMovePlies (optional)
            + numPositions * 256 * sizeof(ushort) + numPositions * 4  // States (optional, generous)
            + numPositions * Unsafe.SizeOf<EncodedPositionWithHistory>() // PositionsBuffer (optional)
+           + numPositions * Unsafe.SizeOf<MGPositionHistoryCompact>() // CompactHistories (optional)
            + 1024;                                           // margin
     }
 
@@ -119,14 +121,20 @@ namespace Ceres.Chess.NNEvaluators.Remote
                        && !batch.States.IsEmpty;
       bool hasLastMovePlies = requiredInputs.HasFlag(NNEvaluator.InputTypes.LastMovePlies)
                               && !batch.LastMovePlies.IsEmpty;
-      // PositionsBuffer (EncodedPositionWithHistory[]) is needed by Ceres/TPG networks.
-      bool hasPositionsBuffer = !batch.PositionsBuffer.IsEmpty;
+      // Position histories are needed only by Ceres/TPG networks (which advertise
+      // InputTypes.CompactHistories); prefer the compact records when present,
+      // falling back to the legacy full PositionsBuffer. Servers not requiring
+      // them (e.g. LC0 nets) receive neither.
+      bool requiresHistories = requiredInputs.HasFlag(NNEvaluator.InputTypes.CompactHistories);
+      bool hasCompactHistories = requiresHistories && !batch.CompactHistories.IsEmpty;
+      bool hasPositionsBuffer = requiresHistories && !hasCompactHistories && !batch.PositionsBuffer.IsEmpty;
 
       if (hasPositions) flags |= NNRemoteBatchFlags.HasPositions;
       if (hasHashes) flags |= NNRemoteBatchFlags.HasHashes;
       if (hasStates) flags |= NNRemoteBatchFlags.HasStates;
       if (hasLastMovePlies) flags |= NNRemoteBatchFlags.HasLastMovePlies;
       if (hasPositionsBuffer) flags |= NNRemoteBatchFlags.HasPositionsBuffer;
+      if (hasCompactHistories) flags |= NNRemoteBatchFlags.HasCompactHistories;
 
       buffer[offset++] = (byte)flags;
 
@@ -188,13 +196,22 @@ namespace Ceres.Chess.NNEvaluators.Remote
         }
       }
 
-      // Conditional: PositionsBuffer (EncodedPositionWithHistory[] - needed by Ceres/TPG)
+      // Conditional: PositionsBuffer (EncodedPositionWithHistory[] - needed by Ceres/TPG, legacy fallback)
       if (hasPositionsBuffer)
       {
         ReadOnlySpan<EncodedPositionWithHistory> posBuffer = batch.PositionsBuffer.Span.Slice(0, numPos);
         ReadOnlySpan<byte> posBufferBytes = MemoryMarshal.AsBytes(posBuffer);
         posBufferBytes.CopyTo(buffer.Slice(offset));
         offset += posBufferBytes.Length;
+      }
+
+      // Conditional: CompactHistories (needed by Ceres/TPG, much smaller than PositionsBuffer)
+      if (hasCompactHistories)
+      {
+        ReadOnlySpan<MGPositionHistoryCompact> histories = batch.CompactHistories.Span.Slice(0, numPos);
+        ReadOnlySpan<byte> historyBytes = MemoryMarshal.AsBytes(histories);
+        historyBytes.CopyTo(buffer.Slice(offset));
+        offset += historyBytes.Length;
       }
 
       return offset;
@@ -290,7 +307,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
         }
       }
 
-      // Conditional: PositionsBuffer (EncodedPositionWithHistory[] - needed by Ceres/TPG)
+      // Conditional: PositionsBuffer (EncodedPositionWithHistory[] - needed by Ceres/TPG, legacy fallback)
       if (flags.HasFlag(NNRemoteBatchFlags.HasPositionsBuffer))
       {
         int posBufferSize = numPos * Unsafe.SizeOf<EncodedPositionWithHistory>();
@@ -301,6 +318,19 @@ namespace Ceres.Chess.NNEvaluators.Remote
         MemoryMarshal.Cast<byte, EncodedPositionWithHistory>(buffer.Slice(offset, posBufferSize))
           .CopyTo(batch.PositionsBuffer.AsSpan());
         offset += posBufferSize;
+      }
+
+      // Conditional: CompactHistories (needed by Ceres/TPG, much smaller than PositionsBuffer)
+      if (flags.HasFlag(NNRemoteBatchFlags.HasCompactHistories))
+      {
+        int historiesSize = numPos * Unsafe.SizeOf<MGPositionHistoryCompact>();
+        if (batch.CompactHistories == null || batch.CompactHistories.Length < numPos)
+        {
+          batch.CompactHistories = new MGPositionHistoryCompact[numPos];
+        }
+        MemoryMarshal.Cast<byte, MGPositionHistoryCompact>(buffer.Slice(offset, historiesSize))
+          .CopyTo(batch.CompactHistories.AsSpan());
+        offset += historiesSize;
       }
 
       return batch;

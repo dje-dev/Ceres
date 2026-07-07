@@ -128,7 +128,15 @@ namespace Ceres.Chess.LC0.Batches
     {
       get
       {
-        return SliceParent.PositionsBuffer.Slice(StartIndex, Length);
+        return SliceParent.PositionsBuffer.IsEmpty ? default : SliceParent.PositionsBuffer.Slice(StartIndex, Length);
+      }
+    }
+
+    public Memory<MGPositionHistoryCompact> CompactHistories
+    {
+      get
+      {
+        return SliceParent.CompactHistories.IsEmpty ? default : SliceParent.CompactHistories.Slice(StartIndex, Length);
       }
     }
 
