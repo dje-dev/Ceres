@@ -90,9 +90,12 @@ public static class RegularizedPolicyOptimum
   /// <param name="lambda">Regularization strength (scalar).  Must be greater than or equal to 0 for reverse KL, greater than 0 for forward KL.</param>
   /// <param name="anchor">Determines the free intercept C(s) for forward-KL imputation.  Must be None for reverse KL.</param>
   /// <param name="regularization">ReverseKL (Grill) or ForwardKLSoftmax (Boltzmann).</param>
-  /// <param name="yOut">Output buffer for y* (length greater than or equal to n).  May be empty if y* is not needed.</param>
+  /// <param name="yOut">Output buffer for y* (length greater than or equal to n).  May be empty if y* is not needed.
+  /// IMPORTANT: when empty, the solver takes an imputation-only fast path: q_fill is computed exactly as usual
+  /// (bit-identical), but y* is never formed (reverse KL skips the alpha root-find entirely; forward KL skips the
+  /// softmax) and vStarOut is NaN.</param>
   /// <param name="qFillOut">Output buffer for q_fill (length greater than or equal to n).  May be empty if not needed.</param>
-  /// <param name="vStarOut">Output: v* = sum_a y*(a) q_fill(a).</param>
+  /// <param name="vStarOut">Output: v* = sum_a y*(a) q_fill(a).  NaN when yOut is empty (y* not computed).</param>
   /// <param name="options">Tuning knobs.  If the BisectionIterations field is 0, RPOOptions.Default is used.</param>
   /// <param name="nanFallbackQ">Fallback value used for NaN entries in q under reverse KL.  If itself NaN, the mean of the finite q's is used.</param>
   /// <param name="lambdaPerChild">Optional per-action lambda vector (length n).  When non-empty, replaces the scalar lambda in the per-action coefficient: coeff[i] = lambdaPerChild[i] * mu[i].  When empty, scalar lambda is used.  REVERSE-KL ONLY (forward-KL closed form does not generalize naturally to per-child lambda; an empty span is enforced there).</param>
@@ -239,6 +242,20 @@ public static class RegularizedPolicyOptimum
       }
     }
 
+    // Imputation-only fast path (P1): the caller wants q_fill but not y*.  Under reverse
+    // KL the NaN imputation is just the fallback fill performed above - it does not
+    // depend on alpha - so the entire root-find and y construction can be skipped.
+    // q_fill is bit-identical to the full path's; vStar is NaN by contract.
+    if (yOut.IsEmpty)
+    {
+      vStarOut = double.NaN;
+      if (!qFillOut.IsEmpty)
+      {
+        qFill.CopyTo(qFillOut);
+      }
+      return;
+    }
+
     // Degenerate cases: greedy on q if no positive coefficient or every lambda is tiny.
     // In per-child mode, the gate is on max(lambdaPerChild); otherwise the scalar lambda.
     double lambdaForDegen = perChild ? maxLambdaEff : lambda;
@@ -354,6 +371,22 @@ public static class RegularizedPolicyOptimum
         qi = Clamp(qi, -1.0, 1.0);
       }
       qFill[i] = qi;
+    }
+
+    // Imputation-only fast path (P1): the caller wants q_fill but not y*.  q_fill is
+    // fully determined above (the softmax below never feeds back into it), so the
+    // exp-per-action softmax, its normalization, and the v* dot product are skipped.
+    // This is the hot path for the two production imputation call sites: per-child FPU
+    // (PUCTSelector.ApplyRPOImputedFPU) and the CB-GPUCT policy-shaped shrinkage prior
+    // (CBGPUCTScoreCalc.ComputePolicyImpliedQ, invoked on every ComputeVBar backup).
+    if (yOut.IsEmpty)
+    {
+      vStarOut = double.NaN;
+      if (!qFillOut.IsEmpty)
+      {
+        qFill.CopyTo(qFillOut);
+      }
+      return;
     }
 
     // Compute y_i proportional to mu_i * exp(q_i / lambda) with numerically-stable shift.

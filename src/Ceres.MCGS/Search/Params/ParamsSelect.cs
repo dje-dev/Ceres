@@ -632,7 +632,7 @@ public record ParamsSelect
   /// Larger values keep pi_bar closer to the prior P (more exploration);
   /// smaller values let pi_bar concentrate on high-Q actions.
   /// </summary>
-  public float CBGPUCT_SelectLambdaC = 1f;
+  public float CBGPUCT_SelectLambdaC = USE_ZZTUNE ? 1.745f : 2.897f; // ** TO DO: unify with CPUCT expression
 
   /// <summary>
   /// Exponent on (sum N_a) in the Pow lambda_N schedule for the SELECTION phase.
@@ -662,7 +662,7 @@ public record ParamsSelect
   /// policy.
   /// </summary>
   public float CBGPUCT_SelectLambdaCLogBase = DEFAULT_LOG_GROWTH_BASE;
-  public float CBGPUCT_SelectLambdaCLogFactor = 0;// DEFAULT_LOG_GROWTH_FACTOR;
+  public float CBGPUCT_SelectLambdaCLogFactor = DEFAULT_LOG_GROWTH_FACTOR;
 
   /// <summary>
   /// Lambda schedule for the BACKUP phase (V_bar regularized value computation).

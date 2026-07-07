@@ -443,6 +443,7 @@ internal static class CBGPUCTScoreCalc
     Span<double> mu = stackalloc double[numChildren];
     Span<double> qIn = stackalloc double[numChildren];
     Span<double> currentN = stackalloc double[numChildren];
+    int numEdgesExpanded = parentNode.NumEdgesExpanded;
     for (int i = 0; i < numChildren; i++)
     {
       mu[i] = pSpan[i];
@@ -455,44 +456,57 @@ internal static class CBGPUCTScoreCalc
         qIn[i] = -wSpan[i] / nEdge[i];
       }
       double effectiveN = nEdge[i];
-      // Apply the cross-parent surplus blend only to edges that have at least one direct
-      // visit.  If nEdge[i] == 0 while childN is large (transposition heavily visited via
-      // OTHER parents), inflating effectiveN by crossParentFraction * childN would push the
-      // deficit negative indefinitely whenever childN grows in step with sumN; combined with
-      // StopWhenAllOverQuota that starves the edge forever.  Keeping effectiveN = 0 for
-      // unvisited edges lets the PI_BAR_FLOOR * (sumN+1) target produce a positive deficit
-      // so the first visit arrives promptly.
-      if (crossParentFraction > 0.0f && nEdge[i] > 0 && i < parentNode.NumEdgesExpanded)
-      {
-        GEdge edge = parentNode.ChildEdgeAtIndex(i);
-        if (edge.Type == GEdgeStruct.EdgeType.ChildEdge)
-        {
-          double childN = edge.ChildNode.NodeRef.N;
-          double surplus = childN - nEdge[i];
-          if (surplus > 0.0)
-          {
-            effectiveN += crossParentFraction * surplus;
-          }
-        }
-      }
-      currentN[i] = effectiveN + nInFlight[i];
 
-      // Value-uncertainty (volatility) scaling: act as if more (fewer) visits had been
-      // performed to a less (more) volatile child than the VOL_AVG average, shrinking
-      // (growing) its deficit so exploration is steered toward the less-settled children.
-      if (volScalingActive && i < parentNode.NumEdgesExpanded)
+      // Cross-parent surplus blend and volatility scaling both need the child node behind
+      // the edge; the edge is fetched (and the child dereferenced) AT MOST ONCE per child
+      // (P4 fusion of the former two independent lookups).
+      //
+      // Cross-parent blend applies only to edges with at least one direct visit.  If
+      // nEdge[i] == 0 while childN is large (transposition heavily visited via OTHER
+      // parents), inflating effectiveN by crossParentFraction * childN would push the
+      // deficit negative indefinitely whenever childN grows in step with sumN; combined
+      // with StopWhenAllOverQuota that starves the edge forever.  Keeping effectiveN = 0
+      // for unvisited edges lets the PI_BAR_FLOOR * (sumN+1) target produce a positive
+      // deficit so the first visit arrives promptly.
+      //
+      // Volatility scaling: act as if more (fewer) visits had been performed to a less
+      // (more) volatile child than the VOL_AVG average, shrinking (growing) its deficit
+      // so exploration is steered toward the less-settled children.  Applied AFTER the
+      // nInFlight addition, exactly as in the historical two-pass form.
+      bool wantCrossParent = crossParentFraction > 0.0f && nEdge[i] > 0;
+      double currentNI;
+      if ((wantCrossParent || volScalingActive) && i < numEdgesExpanded)
       {
         GEdge edge = parentNode.ChildEdgeAtIndex(i);
         if (edge.Type == GEdgeStruct.EdgeType.ChildEdge)
         {
           GNode childNode = edge.ChildNode;
-          if (childNode.NodeRef.N > VOL_SCALING_MIN_CHILD_N)
+          double childN = childNode.NodeRef.N;
+          if (wantCrossParent)
+          {
+            double surplus = childN - nEdge[i];
+            if (surplus > 0.0)
+            {
+              effectiveN += crossParentFraction * surplus;
+            }
+          }
+          currentNI = effectiveN + nInFlight[i];
+          if (volScalingActive && childN > VOL_SCALING_MIN_CHILD_N)
           {
             double factor = 1.0 - volUncertaintyScaling * (childNode.LeafValueVolatilityDebiased - VOL_AVG);
-            currentN[i] *= factor > 0.0 ? factor : 0.0;
+            currentNI *= factor > 0.0 ? factor : 0.0;
           }
         }
+        else
+        {
+          currentNI = effectiveN + nInFlight[i];
+        }
       }
+      else
+      {
+        currentNI = effectiveN + nInFlight[i];
+      }
+      currentN[i] = currentNI;
     }
 
     // Snapshot qIn before any modification (shrinkage / fixed-point) so the optional
@@ -781,34 +795,15 @@ internal static class CBGPUCTScoreCalc
     Span<double> edgeNSpan = (bufferEdgeN ??= new double[cap]).AsSpan(0, numChildren);    // per-edge visits (lambda schedule + diagnostics)
     Span<double> nSupport = (bufferNSupport ??= new double[cap]).AsSpan(0, numChildren);  // child.N: statistical support of qRaw
 
-    // First pass: gather mu / qRaw / edge.N / child.N (mirrors the legacy first pass).
+    // Single fused pass (P4): gather mu / qRaw / edge.N / child.N (mirrors the legacy
+    // first pass) AND accumulate the empirical-Bayes consensus in the same sweep - the
+    // consensus terms depend only on values produced earlier in the same iteration, so
+    // the historical second pass over the children bought nothing but cache traffic.
+    // Accumulation order (ascending i) and the visited-children guard are unchanged, so
+    // the result is bit-identical to the two-pass form.
     // sumEdgeN feeds the lambda_N schedule (kept on per-edge N for comparability); the
     // shrinkage and the consensus use child.N (the true support of each Q estimate).
-    double sumEdgeN = 0.0;
-    Span<GEdgeHeaderStruct> headersSpan = node.EdgeHeadersSpan;
-    for (int i = 0; i < numChildren; i++)
-    {
-      if (i < numExpanded)
-      {
-        GEdge edge = node.ChildEdgeAtIndex(i);
-        mu[i] = edge.P;
-        int edgeN = edge.N;
-        edgeNSpan[i] = edgeN;
-        qRaw[i] = edgeN == 0 ? double.NaN : -edge.Q;   // child perspective -> parent perspective
-        sumEdgeN += edgeN;
-        nSupport[i] = edge.Type == GEdgeStruct.EdgeType.ChildEdge
-          ? edge.ChildNode.NodeRef.N
-          : edgeN;                                     // terminal edges: Q exact, use edge.N
-      }
-      else
-      {
-        mu[i] = (double)headersSpan[i].P;
-        edgeNSpan[i] = 0;
-        qRaw[i] = double.NaN;
-        nSupport[i] = 0;
-      }
-    }
-
+    //
     // Empirical-Bayes anchor: the weighted consensus of the visited children,
     // q_bar = sum_a w_a q_a / sum_a w_a, falling back to the node's own network value
     // when nothing is visited.  Anchoring the shrinkage target on what search has
@@ -824,25 +819,51 @@ internal static class CBGPUCTScoreCalc
     // rather than bias.
     ParamsSelect.CBGPUCTConsensusWeightType consensusMode = paramsSelect.CBGPUCT_ConsensusWeight;
     double consensusKc = paramsSelect.CBGPUCT_ConsensusReliabilityK;
+    double sumEdgeN = 0.0;
     double sumSupport = 0.0;
     double sumSupportQ = 0.0;
+    Span<GEdgeHeaderStruct> headersSpan = node.EdgeHeadersSpan;
     for (int i = 0; i < numChildren; i++)
     {
-      if (!double.IsNaN(qRaw[i]) && nSupport[i] > 0.0)
+      if (i < numExpanded)
       {
-        // Saturating reliability gate g = N/(N+Kc) in [0,1): -> N/Kc (proportional to
-        // precision) at low N, -> 1 (saturated) at high N.  Kc <= 0 disables it (g = 1).
-        double gate = consensusKc > 0.0 ? nSupport[i] / (nSupport[i] + consensusKc) : 1.0;
-        double w = consensusMode switch
+        GEdge edge = node.ChildEdgeAtIndex(i);
+        mu[i] = edge.P;
+        int edgeN = edge.N;
+        edgeNSpan[i] = edgeN;
+        qRaw[i] = edgeN == 0 ? double.NaN : -edge.Q;   // child perspective -> parent perspective
+        sumEdgeN += edgeN;
+        double support = edge.Type == GEdgeStruct.EdgeType.ChildEdge
+          ? edge.ChildNode.NodeRef.N
+          : edgeN;                                     // terminal edges: Q exact, use edge.N
+        nSupport[i] = support;
+
+        // Consensus contribution (visited children only; edgeN != 0 is exactly the
+        // condition under which qRaw[i] is finite, matching the historical
+        // !IsNaN(qRaw[i]) && nSupport[i] > 0 guard).
+        if (edgeN != 0 && support > 0.0)
         {
-          ParamsSelect.CBGPUCTConsensusWeightType.EdgeN => edgeNSpan[i],
-          ParamsSelect.CBGPUCTConsensusWeightType.Policy => mu[i],
-          ParamsSelect.CBGPUCTConsensusWeightType.ChildNSaturating => gate,
-          ParamsSelect.CBGPUCTConsensusWeightType.PolicyChildNSaturating => mu[i] * gate,
-          _ => nSupport[i],   // ChildN (default)
-        };
-        sumSupport += w;
-        sumSupportQ += w * qRaw[i];
+          // Saturating reliability gate g = N/(N+Kc) in [0,1): -> N/Kc (proportional to
+          // precision) at low N, -> 1 (saturated) at high N.  Kc <= 0 disables it (g = 1).
+          double gate = consensusKc > 0.0 ? support / (support + consensusKc) : 1.0;
+          double w = consensusMode switch
+          {
+            ParamsSelect.CBGPUCTConsensusWeightType.EdgeN => edgeN,
+            ParamsSelect.CBGPUCTConsensusWeightType.Policy => mu[i],
+            ParamsSelect.CBGPUCTConsensusWeightType.ChildNSaturating => gate,
+            ParamsSelect.CBGPUCTConsensusWeightType.PolicyChildNSaturating => mu[i] * gate,
+            _ => support,   // ChildN (default)
+          };
+          sumSupport += w;
+          sumSupportQ += w * qRaw[i];
+        }
+      }
+      else
+      {
+        mu[i] = (double)headersSpan[i].P;
+        edgeNSpan[i] = 0;
+        qRaw[i] = double.NaN;
+        nSupport[i] = 0;
       }
     }
     double consensusQ = sumSupport > 0.0 ? sumSupportQ / sumSupport : node.NodeRef.V;
