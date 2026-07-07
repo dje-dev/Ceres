@@ -154,8 +154,12 @@ public class ONNXExecutor : IDisposable
 
   /// <summary>
   /// Size of the input data type (in bits).
+  /// Initialized from the caller-supplied hint, but authoritatively corrected to reflect the
+  /// element type actually declared by the ONNX model once a session (and hence its metadata)
+  /// is available. This must follow the model's declared I/O type (e.g. an fp16 model always has
+  /// fp16 inputs), independent of the requested compute precision (FP16 vs FP32).
   /// </summary>
-  public readonly int InputsNumBits;
+  public int InputsNumBits { get; private set; }
 
   /// <summary>
   /// If a single session can support multiple batch size profiles.
@@ -424,6 +428,19 @@ public class ONNXExecutor : IDisposable
       }
     }
   }
+
+
+  /// <summary>
+  /// Returns the size (in bits) of a given ONNX tensor element type,
+  /// as used to select the corresponding managed buffer element type (byte / Float16 / float).
+  /// </summary>
+  private static int NumBitsForElementType(TensorElementType elementType) => elementType switch
+  {
+    TensorElementType.UInt8 or TensorElementType.Int8 => 8,
+    TensorElementType.Float16 or TensorElementType.BFloat16 => 16,
+    TensorElementType.Float => 32,
+    _ => throw new NotSupportedException($"Unsupported ONNX input tensor element type: {elementType}")
+  };
 
 
   /// <summary>
@@ -841,7 +858,9 @@ public class ONNXExecutor : IDisposable
     }
     else if (inputType == ONNXInputTypeEnum.Float32)
     {
-      return RunOutputFloat(inputsONNX, batchSize);
+      // Half inputs are upconverted to the float32 input buffers inside RunInputHalfOutputFloat16
+      // (which handles both FP16 and FP32 nets uniformly based on InputsNumBits).
+      return RunInputHalfOutputFloat16(inputsONNX, batchSize);
     }
     else if (inputType == ONNXInputTypeEnum.Byte)
     {
@@ -888,6 +907,20 @@ public class ONNXExecutor : IDisposable
   internal List<(string, Memory<Float16>)> RunInputHalfOutputFloat16((Memory<Half> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
   {
     SessionForBatchSize session = GetOrCreateSessionForBatchSize(batchSize);
+
+    // For FP32 nets the internal input buffers are float32, but callers always supply Half input
+    // (written into a separate scratch buffer returned by InputBufferForBatchSize). Upconvert those
+    // Half values into the float32 input buffers that ONNX Runtime actually reads. For FP16 nets the
+    // scratch already aliases the internal Float16 input buffer, so no conversion is needed.
+    if (InputsNumBits == 32)
+    {
+      for (int i = 0; i < inputs.Length; i++)
+      {
+        float[] dest = (float[])session.InputBuffers[i];
+        TensorPrimitives.ConvertToSingle(inputs[i].input.Span, dest.AsSpan(0, inputs[i].numElements));
+      }
+    }
+
     return session.UsesCUDAGraphs ? RunWithIOBinding<Half, Float16>(inputs, batchSize)
                                   : RunWithDirectRun<Half, Float16>(inputs, batchSize);
   }
@@ -904,10 +937,31 @@ public class ONNXExecutor : IDisposable
     }
 
     int evaluatorBatchSize = Math.Max(MinBatchSize, batchSize);
-    T[] rawArray = ((T[])GetOrCreateSessionForBatchSize(evaluatorBatchSize).InputBuffers[inputIndex]);
+    SessionForBatchSize session = GetOrCreateSessionForBatchSize(evaluatorBatchSize);
     int numElements = ONNXHelpers.ProductDimensions(InputsMetadata.ElementAt(inputIndex).Value.Dimensions, batchSize);
 
-    return MemoryCasted.AsMemory<T, TDest>(rawArray).Slice(0, numElements);
+    Array rawBuffer = session.InputBuffers[inputIndex];
+    if (rawBuffer is T[] rawArray)
+    {
+      // The internal input buffer already has the element type the caller writes into
+      // (byte nets or FP16 nets). Hand back a zero-copy view over it.
+      return MemoryCasted.AsMemory<T, TDest>(rawArray).Slice(0, numElements);
+    }
+    else
+    {
+      // Element type mismatch. This occurs for FP32 nets, whose internal input buffer is float[],
+      // whereas callers still supply Half input values (which are subsequently upconverted to
+      // float32 immediately before execution). Return a persistent scratch buffer of the caller's
+      // element type rather than reinterpreting the float[] buffer (which would be an invalid cast).
+      session.InputScratchBuffers ??= new Array[session.InputBuffers.Count];
+      if (session.InputScratchBuffers[inputIndex] is not T[] scratch || scratch.Length < rawBuffer.Length)
+      {
+        scratch = new T[rawBuffer.Length];
+        session.InputScratchBuffers[inputIndex] = scratch;
+      }
+
+      return MemoryCasted.AsMemory<T, TDest>(scratch).Slice(0, numElements);
+    }
   }
 
 
@@ -1125,148 +1179,6 @@ public class ONNXExecutor : IDisposable
       {
         outputOrtValuesList.ForEach(ortVal => ortVal?.Dispose());
         inputOrtValuesList.ForEach(ortVal => ortVal?.Dispose());
-      }
-    }
-
-    return resultArrays;
-  }
-
-
-  /// <summary>
-  /// Runs the network with float inputs (instead of Half).
-  /// 
-  /// Note that this accepts Half inputs and returns Half inputs, 
-  /// but merely upcasts them to floats for ONNX runtime execution and then downcasts results.
-  /// 
-  /// This is inefficient and does not fully exploit the higher precision of float over Half
-  /// (but is intended mostly for debugging purposes).
-  /// </summary>
-  /// <param name="inputs"></param>
-  /// <param name="batchSize"></param>
-  /// <returns></returns>
-  private List<(string, Memory<Float16>)> RunOutputFloat((Memory<Half> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
-  {
-    if (batchSize < MinBatchSize)
-    {
-      throw new ArgumentException($"Batch size {batchSize} is less than minimum of {MinBatchSize}");
-    }
-
-    List<(string, Memory<Float16>)> resultArrays = new();
-
-    // TODO: improve this method to be more like RunOutputHalf (copy or share logic)
-    lock (lockObject)
-    {
-      cudaDevice.SetCurrent();
-
-      SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize);
-
-      // Convert inputs to float buffers using pre-allocated inputBuffers32.
-      for (int i = 0; i < inputs.Length; i++)
-      {
-        (Memory<Half> input, int[] shape, string inputName, int numElements) = inputs[i];
-        float[] buffer = context.InputBuffers[i] as float[];
-        Span<float> inputBufferSpanFloat = buffer.AsSpan(0, numElements);
-        TensorPrimitives.ConvertToSingle(input.Span, inputBufferSpanFloat);
-      }
-
-      if (!context.UsesCUDAGraphs)
-      {
-        // Create temporary OrtValues for direct Run
-        OrtMemoryInfo cpuMemInfo = OrtMemoryInfo.DefaultInstance;
-        List<OrtValue> inputOrtValuesList = new List<OrtValue>();
-        List<OrtValue> outputOrtValuesList2 = new List<OrtValue>();
-
-        List<string> inputNames = new List<string>(InputsMetadata.Count);
-        List<string> outputNames2 = new List<string>(); // TODO: preallocate
-
-        try
-        {
-          // Create input OrtValues from InputBuffers (not from context.InputOrtValues which are null)
-          for (int i = 0; i < context.InputBuffers.Count; i++)
-          {
-            string name = InputsMetadata.ElementAt(i).Key;
-            float[] buf = (float[])context.InputBuffers[i];
-            long[] shape = ONNXHelpers.ToLongArray(InputsMetadata.ElementAt(i).Value.Dimensions, batchSize);
-
-            OrtValue ortValue = OrtValue.CreateTensorValueFromMemory(buf, shape);
-            inputOrtValuesList.Add(ortValue);
-            inputNames.Add(name);
-          }
-
-          // Create output OrtValues
-          List<OrtValue> outputOrtValuesList = new List<OrtValue>();
-          List<string> outputNames = new List<string>();
-
-          try
-          {
-            for (int i = 0; i < context.OutputBuffers.Count; i++)
-            {
-              var (name, metadata, buffer) = context.OutputBuffers[i];
-              long[] shape = ONNXHelpers.ToLongArray(metadata.Dimensions, batchSize);
-              int count = ONNXHelpers.ProductDimensions(metadata.Dimensions, batchSize);
-
-              float[] f32 = buffer as float[];
-              Memory<float> mem = new Memory<float>(f32, 0, count);
-              OrtValue ortVal = OrtValue.CreateTensorValueFromMemory<float>(cpuMemInfo, mem, shape);
-
-              outputOrtValuesList.Add(ortVal);
-              outputNames.Add(name);
-            }
-
-            throw new Exception("Needs remediation to look like other one");
-            context.Session.Run(runOptionsNonBlocking, inputNames, inputOrtValuesList, outputNames, outputOrtValuesList);
-
-            // Convert results
-            foreach (var (name, metadata, buffer) in context.OutputBuffers)
-            {
-              float[] floatBuffer = buffer as float[];
-              int count = ONNXHelpers.ProductDimensions(metadata.Dimensions, batchSize);
-              Float16[] halfResult = new Float16[count];
-              for (int j = 0; j < count; j++)
-              {
-                halfResult[j] = (Float16)floatBuffer[j];
-              }
-              resultArrays.Add((name, halfResult));
-            }
-          }
-          finally
-          {
-            foreach (var ortVal in outputOrtValuesList)
-            {
-              ortVal?.Dispose();
-            }
-          }
-        }
-        finally
-        {
-          foreach (var ortVal in inputOrtValuesList)
-          {
-            ortVal?.Dispose();
-          }
-        }
-      }
-      else
-      {
-        // Use IOBinding path; synchronize via CUDA events instead of stream-wide syncs
-        using CudaEvent startEvt = new CudaEvent();
-        using CudaEvent stopEvt = new CudaEvent();
-        startEvt.Record(cuStream.Stream);
-        context.Session.RunWithBinding(runOptionsNonBlocking, context.IoBinding);
-        stopEvt.Record(cuStream.Stream);
-        stopEvt.Synchronize();
-        LastCudaExecutionMS = CudaEvent.ElapsedTime(startEvt, stopEvt);
-
-        foreach (var (name, metadata, buffer) in context.OutputBuffers)
-        {
-          float[] floatBuffer = buffer as float[];
-          int count = ONNXHelpers.ProductDimensions(metadata.Dimensions, batchSize);
-          Float16[] halfResult = new Float16[count];
-          for (int j = 0; j < count; j++)
-          {
-            halfResult[j] = (Float16)floatBuffer[j];
-          }
-          resultArrays.Add((name, halfResult));
-        }
       }
     }
 
@@ -1573,6 +1485,13 @@ public class ONNXExecutor : IDisposable
     IReadOnlyDictionary<string, NodeMetadata> sessionInputMetadata = FilterMetadata(newSession.InputMetadata);
     IReadOnlyDictionary<string, NodeMetadata> sessionOutputMetadata = newSession.OutputMetadata;
 
+    // Correct the input element size to whatever the ONNX model actually declares.
+    // The value initially supplied by the caller is only a hint derived from the requested compute
+    // precision (FP16 vs FP32); however the model's input tensor type is fixed by the graph itself
+    // (e.g. an fp16-exported net always has fp16 inputs regardless of the FP32 precision request).
+    // Feeding a mismatched type causes ONNX Runtime to reject the input, so trust the model here.
+    InputsNumBits = NumBitsForElementType(sessionInputMetadata.First().Value.ElementDataType);
+
     OrtIoBinding newIoBinding = newSession.CreateIoBinding();
     SessionForBatchSize context = new SessionForBatchSize
     {
@@ -1859,6 +1778,12 @@ public class ONNXExecutor : IDisposable
     public List<(string name, OrtValue ortValue, long[] shape, CudaDeviceVariable<byte> cudaBufferByte, CudaDeviceVariable<Float16> cudaBufferFloat16)> InputOrtValues { get; set; }
     public List<(string name, OrtValue ortValue, long[] shape, CudaDeviceVariable<Float16> cudaBuffer)> OutputOrtValues { get; set; }
     public List<Array> InputBuffers { get; set; }
+
+    // Lazily-allocated per-input scratch buffers used when the caller's input element type differs
+    // from the internal input buffer element type (e.g. Half input supplied for an FP32 net whose
+    // internal buffers are float32). Null unless/until such a conversion is required.
+    public Array[] InputScratchBuffers { get; set; }
+
     public List<(string name, NodeMetadata metadata, Array buffer)> OutputBuffers { get; set; }
     public OrtAllocator AllocatorInput { get; set; }
     public OrtAllocator AllocatorOutput { get; set; }
