@@ -16,10 +16,9 @@
 using System;
 using System.Diagnostics;
 using System.Text;
-
 using Ceres.Chess.EncodedPositions;
-using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GEdgeHeaders;
+using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Search.Params;
 using Ceres.MCGS.Search.RPO;
@@ -572,6 +571,20 @@ internal static class CBGPUCTScoreCalc
       sumNStart += currentN[i];
     }
     double lambdaN = ComputeLambdaNForSelection(paramsSelect, sumNStart, numChildren, mu, explorationMultiplier);
+
+    const int MIN_N_APPLY_VOLATILITY_SCALING = 20;
+    float backupUncertaintyScaling = paramsSelect.CBGPUCT_BackupValueUncertaintyScalingFactor;
+    if (parentNode.N >= MIN_N_APPLY_VOLATILITY_SCALING 
+    &&  backupUncertaintyScaling != 0)
+    {
+      // Less volatile than average --> closer to minimax --> lambda closer to 0.
+      float valueUncertaintyScaled = (float)Math.Clamp(parentNode.LeafValueVolatilityDebiased / 0.25, 0.75, 1.5);
+      
+      //Console.WriteLine(valueUncertaintyScaled);
+
+      lambdaN = ((1.0 - backupUncertaintyScaling) * lambdaN) 
+              + (backupUncertaintyScaling         * lambdaN * valueUncertaintyScaled);
+    }
 
     // Solve for pi_bar.  q is fully filled (no NaN); anchor is ignored for reverse KL.
     Span<double> piBar = stackalloc double[numChildren];

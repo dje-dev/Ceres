@@ -731,6 +731,14 @@ public record ParamsSelect
   /// </summary>
   public float CBGPUCT_SelectValueUncertaintyScalingFactor = 0;
 
+  /// <summary>
+  /// Optional value-uncertainty (leaf value uncertainty) scaling of lambdaN.
+  /// Modulates softmax; acts more like average if values uncertain, more like mimimax if low uncertainty.
+  /// If less volatile than average --> closer to minimax --> lambda closer to 0.
+  /// This value is [0, 1] controlling weighted average between plain lambdaN (when 0) an dfull scaled lambdaN (when 1).
+  /// </summary>
+  public float CBGPUCT_BackupValueUncertaintyScalingFactor = 0;
+
   #endregion
 
   /// <summary>
@@ -941,10 +949,16 @@ public record ParamsSelect
   /// <param name="paramsSearch"></param>
   internal void ValidateAgainst(ParamsSearch paramsSearch)
   {
-    if (CBGPUCT_SelectValueUncertaintyScalingFactor != 0 && !paramsSearch.TrackLeafValueVolatility)
+    if (!paramsSearch.TrackLeafValueVolatility)
     {
-      throw new Exception("TrackLeafValueVolatility must be set to true when "
-                        + "CBGPUCT_SelectValueUncertaintyScalingFactor is nonzero.");
+      if (CBGPUCT_SelectValueUncertaintyScalingFactor != 0)
+      {
+        throw new Exception("TrackLeafValueVolatility must be set to true when CBGPUCT_SelectValueUncertaintyScalingFactor is nonzero.");
+      }
+      if (CBGPUCT_BackupValueUncertaintyScalingFactor != 0)
+      {
+        throw new Exception("TrackLeafValueVolatility must be set to true when CBGPUCT_BackupValueUncertaintyScalingFactor is nonzero.");
+      }
     }
 
     if (CBGPUCT_Mode != CBGPUCTModeType.None)
