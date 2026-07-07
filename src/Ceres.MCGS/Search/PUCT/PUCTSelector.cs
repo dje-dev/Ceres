@@ -365,8 +365,8 @@ public static class PUCTSelector
     double maxQ = 0.20 + defaultFPU;
     for (int i = numExpanded; i < numToProcess; i++)
     {
-      double thisResult = result[i] + paramsSelect.RPOFPUValue; 
-      thisResult = Math.Clamp(result[i], -1, 1);
+      double thisResult = result[i] + paramsSelect.RPOFPUValue;
+      thisResult = Math.Clamp(thisResult, -1, 1);
       result[i] = thisResult > maxQ ? maxQ : thisResult;
     }
 

@@ -379,10 +379,24 @@ internal static class CBGPUCTScoreCalc
 
 
   /// <summary>
+  /// Maximum number of visits placed against a single pi_bar solution before pi_bar is
+  /// re-solved ("K").  Mitigates within-batch staleness: vanilla PUCT re-scores children
+  /// after every simulated visit (its exploration term sees the growing parent N), whereas
+  /// a single pi_bar computed at batch start would drive an arbitrarily large budget
+  /// against fixed targets.  Within one ScoreCalc call the q inputs cannot change (no
+  /// backups complete mid-call), so a re-solve only refreshes lambda_N at the grown sumN
+  /// - one cheap Newton solve per K placements - keeping the visit targets in step with
+  /// the lambda_N decay schedule.  
+  /// </summary>
+  private const int RESOLVE_PIBAR_INTERVAL = 16;
+
+
+  /// <summary>
   /// CB-GPUCT visit-target child selection.  Builds the (mu, q) inputs from gathered
   /// child stats (q pre-filled with FPU values for unvisited children, matching legacy
   /// behavior), solves for pi_bar via RegularizedPolicyOptimum.Solve, then apportions
-  /// the visit budget across children via RPOVisitAllocator.Allocate.
+  /// the visit budget across children via RPOVisitAllocator.Allocate (re-solving pi_bar
+  /// every RESOLVE_PIBAR_INTERVAL placements for large budgets).
   ///
   /// Virtual loss is handled implicitly: in-flight visits count toward currentN so
   /// collisions naturally rebalance.
@@ -483,11 +497,13 @@ internal static class CBGPUCTScoreCalc
 
     // Snapshot qIn before any modification (shrinkage / fixed-point) so the optional
     // select diagnostic can show the raw -W/N (for visited) and original FPU (for
-    // unvisited) values alongside the final qIn that goes into Solve.  Cost is negligible
-    // (at most 64 doubles stack-copied); when the diagnostic gate is false the snapshot is
-    // simply unused.
+    // unvisited) values alongside the final qIn that goes into Solve.  The copy is
+    // gated on the (const) diagnostic flag so the JIT elides it in production builds.
     Span<double> qInOriginal = stackalloc double[numChildren];
-    qIn.CopyTo(qInOriginal);
+    if (CBGPUCTDumpDiagnostics.DEBUG_DUMP_CBGPUCT_SELECT_CALCS)
+    {
+      qIn.CopyTo(qInOriginal);
+    }
 
     // Support-shrinkage of visited children's q toward the policy-shaped empirical-Bayes
     // consensus prior - the select-phase analogue of the backup ComputeVBar mechanism.
@@ -586,10 +602,70 @@ internal static class CBGPUCTScoreCalc
     // to be empty when numVisitsToCompute > 1 (asserted upstream), so use a private
     // scratch when caller did not ask for scores.
     Span<double> firstStepDeficits = !outputScores.IsEmpty ? outputScores : stackalloc double[numChildren];
-    int placed = RPOVisitAllocator.Allocate(piBar, currentN, numVisitsToCompute,
-                                            visitsAddedOut: outputChildVisitCounts,
-                                            firstStepDeficitsOut: firstStepDeficits,
-                                            allocOpts);
+
+    int placed;
+    if (numVisitsToCompute <= RESOLVE_PIBAR_INTERVAL)
+    {
+      // Fast path (the common case away from the root): the whole budget fits in one
+      // chunk, so this is byte-identical work to the pre-chunking implementation.
+      placed = RPOVisitAllocator.Allocate(piBar, currentN, numVisitsToCompute,
+                                          visitsAddedOut: outputChildVisitCounts,
+                                          firstStepDeficitsOut: firstStepDeficits,
+                                          allocOpts);
+    }
+    else
+    {
+      // Large budget: allocate in chunks of RESOLVE_PIBAR_INTERVAL, re-solving pi_bar
+      // between chunks at the grown sumN (mu, qIn and the anchor are fixed for the
+      // duration of the call, so only the lambda_N schedule input moves).  The chunk's
+      // placements are folded into BOTH the cumulative output counts and the local
+      // currentN (which the pure allocator never mutates) so each subsequent chunk sees
+      // up-to-date per-child counts.  firstStepDeficits reflects batch start (first
+      // chunk only), preserving the diagnostic contract.
+      Span<short> chunkVisits = stackalloc short[numChildren];
+      double sumNRunning = sumNStart;
+      placed = 0;
+      while (true)
+      {
+        int chunkBudget = Math.Min(RESOLVE_PIBAR_INTERVAL, numVisitsToCompute - placed);
+        chunkVisits.Clear();
+        int placedThisChunk = RPOVisitAllocator.Allocate(piBar, currentN, chunkBudget,
+                                                         visitsAddedOut: chunkVisits,
+                                                         firstStepDeficitsOut: placed == 0 ? firstStepDeficits : default,
+                                                         allocOpts);
+
+        for (int i = 0; i < numChildren; i++)
+        {
+          short v = chunkVisits[i];
+          if (v != 0)
+          {
+            outputChildVisitCounts[i] += v;
+            currentN[i] += v;
+          }
+        }
+        placed += placedThisChunk;
+        sumNRunning += placedThisChunk;
+
+        if (placedThisChunk < chunkBudget || placed >= numVisitsToCompute)
+        {
+          // Budget exhausted, or the allocator stopped early (all children at/over
+          // their pi_bar quota under StopWhenAllOverQuota); no re-solve needed.
+          break;
+        }
+
+        // Re-solve pi_bar at the updated sumN and re-apply the robustness floor.
+        // Cost: one lambda_N evaluation plus one (warm, small) Newton solve per K
+        // placements - negligible next to the per-visit descent work the batch funds.
+        lambdaN = ComputeLambdaNForSelection(paramsSelect, sumNRunning, numChildren, mu, explorationMultiplier);
+        RegularizedPolicyOptimum.Solve(mu, qIn, lambdaN, anchor, paramsSelect.RPOSelectRegularization,
+                                       yOut: piBar,
+                                       qFillOut: default,
+                                       out vStar,
+                                       options: SolveOptionsSelect,
+                                       nanFallbackQ: qParent);
+        ApplyPiBarFloor(piBar, numChildren);
+      }
+    }
 
     // Diagnostic: log top-3 deficits at the root.
     if (MCGSParamsFixed.DEBUG_CBGPUCT

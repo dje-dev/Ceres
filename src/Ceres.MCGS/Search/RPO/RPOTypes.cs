@@ -94,7 +94,12 @@ public readonly struct RPOOptions
   /// <summary>Residual tolerance |sum(coeff/(alpha - q)) - 1| at which bisection terminates early.</summary>
   public double BisectionResidualTol { get; init; }
 
-  /// <summary>If true, finite q values are clamped to [-1.2, +1.2] before the closed form is applied.</summary>
+  /// <summary>
+  /// If true, q values are clamped before the closed form is applied.  Reverse KL clamps
+  /// finite q's AND the NaN-fallback to [-1.2, +1.2] (preserving proven-win/loss encodings
+  /// slightly above |1|); forward KL clamps to [-1, +1] (imputed guesses must not claim
+  /// proven-result magnitudes).  See RegularizedPolicyOptimum.CLAMP_Q_MIN/MAX.
+  /// </summary>
   public bool ClampQ { get; init; }
 
   /// <summary>Optional floor applied to mu before renormalization (epsilon-smoothing of the prior).</summary>

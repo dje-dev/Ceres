@@ -52,6 +52,18 @@ public static class RegularizedPolicyOptimum
   /// </summary>
   private const int MAX_ACTIONS = 64;
 
+  /// <summary>
+  /// Clamp range applied (under RPOOptions.ClampQ) to finite q values and to the
+  /// NaN-fallback value on the REVERSE-KL path.  Deliberately slightly wider than the
+  /// [-1, 1] value scale so proven-win/loss encodings (|v| slightly above 1; see
+  /// ParamsSelect.WinPForProvenWin) survive the clamp and remain strictly preferred
+  /// over near-certain NN evaluations.  The forward-KL path intentionally clamps to
+  /// [-1, 1] instead: its q values are Boltzmann-imputed GUESSES for unvisited
+  /// children, which should never claim proven-result magnitudes.
+  /// </summary>
+  private const double CLAMP_Q_MIN = -1.2;
+  private const double CLAMP_Q_MAX = 1.2;
+
   // Per-thread scratch reused across Solve calls in place of per-call stackalloc/ArrayPool.
   // Each buffer is lazily allocated once per thread to MAX_ACTIONS and then sliced to the
   // live action count n on every call.  [ThreadStatic] gives each search thread its own set
@@ -197,8 +209,8 @@ public static class RegularizedPolicyOptimum
         qi = fallback;
       }
       if (opts.ClampQ)
-      { 
-        qi = Clamp(qi, -1.2, 1.2);
+      {
+        qi = Clamp(qi, CLAMP_Q_MIN, CLAMP_Q_MAX);
       }
       qFill[i] = qi;
 
@@ -337,6 +349,8 @@ public static class RegularizedPolicyOptimum
       }
       if (opts.ClampQ)
       {
+        // Deliberately [-1, 1] (not CLAMP_Q_MIN/MAX): forward-KL q's are imputed
+        // guesses and must not reach proven-result magnitudes (see CLAMP_Q_MIN docs).
         qi = Clamp(qi, -1.0, 1.0);
       }
       qFill[i] = qi;
@@ -462,15 +476,18 @@ public static class RegularizedPolicyOptimum
 
 
   /// <summary>
-  /// Selects the fallback value for NaN q entries.  If the caller supplied a finite
-  /// nanFallbackQ, uses that (optionally clamped).  Otherwise uses the mean of finite
-  /// q's; if no finite q exists, returns 0.
+  /// Selects the fallback value for NaN q entries (reverse-KL path).  If the caller
+  /// supplied a finite nanFallbackQ, uses that (optionally clamped).  Otherwise uses
+  /// the mean of finite q's; if no finite q exists, returns 0.  The clamp range is
+  /// CLAMP_Q_MIN/MAX, matching the clamp applied to finite q's in SolveReverseKL
+  /// (historically this clamped to [-1, 1], inconsistently flattening proven-result
+  /// fallback values such as a parent Q slightly above 1).
   /// </summary>
-  private static double ResolveFallback(ReadOnlySpan<double> q, double nanFallbackQ, bool clampToUnit)
+  private static double ResolveFallback(ReadOnlySpan<double> q, double nanFallbackQ, bool clamp)
   {
     if (IsFinite(nanFallbackQ))
     {
-      return clampToUnit ? Clamp(nanFallbackQ, -1.0, 1.0) : nanFallbackQ;
+      return clamp ? Clamp(nanFallbackQ, CLAMP_Q_MIN, CLAMP_Q_MAX) : nanFallbackQ;
     }
     double sum = 0.0;
     int count = 0;
@@ -487,7 +504,7 @@ public static class RegularizedPolicyOptimum
       return 0.0;
     }
     double mean = sum / count;
-    return clampToUnit ? Clamp(mean, -1.0, 1.0) : mean;
+    return clamp ? Clamp(mean, CLAMP_Q_MIN, CLAMP_Q_MAX) : mean;
   }
 
 

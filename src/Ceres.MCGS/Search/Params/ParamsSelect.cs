@@ -126,10 +126,10 @@ public record ParamsSelect
   public RPORegularization RPOFPURegularization = RPORegularization.ForwardKLSoftmax;
 
   /// <summary>
-  /// Amount by which unvisited child value scores are shifted in RPO mode
+  /// Amount by which unvisited (unexpanded) child value scores are shifted in RPO mode
   /// from the value computed by RPO imputation.
   /// </summary>
-  public float RPOFPUValue = -0.15f;
+  public float RPOFPUValue = 0.0f;
 
   /// <summary>
   /// Apportionment algorithm used to translate pi_bar into a concrete visit allocation
