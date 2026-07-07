@@ -22,6 +22,7 @@ using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NetEvaluation.Batch;
 
 #endregion
@@ -41,6 +42,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
     HasLastMovePlies = 1 << 3,
     HasPositionsBuffer = 1 << 4,
     HasCompactHistories = 1 << 5,
+    HasPlanes = 1 << 6,
   }
 
 
@@ -129,27 +131,50 @@ namespace Ceres.Chess.NNEvaluators.Remote
       bool hasCompactHistories = requiresHistories && !batch.CompactHistories.IsEmpty;
       bool hasPositionsBuffer = requiresHistories && !hasCompactHistories && !batch.PositionsBuffer.IsEmpty;
 
+      // LC0 planes are consumed only by servers advertising InputTypes.Boards (LC0 nets);
+      // TPG-net servers (post plane-skip) never read them, so omit from the wire entirely
+      // (896 + 112 bytes per position).
+      bool hasPlanes = requiredInputs.HasFlag(NNEvaluator.InputTypes.Boards);
+
+      // If the server needs histories but this producer populated only the legacy
+      // PositionsBuffer (e.g. MCTS LeafEvaluatorNN or the Evaluate helper), derive the
+      // much smaller compact records here (~328 vs ~920 bytes per position) instead of
+      // shipping the buffer. CPU spent client-side only on the remote path where wire
+      // bytes matter more. The caller's batch is never mutated (scratch array).
+      MGPositionHistoryCompact[] derivedHistories = null;
+      if (hasPositionsBuffer)
+      {
+        derivedHistories = DeriveCompactHistories(batch.PositionsBuffer.Span, numPos);
+        hasCompactHistories = true;
+        hasPositionsBuffer = false;
+      }
+
       if (hasPositions) flags |= NNRemoteBatchFlags.HasPositions;
       if (hasHashes) flags |= NNRemoteBatchFlags.HasHashes;
       if (hasStates) flags |= NNRemoteBatchFlags.HasStates;
       if (hasLastMovePlies) flags |= NNRemoteBatchFlags.HasLastMovePlies;
       if (hasPositionsBuffer) flags |= NNRemoteBatchFlags.HasPositionsBuffer;
       if (hasCompactHistories) flags |= NNRemoteBatchFlags.HasCompactHistories;
+      if (hasPlanes) flags |= NNRemoteBatchFlags.HasPlanes;
 
       buffer[offset++] = (byte)flags;
 
-      // PosPlaneBitmaps: N * 112 ulongs
-      int bitmapCount = numPos * PLANES_PER_POS;
-      ReadOnlySpan<ulong> bitmaps = batch.PosPlaneBitmaps.Span.Slice(0, bitmapCount);
-      ReadOnlySpan<byte> bitmapBytes = MemoryMarshal.AsBytes(bitmaps);
-      bitmapBytes.CopyTo(buffer.Slice(offset));
-      offset += bitmapBytes.Length;
+      // Conditional: LC0 planes (bitmaps + values), only for servers requiring Boards.
+      if (hasPlanes)
+      {
+        // PosPlaneBitmaps: N * 112 ulongs
+        int bitmapCount = numPos * PLANES_PER_POS;
+        ReadOnlySpan<ulong> bitmaps = batch.PosPlaneBitmaps.Span.Slice(0, bitmapCount);
+        ReadOnlySpan<byte> bitmapBytes = MemoryMarshal.AsBytes(bitmaps);
+        bitmapBytes.CopyTo(buffer.Slice(offset));
+        offset += bitmapBytes.Length;
 
-      // PosPlaneValues: N * 112 bytes
-      int valuesCount = numPos * PLANES_PER_POS;
-      ReadOnlySpan<byte> values = batch.PosPlaneValues.Span.Slice(0, valuesCount);
-      values.CopyTo(buffer.Slice(offset));
-      offset += valuesCount;
+        // PosPlaneValues: N * 112 bytes
+        int valuesCount = numPos * PLANES_PER_POS;
+        ReadOnlySpan<byte> values = batch.PosPlaneValues.Span.Slice(0, valuesCount);
+        values.CopyTo(buffer.Slice(offset));
+        offset += valuesCount;
+      }
 
       // Conditional: Positions
       if (hasPositions)
@@ -208,13 +233,84 @@ namespace Ceres.Chess.NNEvaluators.Remote
       // Conditional: CompactHistories (needed by Ceres/TPG, much smaller than PositionsBuffer)
       if (hasCompactHistories)
       {
-        ReadOnlySpan<MGPositionHistoryCompact> histories = batch.CompactHistories.Span.Slice(0, numPos);
+        ReadOnlySpan<MGPositionHistoryCompact> histories = derivedHistories != null
+                                                         ? derivedHistories.AsSpan(0, numPos)
+                                                         : batch.CompactHistories.Span.Slice(0, numPos);
         ReadOnlySpan<byte> historyBytes = MemoryMarshal.AsBytes(histories);
         historyBytes.CopyTo(buffer.Slice(offset));
         offset += historyBytes.Length;
       }
 
       return offset;
+    }
+
+
+    /// <summary>
+    /// Reusable scratch array for compact history records derived during serialization.
+    /// </summary>
+    [ThreadStatic]
+    static MGPositionHistoryCompact[] derivedHistoriesScratch;
+
+
+    /// <summary>
+    /// Derives MGPositionHistoryCompact records from legacy EncodedPositionWithHistory rows,
+    /// for producers which populate only PositionsBuffer. Returns a thread-local scratch
+    /// array (valid until the next call on this thread); the source batch is not mutated.
+    /// </summary>
+    static MGPositionHistoryCompact[] DeriveCompactHistories(Span<EncodedPositionWithHistory> positionsBuffer, int numPos)
+    {
+      if (derivedHistoriesScratch == null || derivedHistoriesScratch.Length < numPos)
+      {
+        derivedHistoriesScratch = new MGPositionHistoryCompact[numPos];
+      }
+
+      for (int i = 0; i < numPos; i++)
+      {
+        DeriveCompactHistory(ref positionsBuffer[i], ref derivedHistoriesScratch[i]);
+      }
+
+      return derivedHistoriesScratch;
+    }
+
+
+    /// <summary>
+    /// Reconstructs the real (non-fill) history positions of one encoded position and stores
+    /// them (oldest first) into a compact record, mirroring the slot-detection rule of
+    /// EncodedPositionWithHistory.ToPositionWithHistory: a history slot is an actual position
+    /// iff its planes are non-empty AND differ from the next-more-recent board. The record's
+    /// fill regime is inferred from the trailing planes themselves: empty trailing boards mean
+    /// the producer ran with history fill-in disabled, non-empty (fill copies) mean enabled;
+    /// with all 8 slots real the value is irrelevant (no filled slots, and the prior-state
+    /// predicate thresholds only differ below 3 positions).
+    /// </summary>
+    static void DeriveCompactHistory(ref EncodedPositionWithHistory encoded, ref MGPositionHistoryCompact record)
+    {
+      const int NUM_SLOTS = EncodedPositionBatchFlat.NUM_HISTORY_POSITIONS; // 8
+
+      // Gather real positions, oldest first (slot 0 is the current position).
+      Span<MGPosition> positionsMG = stackalloc MGPosition[NUM_SLOTS];
+      int numReal = 0;
+      for (int i = NUM_SLOTS - 1; i >= 0; i--)
+      {
+        bool isActualBoardPosition = (i == 0)
+                                  || (!encoded.GetPlanesForHistoryBoard(i).IsEmpty
+                                     && encoded.GetPlanesForHistoryBoard(i - 1) != encoded.GetPlanesForHistoryBoard(i));
+        if (isActualBoardPosition)
+        {
+          // HistoryPosition decodes side to move, en passant (from board diff), castling and
+          // repetition count (0/1 from the repetition plane) - the same information the
+          // legacy plane-based conversion path had available.
+          Position pos = encoded.HistoryPosition(i);
+          MGPosition posMG = MGChessPositionConverter.MGChessPositionFromPosition(in pos);
+          posMG.RepetitionCount = pos.MiscInfo.RepetitionCount; // not copied by the converter
+          positionsMG[numReal++] = posMG;
+        }
+      }
+
+      bool fillInHistory = numReal == NUM_SLOTS
+                        || !encoded.GetPlanesForHistoryBoard(numReal).IsEmpty;
+
+      record.SetFrom(positionsMG.Slice(0, numReal), fillInHistory);
     }
 
 
@@ -235,17 +331,23 @@ namespace Ceres.Chess.NNEvaluators.Remote
         EncodedPositionType.PositionOnly, numPos);
       batch.NumPos = numPos;
 
-      // PosPlaneBitmaps
-      int bitmapCount = numPos * PLANES_PER_POS;
-      int bitmapByteCount = bitmapCount * sizeof(ulong);
-      ReadOnlySpan<byte> bitmapBytes = buffer.Slice(offset, bitmapByteCount);
-      MemoryMarshal.Cast<byte, ulong>(bitmapBytes).CopyTo(batch.PosPlaneBitmaps.AsSpan());
-      offset += bitmapByteCount;
+      // Conditional: LC0 planes. Absent for TPG-net servers; the constructor-allocated
+      // arrays then remain zero-filled (nothing on the TPG path reads them, and pool
+      // aggregation of zero planes is harmless).
+      if (flags.HasFlag(NNRemoteBatchFlags.HasPlanes))
+      {
+        // PosPlaneBitmaps
+        int bitmapCount = numPos * PLANES_PER_POS;
+        int bitmapByteCount = bitmapCount * sizeof(ulong);
+        ReadOnlySpan<byte> bitmapBytes = buffer.Slice(offset, bitmapByteCount);
+        MemoryMarshal.Cast<byte, ulong>(bitmapBytes).CopyTo(batch.PosPlaneBitmaps.AsSpan());
+        offset += bitmapByteCount;
 
-      // PosPlaneValues
-      int valuesCount = numPos * PLANES_PER_POS;
-      buffer.Slice(offset, valuesCount).CopyTo(batch.PosPlaneValues.AsSpan());
-      offset += valuesCount;
+        // PosPlaneValues
+        int valuesCount = numPos * PLANES_PER_POS;
+        buffer.Slice(offset, valuesCount).CopyTo(batch.PosPlaneValues.AsSpan());
+        offset += valuesCount;
+      }
 
       // Conditional: Positions
       if (flags.HasFlag(NNRemoteBatchFlags.HasPositions))

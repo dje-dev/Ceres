@@ -263,9 +263,17 @@ public class NNEvaluatorTensorRT : NNEvaluator
     return Math.Min(MaxBatchSize, pool.PaddedBatchCapacity(numPositions));
   }
 
-  public override InputTypes InputsRequired => InputTypes.Positions | InputTypes.Boards | InputTypes.Moves
-                                             | (HasState ? InputTypes.State : 0)
-                                             | (NetType == ONNXNetExecutor.NetTypeEnum.TPG ? InputTypes.CompactHistories : 0);
+  /// <summary>
+  /// Types of input(s) required by the evaluator.
+  /// TPG nets consume only the TPG converter output (built from CompactHistories) plus
+  /// Positions/Moves/State; the LC0 board planes are never read (FillInputLC0 is the LC0-only
+  /// branch), so Boards is not requested and producers skip plane encoding entirely.
+  /// </summary>
+  public override InputTypes InputsRequired => NetType == ONNXNetExecutor.NetTypeEnum.TPG
+                                             ? InputTypes.Positions | InputTypes.Moves
+                                               | (HasState ? InputTypes.State : 0) | InputTypes.CompactHistories
+                                             : InputTypes.Positions | InputTypes.Boards | InputTypes.Moves
+                                               | (HasState ? InputTypes.State : 0);
 
 
 

@@ -93,8 +93,11 @@ namespace Ceres.Chess.NNEvaluators.Remote
     /// Protocol version for handshake compatibility checking.
     /// Version 2: batch input flags gained HasCompactHistories (and position histories
     ///            became requiredInputs-gated rather than presence-based).
+    /// Version 3: LC0 planes became optional (HasPlanes flag, sent only to servers
+    ///            advertising InputTypes.Boards) and clients derive CompactHistories
+    ///            from PositionsBuffer rather than shipping it to TPG servers.
     /// </summary>
-    public const int PROTOCOL_VERSION = 2;
+    public const int PROTOCOL_VERSION = 3;
 
     /// <summary>
     /// Minimum payload size to attempt compression (bytes).

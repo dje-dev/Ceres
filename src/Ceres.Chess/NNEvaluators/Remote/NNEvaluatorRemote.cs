@@ -240,7 +240,8 @@ namespace Ceres.Chess.NNEvaluators.Remote
       // Ceres/TPG networks (which advertise CompactHistories) need position histories
       // in the batches they receive. Client-side producers feeding a remote evaluator
       // do not populate CompactHistories, so set the global flag ensuring batch
-      // constructors retain PositionsBuffer as the legacy fallback the serializer ships.
+      // constructors retain PositionsBuffer, from which the serializer derives the
+      // compact records it ships (PositionsBuffer itself no longer goes on the wire).
       // (LC0-net servers need neither, so avoid the retention overhead entirely.)
       if (cachedInputsRequired.HasFlag(InputTypes.CompactHistories))
       {

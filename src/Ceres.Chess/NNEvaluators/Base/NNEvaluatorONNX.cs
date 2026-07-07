@@ -81,10 +81,15 @@ public class NNEvaluatorONNX : NNEvaluator
 
   /// <summary>
   /// Types of input(s) required by the evaluator.
+  /// TPG nets consume only the TPG converter output (built from CompactHistories) plus
+  /// Positions/Moves/State; the LC0 board planes are never read, so Boards is not requested
+  /// and producers (e.g. MCGS SetBatch) skip plane encoding entirely for these nets.
   /// </summary>
-  public override InputTypes InputsRequired => InputTypes.Positions | InputTypes.Boards | InputTypes.Moves
-                                             | (HasState ? InputTypes.State : 0)
-                                             | (Type == ONNXNetExecutor.NetTypeEnum.TPG ? InputTypes.CompactHistories : 0);
+  public override InputTypes InputsRequired => Type == ONNXNetExecutor.NetTypeEnum.TPG
+                                             ? InputTypes.Positions | InputTypes.Moves
+                                               | (HasState ? InputTypes.State : 0) | InputTypes.CompactHistories
+                                             : InputTypes.Positions | InputTypes.Boards | InputTypes.Moves
+                                               | (HasState ? InputTypes.State : 0);
 
 
   /// <summary>
