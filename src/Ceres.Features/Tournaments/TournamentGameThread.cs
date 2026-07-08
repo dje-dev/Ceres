@@ -155,8 +155,7 @@ namespace Ceres.Features.Tournaments
       // If enabled, initialize each in-process Ceres MCGS engine's per-tournament diagnostic minilog.
       // The PGN base name is identical across concurrent threads (and the PGN itself is shared via a
       // lock), so disambiguate the per-engine minilogs by ThreadIndex when more than one thread runs.
-      // The global CeresUserSettings.EnableMiniLog switch can suppress minilogs entirely.
-      if (Def.MiniLogFiles != MiniLogFilesMode.Never && CeresUserSettingsManager.Settings.EnableMiniLog)
+      if (Def.MiniLogFiles != MiniLogFilesMode.Never)
       {
         string pgnBaseNoExt = pgnFileName.EndsWith(".pgn") ? pgnFileName.Substring(0, pgnFileName.Length - 4) : pgnFileName;
         string threadSuffix = ThreadIndex > 0 ? ".t" + ThreadIndex : "";
