@@ -97,8 +97,6 @@ namespace Ceres.Chess.NNEvaluators
       // Concatenate all batches together into one big batch.
       // TODO: could we allocate these arrays once and then reuse for efficiency?
       int numPositions = NumPendingPositions;
-      ulong[] posPlaneBitmaps = new ulong[numPositions * EncodedPositionWithHistory.NUM_PLANES_TOTAL];
-      byte[] posPlaneValuesEncoded = new byte[numPositions * EncodedPositionWithHistory.NUM_PLANES_TOTAL];
 
       // When pooling across multiple independent searches the sub-batches may be heterogeneous
       // (e.g. some carry optional auxiliary inputs while others do not, or some are empty), so the
@@ -108,17 +106,28 @@ namespace Ceres.Chess.NNEvaluators
       bool hasMoves = false;
       bool hasHashes = false;
       bool hasPliesSincePerSquare = false;
-      bool hasPositionsBuffer = false;
       bool hasCompactHistories = false;
+      // Merged flags use AND semantics: the combined batch is only considered fully populated if
+      // every sub-batch was (so the corresponding choke-point hook re-generates all rows on the
+      // merged batch otherwise). Compact-only merges (all sub-batches TPG/MCGS) allocate no plane
+      // arrays at all - ~3x less memory - and let hook 2 materialize planes only if an LC0 net needs them.
+      bool allCompactPopulated = pendingBatches.Count > 0;
+      bool allPlanesPopulated = pendingBatches.Count > 0;
       foreach (EncodedPositionBatchFlat scanBatch in pendingBatches)
       {
         if (scanBatch.Positions != null) { hasPositions = true; }
         if (scanBatch.Moves != null) { hasMoves = true; }
         if (scanBatch.PositionHashes != null) { hasHashes = true; }
         if (scanBatch.LastMovePlies != null) { hasPliesSincePerSquare = true; }
-        if (scanBatch.PositionsBuffer != null && scanBatch.PositionsBuffer.Length > 0) { hasPositionsBuffer = true; }
         if (scanBatch.CompactHistories != null && scanBatch.CompactHistories.Length > 0) { hasCompactHistories = true; }
+        if (!scanBatch.CompactHistoriesPopulated) { allCompactPopulated = false; }
+        if (!scanBatch.PlanesPopulated) { allPlanesPopulated = false; }
       }
+
+      // Allocate plane arrays only when every sub-batch has planes; otherwise the merged batch is
+      // compact-only (planes null) and hook 2 materializes them on demand.
+      ulong[] posPlaneBitmaps = allPlanesPopulated ? new ulong[numPositions * EncodedPositionWithHistory.NUM_PLANES_TOTAL] : null;
+      byte[] posPlaneValuesEncoded = allPlanesPopulated ? new byte[numPositions * EncodedPositionWithHistory.NUM_PLANES_TOTAL] : null;
 
       MGPosition[] positions = hasPositions ? new MGPosition[numPositions] : null;
       ulong[] positionHashes = hasHashes ? new ulong[numPositions] : null;
@@ -126,14 +135,9 @@ namespace Ceres.Chess.NNEvaluators
 
       MGMoveList[] moves = hasMoves ? new MGMoveList[numPositions] : null;
 
-      // The raw encoded positions (needed by TPG/Ceres nets that re-convert positions at eval time, e.g.
-      // when EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS is set) must also be carried through the
-      // aggregation, otherwise the combined batch's PositionsBuffer is empty and TPG conversion throws.
-      EncodedPositionWithHistory[] positionsBuffer = hasPositionsBuffer ? new EncodedPositionWithHistory[numPositions] : null;
-
-      // Compact history records are likewise carried through; rows originating from batches
-      // without them remain default (NumPositions == 0) and consumers fall back to
-      // that row's PositionsBuffer entry.
+      // Compact history records are carried through; rows originating from batches without them
+      // remain default (NumPositions == 0). When any sub-batch lacked them the merged flag is
+      // false, so hook 1 regenerates all rows from the (always-present) planes on the merged batch.
       MGPositionHistoryCompact[] compactHistories = hasCompactHistories ? new MGPositionHistoryCompact[numPositions] : null;
 
       int nextSourceBitmapIndex = 0;
@@ -147,11 +151,14 @@ namespace Ceres.Chess.NNEvaluators
           continue;
         }
 
-        int skipCount = numPos * EncodedPositionWithHistory.NUM_PLANES_TOTAL;
-        Array.Copy(thisBatch.PosPlaneBitmaps, 0, posPlaneBitmaps, nextSourceBitmapIndex, skipCount);
-        nextSourceBitmapIndex += skipCount;
-        Array.Copy(thisBatch.PosPlaneValues, 0, posPlaneValuesEncoded, nextSourceValueIndex, skipCount);
-        nextSourceValueIndex += skipCount;
+        if (allPlanesPopulated)
+        {
+          int skipCount = numPos * EncodedPositionWithHistory.NUM_PLANES_TOTAL;
+          Array.Copy(thisBatch.PosPlaneBitmaps, 0, posPlaneBitmaps, nextSourceBitmapIndex, skipCount);
+          nextSourceBitmapIndex += skipCount;
+          Array.Copy(thisBatch.PosPlaneValues, 0, posPlaneValuesEncoded, nextSourceValueIndex, skipCount);
+          nextSourceValueIndex += skipCount;
+        }
 
         if (hasPositions && thisBatch.Positions != null)
         {
@@ -171,11 +178,6 @@ namespace Ceres.Chess.NNEvaluators
         if (hasMoves && thisBatch.Moves != null)
         {
           Array.Copy(thisBatch.Moves, 0, moves, nextPositionIndex, numPos);
-        }
-
-        if (hasPositionsBuffer && thisBatch.PositionsBuffer != null && thisBatch.PositionsBuffer.Length > 0)
-        {
-          Array.Copy(thisBatch.PositionsBuffer, 0, positionsBuffer, nextPositionIndex, numPos);
         }
 
         if (hasCompactHistories && thisBatch.CompactHistories != null && thisBatch.CompactHistories.Length > 0)
@@ -208,16 +210,16 @@ namespace Ceres.Chess.NNEvaluators
         fullBatch.Moves = moves;
       }
 
-      if (hasPositionsBuffer)
-      {
-        // PositionsBuffer is a settable field on the concrete type (get-only on the interface).
-        ((EncodedPositionBatchFlat)fullBatch).PositionsBuffer = positionsBuffer;
-      }
-
       if (hasCompactHistories)
       {
         ((EncodedPositionBatchFlat)fullBatch).CompactHistories = compactHistories;
       }
+
+      // Set merged flags explicitly (AND semantics). CompactHistoriesPopulated=false triggers
+      // hook 1; PlanesPopulated matches whether plane arrays were allocated above (the ctor also
+      // derives it from posPlaneBitmaps != null - set here for clarity), and false triggers hook 2.
+      ((EncodedPositionBatchFlat)fullBatch).CompactHistoriesPopulated = allCompactPopulated;
+      ((EncodedPositionBatchFlat)fullBatch).PlanesPopulated = allPlanesPopulated;
 
       return fullBatch;
     }

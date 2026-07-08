@@ -146,8 +146,6 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
                                 Func<object, int> batchEvaluatorIndexDynamicSelector,
                                 bool engineIsWhite)
   {
-    rawPosArray = posArrayPool.Rent(maxBatchSize);
-
     EvaluatorDef = evaluatorDef;
     FillInHistory = fillInHistory;
     LowPriority = lowPriority;
@@ -212,11 +210,6 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
 
 
 
-  EncodedPositionWithHistory[] rawPosArray;
-
-  // TO DO: make uses elsewhere of ArrayPool use the shared
-  static readonly ArrayPool<EncodedPositionWithHistory> posArrayPool = ArrayPool<EncodedPositionWithHistory>.Shared;
-
   readonly Lock shutdownLockObj = new();
   private bool disposed = false;
 
@@ -242,12 +235,6 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
     {
       if (!disposed)
       {
-        if (rawPosArray != null)
-        {
-          posArrayPool.Return(rawPosArray);
-          rawPosArray = null;
-        }
-
         Batch?.Shutdown();
         disposed = true;
       }
@@ -321,31 +308,26 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
         Batch.LastMovePlies = new byte[Batch.MaxBatchSize * 64];
       }
 
-      bool useCompactHistories = Evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.CompactHistories);
-      if (useCompactHistories && (Batch.CompactHistories == null || Batch.CompactHistories.Length < paths.Count))
+      // The batch is compact-only for every net type: the producer populates CompactHistories
+      // (the canonical history representation) and never encodes LC0 planes. LC0 nets are served
+      // by hook 2 (MaterializePlanesFromCompactHistories) at the evaluation choke point.
+      if (Batch.CompactHistories == null || Batch.CompactHistories.Length < paths.Count)
       {
         Batch.CompactHistories = new MGPositionHistoryCompact[Batch.MaxBatchSize];
       }
 
-      // Evaluators not requesting Boards (TPG nets) never read the LC0 planes, so both the
-      // per-position EncodedPositionWithHistory encoding and the Batch.Set plane extraction
-      // are skipped entirely. Such evaluators must consume CompactHistories instead.
-      bool needsBoards = Evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Boards);
-      Debug.Assert(needsBoards || useCompactHistories);
-
       if (EvaluatorDef.PositionTransform == NNEvaluatorDef.PositionTransformType.Mirror)
       {
         throw new NotImplementedException("Mirroring temporarily disabled.");
-        //rawPosArray[i] = rawPosArray[i].Mirrored;
       }
 
       const int NUM_ITEMS_PER_THREAD = 48;
       ParallelOptions parallelOptions = ParallelUtils.ParallelOptions(paths.Count, NUM_ITEMS_PER_THREAD);
 
-      MGPositionHistoryCompact[] compactHistoriesArray = useCompactHistories ? Batch.CompactHistories : null;
+      MGPositionHistoryCompact[] compactHistoriesArray = Batch.CompactHistories;
       Parallel.For(0, paths.Count, parallelOptions, delegate (int i)
       {
-        SetEncodedBoardPositionFromPath(paths[i], ref rawPosArray[i], FillInHistory, compactHistoriesArray, i, needsBoards);
+        SetEncodedBoardPositionFromPath(paths[i], FillInHistory, compactHistoriesArray, i);
 
         if (engine.NeedsPlySinceLastMove)
         {
@@ -381,31 +363,16 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
       });
 
 
-      if (EvaluatorDef.Location == NNEvaluatorDef.LocationType.Local)
-      {
-        if (needsBoards)
-        {
-          const bool FILL_EMPTY_PLANES = false; // planes assumed already filled out
-          // (an empty last history plane is legitimate when FillInHistory is disabled and history is short)
-          Debug.Assert(!FillInHistory || !rawPosArray[0].HistoryPositionIsEmpty(EncodedPositionBatchFlat.NUM_HISTORY_POSITIONS - 1));
+      // Compact-only batch: set the fields Batch.Set would have set (planes are never encoded
+      // here). Consumers read CompactHistories (+ Positions / Moves / LastMovePlies); LC0 nets
+      // get planes materialized by hook 2.
+      Batch.NumPos = paths.Count;
+      Batch.TrainingType = EncodedPositionType.PositionOnly;
 
-          const bool SET_POSITIONS = false; // we assume this is already done (if needed)
-
-          // When compact histories are populated the consumer no longer needs PositionsBuffer,
-          // so suppress the large per-batch retained copy (otherwise defer to the global flag).
-          Batch.Set(rawPosArray, paths.Count, SET_POSITIONS, fillInHistoryPlanes: FILL_EMPTY_PLANES,
-                    retainPositionsBuffer: useCompactHistories ? false : null);
-          //          Batch.States = states;
-        }
-        else
-        {
-          // Planes-free batch (TPG net): rawPosArray was never written (stale data from prior
-          // batches) and Batch.Set is skipped entirely. Set the only two fields Set would
-          // have set; consumers read CompactHistories (+ Positions/Moves/etc.) exclusively.
-          Batch.NumPos = paths.Count;
-          Batch.TrainingType = EncodedPositionType.PositionOnly;
-        }
-      }
+      // The producer natively populated the compact records above, so hook 1 is a no-op; the
+      // planes are stale (never written), so hook 2 must re-materialize them for LC0 nets.
+      Batch.CompactHistoriesPopulated = true;
+      Batch.PlanesPopulated = false;
 
       if (BatchEvaluatorIndexDynamicSelector != null)
       {
@@ -926,7 +893,8 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
   static MGPosition[] positionsBufferMG;
 
   /// <summary>
-  /// Encodes the leaf position of the specified path (with history planes) into boardsHistory.
+  /// Gathers the sequential position history of the specified path's leaf and stores it as a
+  /// compact history record (MGPositionHistoryCompact) at the given batch index.
   ///
   /// The history positions are drawn from three contiguous sources, oldest to newest:
   ///   1. prehistory         - game positions up to and including the graph root
@@ -941,17 +909,13 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
   ///      using the history of whichever path first reached it (a deliberate design compromise).
   /// </summary>
   /// <param name="path"></param>
-  /// <param name="boardsHistory">target of LC0 plane encoding (untouched when encodeBoards is false)</param>
   /// <param name="historyFillIn">if missing history planes should be filled in with the oldest position</param>
-  /// <param name="compactHistories">optional array of compact history records to also populate (at batchIndex)</param>
+  /// <param name="compactHistories">array of compact history records to populate (at batchIndex)</param>
   /// <param name="batchIndex">index within compactHistories to populate</param>
-  /// <param name="encodeBoards">if the gathered positions should also be encoded into boardsHistory LC0 planes
-  ///                            (false for TPG nets which consume only the compact records)</param>
-  public unsafe void SetEncodedBoardPositionFromPath(MCGSPath path, ref EncodedPositionWithHistory boardsHistory, bool historyFillIn,
-                                                     MGPositionHistoryCompact[] compactHistories = null, int batchIndex = 0,
-                                                     bool encodeBoards = true)
+  public unsafe void SetEncodedBoardPositionFromPath(MCGSPath path, bool historyFillIn,
+                                                     MGPositionHistoryCompact[] compactHistories, int batchIndex)
   {
-    Debug.Assert(encodeBoards || compactHistories != null); // some consumer must receive the history
+    Debug.Assert(compactHistories != null); // the compact record is the only history consumer
     PositionWithHistory RootPreHistory = path.Graph.Store.PositionHistory;
 
     // Make sure the ThreadStatic temporary buffer used for positions is populated.
@@ -1050,19 +1014,13 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
     //      (prehistory: PositionWithHistoryHashes constructor; path visits: select phase via
     //      HashFoundInHistoryOrPrehistory, a full-path lookback with irreversibility cutoff).
 
-    // Optionally capture the compact history record (a single span copy).
-    // Must happen here since positionsPopulatedMG is backed by a ThreadStatic buffer.
-    if (compactHistories != null && numUsablePositions > 0)
+    // Capture the compact history record (a single span copy). Must happen here since
+    // positionsPopulatedMG is backed by a ThreadStatic buffer. This is the only history
+    // representation the batch carries; LC0 planes (if needed) are materialized from it at
+    // the evaluation choke point (hook 2).
+    if (numUsablePositions > 0)
     {
       compactHistories[batchIndex].SetFrom(positionsPopulatedMG, historyFillIn);
-    }
-
-    // Fill in boards history with the gathered positions (skipped for TPG nets,
-    // where nothing downstream reads the LC0 planes - the ~1KB of board writes per
-    // position here was the dominant per-position encode cost).
-    if (encodeBoards)
-    {
-      boardsHistory.SetFromSequentialPositions(positionsPopulatedMG, historyFillIn);
     }
   }
 

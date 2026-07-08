@@ -90,7 +90,6 @@ namespace Ceres.Chess.NNEvaluators.Remote
            + numPositions * sizeof(ulong)                    // Hashes (optional)
            + numPositions * 64                               // LastMovePlies (optional)
            + numPositions * 256 * sizeof(ushort) + numPositions * 4  // States (optional, generous)
-           + numPositions * Unsafe.SizeOf<EncodedPositionWithHistory>() // PositionsBuffer (optional)
            + numPositions * Unsafe.SizeOf<MGPositionHistoryCompact>() // CompactHistories (optional)
            + 1024;                                           // margin
     }
@@ -123,37 +122,18 @@ namespace Ceres.Chess.NNEvaluators.Remote
                        && !batch.States.IsEmpty;
       bool hasLastMovePlies = requiredInputs.HasFlag(NNEvaluator.InputTypes.LastMovePlies)
                               && !batch.LastMovePlies.IsEmpty;
-      // Position histories are needed only by Ceres/TPG networks (which advertise
-      // InputTypes.CompactHistories); prefer the compact records when present,
-      // falling back to the legacy full PositionsBuffer. Servers not requiring
-      // them (e.g. LC0 nets) receive neither.
-      bool requiresHistories = requiredInputs.HasFlag(NNEvaluator.InputTypes.CompactHistories);
-      bool hasCompactHistories = requiresHistories && !batch.CompactHistories.IsEmpty;
-      bool hasPositionsBuffer = requiresHistories && !hasCompactHistories && !batch.PositionsBuffer.IsEmpty;
-
-      // LC0 planes are consumed only by servers advertising InputTypes.Boards (LC0 nets);
-      // TPG-net servers (post plane-skip) never read them, so omit from the wire entirely
-      // (896 + 112 bytes per position).
-      bool hasPlanes = requiredInputs.HasFlag(NNEvaluator.InputTypes.Boards);
-
-      // If the server needs histories but this producer populated only the legacy
-      // PositionsBuffer (e.g. MCTS LeafEvaluatorNN or the Evaluate helper), derive the
-      // much smaller compact records here (~328 vs ~920 bytes per position) instead of
-      // shipping the buffer. CPU spent client-side only on the remote path where wire
-      // bytes matter more. The caller's batch is never mutated (scratch array).
-      MGPositionHistoryCompact[] derivedHistories = null;
-      if (hasPositionsBuffer)
-      {
-        derivedHistories = DeriveCompactHistories(batch.PositionsBuffer.Span, numPos);
-        hasCompactHistories = true;
-        hasPositionsBuffer = false;
-      }
+      // Wire flags are content-driven (v4): ship whatever representation the batch actually
+      // carries. The client fed its batch through EvaluateIntoBuffers, so hooks 1/2 already
+      // normalized it. Prefer compact records (the smaller representation): an MCGS client ships
+      // compact even to an LC0 server, which materializes planes server-side. A legacy plane
+      // producer with no compact records ships its planes.
+      bool hasCompactHistories = batch.CompactHistoriesPopulated && !batch.CompactHistories.IsEmpty;
+      bool hasPlanes = batch.PlanesPopulated && !hasCompactHistories;
 
       if (hasPositions) flags |= NNRemoteBatchFlags.HasPositions;
       if (hasHashes) flags |= NNRemoteBatchFlags.HasHashes;
       if (hasStates) flags |= NNRemoteBatchFlags.HasStates;
       if (hasLastMovePlies) flags |= NNRemoteBatchFlags.HasLastMovePlies;
-      if (hasPositionsBuffer) flags |= NNRemoteBatchFlags.HasPositionsBuffer;
       if (hasCompactHistories) flags |= NNRemoteBatchFlags.HasCompactHistories;
       if (hasPlanes) flags |= NNRemoteBatchFlags.HasPlanes;
 
@@ -221,96 +201,16 @@ namespace Ceres.Chess.NNEvaluators.Remote
         }
       }
 
-      // Conditional: PositionsBuffer (EncodedPositionWithHistory[] - needed by Ceres/TPG, legacy fallback)
-      if (hasPositionsBuffer)
-      {
-        ReadOnlySpan<EncodedPositionWithHistory> posBuffer = batch.PositionsBuffer.Span.Slice(0, numPos);
-        ReadOnlySpan<byte> posBufferBytes = MemoryMarshal.AsBytes(posBuffer);
-        posBufferBytes.CopyTo(buffer.Slice(offset));
-        offset += posBufferBytes.Length;
-      }
-
-      // Conditional: CompactHistories (needed by Ceres/TPG, much smaller than PositionsBuffer)
+      // Conditional: CompactHistories (the canonical history representation for Ceres/TPG servers)
       if (hasCompactHistories)
       {
-        ReadOnlySpan<MGPositionHistoryCompact> histories = derivedHistories != null
-                                                         ? derivedHistories.AsSpan(0, numPos)
-                                                         : batch.CompactHistories.Span.Slice(0, numPos);
+        ReadOnlySpan<MGPositionHistoryCompact> histories = batch.CompactHistories.Span.Slice(0, numPos);
         ReadOnlySpan<byte> historyBytes = MemoryMarshal.AsBytes(histories);
         historyBytes.CopyTo(buffer.Slice(offset));
         offset += historyBytes.Length;
       }
 
       return offset;
-    }
-
-
-    /// <summary>
-    /// Reusable scratch array for compact history records derived during serialization.
-    /// </summary>
-    [ThreadStatic]
-    static MGPositionHistoryCompact[] derivedHistoriesScratch;
-
-
-    /// <summary>
-    /// Derives MGPositionHistoryCompact records from legacy EncodedPositionWithHistory rows,
-    /// for producers which populate only PositionsBuffer. Returns a thread-local scratch
-    /// array (valid until the next call on this thread); the source batch is not mutated.
-    /// </summary>
-    static MGPositionHistoryCompact[] DeriveCompactHistories(Span<EncodedPositionWithHistory> positionsBuffer, int numPos)
-    {
-      if (derivedHistoriesScratch == null || derivedHistoriesScratch.Length < numPos)
-      {
-        derivedHistoriesScratch = new MGPositionHistoryCompact[numPos];
-      }
-
-      for (int i = 0; i < numPos; i++)
-      {
-        DeriveCompactHistory(ref positionsBuffer[i], ref derivedHistoriesScratch[i]);
-      }
-
-      return derivedHistoriesScratch;
-    }
-
-
-    /// <summary>
-    /// Reconstructs the real (non-fill) history positions of one encoded position and stores
-    /// them (oldest first) into a compact record, mirroring the slot-detection rule of
-    /// EncodedPositionWithHistory.ToPositionWithHistory: a history slot is an actual position
-    /// iff its planes are non-empty AND differ from the next-more-recent board. The record's
-    /// fill regime is inferred from the trailing planes themselves: empty trailing boards mean
-    /// the producer ran with history fill-in disabled, non-empty (fill copies) mean enabled;
-    /// with all 8 slots real the value is irrelevant (no filled slots, and the prior-state
-    /// predicate thresholds only differ below 3 positions).
-    /// </summary>
-    static void DeriveCompactHistory(ref EncodedPositionWithHistory encoded, ref MGPositionHistoryCompact record)
-    {
-      const int NUM_SLOTS = EncodedPositionBatchFlat.NUM_HISTORY_POSITIONS; // 8
-
-      // Gather real positions, oldest first (slot 0 is the current position).
-      Span<MGPosition> positionsMG = stackalloc MGPosition[NUM_SLOTS];
-      int numReal = 0;
-      for (int i = NUM_SLOTS - 1; i >= 0; i--)
-      {
-        bool isActualBoardPosition = (i == 0)
-                                  || (!encoded.GetPlanesForHistoryBoard(i).IsEmpty
-                                     && encoded.GetPlanesForHistoryBoard(i - 1) != encoded.GetPlanesForHistoryBoard(i));
-        if (isActualBoardPosition)
-        {
-          // HistoryPosition decodes side to move, en passant (from board diff), castling and
-          // repetition count (0/1 from the repetition plane) - the same information the
-          // legacy plane-based conversion path had available.
-          Position pos = encoded.HistoryPosition(i);
-          MGPosition posMG = MGChessPositionConverter.MGChessPositionFromPosition(in pos);
-          posMG.RepetitionCount = pos.MiscInfo.RepetitionCount; // not copied by the converter
-          positionsMG[numReal++] = posMG;
-        }
-      }
-
-      bool fillInHistory = numReal == NUM_SLOTS
-                        || !encoded.GetPlanesForHistoryBoard(numReal).IsEmpty;
-
-      record.SetFrom(positionsMG.Slice(0, numReal), fillInHistory);
     }
 
 
@@ -331,11 +231,12 @@ namespace Ceres.Chess.NNEvaluators.Remote
         EncodedPositionType.PositionOnly, numPos);
       batch.NumPos = numPos;
 
-      // Conditional: LC0 planes. Absent for TPG-net servers; the constructor-allocated
-      // arrays then remain zero-filled (nothing on the TPG path reads them, and pool
-      // aggregation of zero planes is harmless).
+      // Conditional: LC0 planes. Only present when the client actually shipped planes; the plane
+      // arrays are otherwise never allocated (compact-only batch). Allocate lazily here.
       if (flags.HasFlag(NNRemoteBatchFlags.HasPlanes))
       {
+        batch.EnsurePlaneArraysAllocated();
+
         // PosPlaneBitmaps
         int bitmapCount = numPos * PLANES_PER_POS;
         int bitmapByteCount = bitmapCount * sizeof(ulong);
@@ -347,6 +248,8 @@ namespace Ceres.Chess.NNEvaluators.Remote
         int valuesCount = numPos * PLANES_PER_POS;
         buffer.Slice(offset, valuesCount).CopyTo(batch.PosPlaneValues.AsSpan());
         offset += valuesCount;
+
+        batch.PlanesPopulated = true;
       }
 
       // Conditional: Positions
@@ -409,20 +312,15 @@ namespace Ceres.Chess.NNEvaluators.Remote
         }
       }
 
-      // Conditional: PositionsBuffer (EncodedPositionWithHistory[] - needed by Ceres/TPG, legacy fallback)
+      // The legacy PositionsBuffer never appears on the wire from v3+ clients (they always ship
+      // CompactHistories). Reject it loudly rather than silently mis-parsing the stream.
       if (flags.HasFlag(NNRemoteBatchFlags.HasPositionsBuffer))
       {
-        int posBufferSize = numPos * Unsafe.SizeOf<EncodedPositionWithHistory>();
-        if (batch.PositionsBuffer == null || batch.PositionsBuffer.Length < numPos)
-        {
-          batch.PositionsBuffer = new EncodedPositionWithHistory[numPos];
-        }
-        MemoryMarshal.Cast<byte, EncodedPositionWithHistory>(buffer.Slice(offset, posBufferSize))
-          .CopyTo(batch.PositionsBuffer.AsSpan());
-        offset += posBufferSize;
+        throw new NotSupportedException("HasPositionsBuffer is no longer supported on the wire "
+                                      + "(v3+ clients ship CompactHistories instead).");
       }
 
-      // Conditional: CompactHistories (needed by Ceres/TPG, much smaller than PositionsBuffer)
+      // Conditional: CompactHistories (the canonical history representation for Ceres/TPG servers)
       if (flags.HasFlag(NNRemoteBatchFlags.HasCompactHistories))
       {
         int historiesSize = numPos * Unsafe.SizeOf<MGPositionHistoryCompact>();
@@ -433,6 +331,8 @@ namespace Ceres.Chess.NNEvaluators.Remote
         MemoryMarshal.Cast<byte, MGPositionHistoryCompact>(buffer.Slice(offset, historiesSize))
           .CopyTo(batch.CompactHistories.AsSpan());
         offset += historiesSize;
+
+        batch.CompactHistoriesPopulated = true;
       }
 
       return batch;

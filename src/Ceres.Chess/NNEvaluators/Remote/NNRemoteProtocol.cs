@@ -96,8 +96,12 @@ namespace Ceres.Chess.NNEvaluators.Remote
     /// Version 3: LC0 planes became optional (HasPlanes flag, sent only to servers
     ///            advertising InputTypes.Boards) and clients derive CompactHistories
     ///            from PositionsBuffer rather than shipping it to TPG servers.
+    /// Version 4: PositionsBuffer / RETAIN_POSITION_INTERNALS removed; wire flags are now
+    ///            content-driven (HasCompactHistories from batch content, HasPlanes only when
+    ///            planes present and no compact records). MCGS clients ship compact records even
+    ///            to LC0 servers (which materialize planes server-side), a wire size reduction.
     /// </summary>
-    public const int PROTOCOL_VERSION = 3;
+    public const int PROTOCOL_VERSION = 4;
 
     /// <summary>
     /// Minimum payload size to attempt compression (bytes).

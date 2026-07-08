@@ -547,19 +547,15 @@ public class NNEvaluatorONNX : NNEvaluator
         {
           if (!batch.CompactHistories.IsEmpty && batch.CompactHistories.Span[i].IsPopulated)
           {
-            // Equivalent of the History_1 != History_2 test below:
+            // Equivalent of the legacy History_1 != History_2 test:
             // under history fill-in, boards 1 and 2 are identical unless at least 3 real
             // positions exist; without fill-in, board 2 is nonempty already with 2 positions.
             ref readonly MGPositionHistoryCompact ch = ref batch.CompactHistories.Span[i];
             return ch.NumPositions >= (ch.FillInHistory ? 3 : 2);
           }
-          else if (!batch.PositionsBuffer.IsEmpty)
-          {
-            return batch.PositionsBuffer.Span[i].BoardsHistory.History_1
-                != batch.PositionsBuffer.Span[i].BoardsHistory.History_2;
-          }
 
-          throw new Exception("State-enabled evaluator requires CompactHistories or PositionsBuffer on the batch");
+          throw new Exception("State-enabled evaluator requires CompactHistories on the batch "
+                            + "(populated by the producer or derived by the choke-point hook 1)");
         };
         int numPositionsInBatchSentToExecutor = numPos < Executor.MinBatchSize ? Executor.MinBatchSize : numPos;
 

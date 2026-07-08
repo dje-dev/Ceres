@@ -27,13 +27,14 @@ namespace Ceres.Chess.LC0.Batches
   /// Compact fixed-size record of the sequential MGPositions (up to 8, stored oldest first)
   /// backing one neural network evaluation position.
   ///
-  /// Serves as a much smaller substitute for retaining EncodedPositionWithHistory in
-  /// EncodedPositionBatchFlat.PositionsBuffer (~920 bytes/position, allocated fresh every batch)
-  /// for consumers such as TPG conversion which only need the underlying position sequence
-  /// (328 bytes/position, preallocated per batch, zero steady-state allocation).
+  /// This is the canonical position-history representation carried on an evaluation batch
+  /// (328 bytes/position, preallocated per batch, zero steady-state allocation): TPG conversion
+  /// consumes it directly, and LC0 planes are materialized from it on demand. It replaced the
+  /// former per-batch EncodedPositionWithHistory copy (~920 bytes/position, allocated fresh
+  /// every batch).
   ///
-  /// A record with NumPositions == 0 means "not populated" and consumers are expected
-  /// to fall back to PositionsBuffer for that batch row (possible in merged pooled batches).
+  /// A record with NumPositions == 0 means "not populated"; the choke-point hooks normalize a
+  /// batch to a uniform representation, so consumers treat an unpopulated row as a loud error.
   /// </summary>
   public struct MGPositionHistoryCompact
   {

@@ -426,12 +426,7 @@ namespace Ceres.Chess.NNEvaluators
         Helpers.PolicyHeadProcessingHelper.ThrowIfAdvancedPolicyFeaturesRequested(Options, GetType().Name);
       }
 
-      SetMovesIfNeeded(positions);
-
-      if (ZeroHistoryPlanes)
-      {
-        positions.ZeroHistoryPlanes();
-      }
+      PrepareBatchInputs(positions);
 
       // Acquire the buffers lock, if any.
       BuffersLock?.Wait();
@@ -469,6 +464,53 @@ namespace Ceres.Chess.NNEvaluators
       return batchEvaluation;
     }
     NNEvaluator extensionEvaluator;
+
+
+    /// <summary>
+    /// Consolidates all lazy per-batch input preparation performed at the evaluation choke point,
+    /// in a fixed order: derive compact history records (hook 1), the ZeroHistoryPlanes ablation,
+    /// then Moves. Idempotent and safe to call repeatedly on the same batch.
+    ///
+    /// Invariant: pooled / compound / sub-batched wrappers union or forward child InputsRequired
+    /// and run this on the full batch (or each sequential slice) before any parallel inner
+    /// evaluation, so consumers always see a uniform representation. The batch-level
+    /// CompactHistoriesPopulated flag (never per-row IsPopulated on a reused batch) decides
+    /// whether a representation must be (re)generated for all rows.
+    /// </summary>
+    private void PrepareBatchInputs(IEncodedPositionBatchFlat positions)
+    {
+      // Null-guard first (also fixes a latent NRE on the async path, which dereferenced the
+      // batch for ZeroHistoryPlanes before its own null check).
+      if (positions == null)
+      {
+        return;
+      }
+
+      // Hook 1: evaluators consuming compact history records (TPG / Ceres nets) require every
+      // row populated. Producers that supplied only planes (MCTS, the Evaluate helper, training
+      // batches, mixed pool merges) are served by deriving the records from the planes here.
+      if (InputsRequired.HasFlag(InputTypes.CompactHistories) && !positions.CompactHistoriesPopulated)
+      {
+        positions.EnsureCompactHistories();
+      }
+
+      // Hook 2: evaluators consuming LC0 planes (Boards) require them populated. Compact-only
+      // producers (MCGS for all net types) are served by materializing the planes from the
+      // compact records here (one parallel pass), byte-identical to native plane encoding.
+      if (InputsRequired.HasFlag(InputTypes.Boards) && !positions.PlanesPopulated)
+      {
+        positions.MaterializePlanesFromCompactHistories();
+      }
+
+      // The ZeroHistoryPlanes ablation only makes sense once planes exist (it is a no-op for
+      // compact-only TPG batches, whose planes are never materialized).
+      if (ZeroHistoryPlanes && positions.PlanesPopulated)
+      {
+        positions.ZeroHistoryPlanes();
+      }
+
+      SetMovesIfNeeded(positions);
+    }
 
 
     private void SetMovesIfNeeded(IEncodedPositionBatchFlat positions)
@@ -1069,11 +1111,8 @@ return true;
         batch = new EncodedPositionBatchFlat(encodedPositions, numPositions, setPositions, fillInHistoryPlanes);
       }
 
-      if (EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS)
-      {
-        batch.PositionsBuffer = encodedPositions;
-      }
-
+      // TPG/Ceres evaluators consume compact history records; hook 1 derives them from the
+      // planes just built (this helper's batches carry planes, never native compact records).
       return EvaluateIntoBuffers(batch, retrieveSupplementalResults);
     }
 
@@ -1215,15 +1254,7 @@ return true;
         throw new ArgumentException("numPositions wrong size");
       }
 
-      if (ZeroHistoryPlanes)
-      {
-        positions.ZeroHistoryPlanes();
-      }
-
-      if (positions != null)
-      {
-        SetMovesIfNeeded(positions);
-      }
+      PrepareBatchInputs(positions);
 
       Task task = DoLaunchEvaluateBatchAsync(positions, retrieveSupplementalResults);
 
@@ -1371,24 +1402,30 @@ return true;
         Span<Position> historyPositionsScratch = stackalloc Position[MGPositionHistoryCompact.MAX_POSITIONS];
         foreach (int i in _selectedIndices)
         {
-          // Convert the parent's position to a PositionWithHistory
-          // (from the compact history record if available, else from PositionsBuffer).
-          PositionWithHistory parentPWH;
+          // Convert the parent's position to a PositionWithHistory from its compact history
+          // record, deriving that record from the parent's planes when the parent evaluator
+          // supplied only planes (e.g. an LC0 parent that never populates CompactHistories).
+          MGPositionHistoryCompact ch;
           if (!_positions.CompactHistories.IsEmpty && _positions.CompactHistories.Span[i].IsPopulated)
           {
-            ref readonly MGPositionHistoryCompact ch = ref _positions.CompactHistories.Span[i];
-            Span<Position> historyPositions = historyPositionsScratch.Slice(0, ch.NumPositions);
-            for (int k = 0; k < ch.NumPositions; k++)
-            {
-              historyPositions[k] = MGChessPositionConverter.PositionFromMGChessPosition(in ch.Positions[k],
-                                                                                         includeRepetitionCount: true);
-            }
-            parentPWH = new PositionWithHistory(historyPositions, firstPositionMayBeMissingEnPassant: true);
+            ch = _positions.CompactHistories.Span[i];
           }
           else
           {
-            parentPWH = _positions.PositionsBuffer.Span[i].ToPositionWithHistory(8);
+            const int PLANES = EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES;
+            ch = default;
+            CompactHistoryDerivation.DeriveFromPlanes(_positions.PosPlaneBitmaps.Span.Slice(i * PLANES, PLANES),
+                                                      _positions.PosPlaneValues.Span.Slice(i * PLANES, PLANES),
+                                                      ref ch);
           }
+
+          Span<Position> historyPositions = historyPositionsScratch.Slice(0, ch.NumPositions);
+          for (int k = 0; k < ch.NumPositions; k++)
+          {
+            historyPositions[k] = MGChessPositionConverter.PositionFromMGChessPosition(in ch.Positions[k],
+                                                                                       includeRepetitionCount: true);
+          }
+          PositionWithHistory parentPWH = new PositionWithHistory(historyPositions, firstPositionMayBeMissingEnPassant: true);
           CompressedPolicyVector childPolicy = _parentEvaluations.Policies.Span[i];
 
           (EncodedMove Move, float Probability) thisPolicyMove = childPolicy.PolicyInfoAtIndex(0);
@@ -1437,6 +1474,10 @@ return true;
         {
           throw new Exception("Child batch is empty.");
         }
+        // The child batch bypasses EvaluateIntoBuffers (calls the protected DoEvaluateIntoBuffers
+        // directly), so run the choke-point hooks here to prepare its inputs (e.g. derive compact
+        // histories for a TPG extension evaluator, compute Moves).
+        baseEvaluator.PrepareBatchInputs(batch);
         _childEvaluations = baseEvaluator.DoEvaluateIntoBuffers(batch, false);
       }
 

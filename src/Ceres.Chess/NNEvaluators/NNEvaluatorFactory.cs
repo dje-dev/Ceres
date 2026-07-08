@@ -371,12 +371,6 @@ namespace Ceres.Chess.NNEvaluators
 
           bool isTorchscipt = deviceDef.OverrideEngineType?.Contains("TORCHSCRIPT", StringComparison.OrdinalIgnoreCase) == true;
 
-          // Legacy: retained for callers not yet populating CompactHistories
-          // (the MCGS batch producer now uses CompactHistories and suppresses this
-          // per-batch retained copy via the retainPositionsBuffer argument of Set).
-          // TODO: Remove once all remaining batch producers migrate to CompactHistories.
-          EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true;
-
           // TODO: Derive these values from NNEvaluatorOptions in the definition object
           const bool ENABLE_PROFILING = false;
           const bool USE_HISTORY = true;
@@ -455,7 +449,6 @@ namespace Ceres.Chess.NNEvaluators
                                              ENABLE_PROFILING, false, USE_HISTORY, optionsCeres,
                                              true, optionsCeres.UsePriorState, optionsCeres.HeadOverrides);
 
-            EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // Legacy fallback for non-migrated callers (see comment above)
             onnxEngine.ConverterToFlatFromTPG = (options, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(options, o, f1.Span);
             onnxEngine.ConverterToFlat = (options, o, history, squaresBytes, squares, legalMoveIndices)
               => TPGConvertersToFlat.ConvertToFlatTPG(options, o, history, squaresBytes, squares, legalMoveIndices);

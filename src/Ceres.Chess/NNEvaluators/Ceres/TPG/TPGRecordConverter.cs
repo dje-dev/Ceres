@@ -188,17 +188,15 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
         Array.Clear(legalMoveIndices, 0, positions.NumPos * TPGRecordMovesExtractor.NUM_MOVE_SLOTS_PER_REQUEST);
       }
 
-      // Get all positions from input batch.
-      // Prefer the compact history records (populated when the evaluator advertises
-      // InputTypes.CompactHistories) over the much larger PositionsBuffer.
-      // Selection is per row: merged pooled batches can mix rows having only one of the two.
+      // All history is read from the compact records. Producers that supply only planes (MCTS,
+      // the Evaluate helper, mixed pool merges) are normalized at the evaluation choke point by
+      // hook 1 (EnsureCompactHistories), which derives the records from planes before this runs.
       Memory<MGPositionHistoryCompact> compactHistories = positions.CompactHistories;
-      Memory<EncodedPositionWithHistory> positionsFlat = positions.PositionsBuffer;
-      if (compactHistories.IsEmpty && positionsFlat.IsEmpty)
+      if (compactHistories.IsEmpty)
       {
-        throw new Exception("Neither CompactHistories nor PositionsBuffer initialized "
-                          + "(evaluator must advertise InputTypes.CompactHistories "
-                          + "or EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS must be set true)");
+        throw new Exception("CompactHistories not populated (evaluator must advertise "
+                          + "InputTypes.CompactHistories; the choke-point hook 1 derives the "
+                          + "records from planes for plane-only producers)");
       }
 
       // mgPos is unused by the sole caller (passes `out _`); skip the expensive
@@ -220,18 +218,18 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
         {
           Span<byte> thesePliesSinceLastMove = havePlies ? pliesSinceLastMoveAll.Span.Slice(i * 64, 64) : default;
 
-          bool useCompact = !compactHistories.IsEmpty && compactHistories.Span[i].IsPopulated;
-          if (!useCompact && (positionsFlat.IsEmpty || i >= positionsFlat.Length))
+          // Loud backstop: NumPositions==0 means hook 1 failed to normalize this row (should be
+          // impossible), so throw rather than emit a garbage board.
+          if (!compactHistories.Span[i].IsPopulated)
           {
-            throw new Exception($"Position {i} has neither a populated CompactHistories record nor a PositionsBuffer entry");
+            throw new Exception($"Position {i} has no populated CompactHistories record (choke-point hook 1 did not run?)");
           }
 
           float thisQNegativeBlunders;
           float thisQPositiveBlunders;
           if (positions.EngineIsWhite is not null)
           {
-            bool isWhite = useCompact ? !compactHistories.Span[i].CurrentPosition.BlackToMove
-                                      : positionsFlat.Span[i].FinalPosition.IsWhite;
+            bool isWhite = !compactHistories.Span[i].CurrentPosition.BlackToMove;
             thisQNegativeBlunders = isWhite ? qNegativeBlunders : qPositiveBlunders;
             thisQPositiveBlunders = isWhite ? qPositiveBlunders : qNegativeBlunders;
           }
@@ -244,18 +242,9 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
           // Convert to sequence of TPGSquareRecord.
           // This is done using unsafe code in situ in the raw squareBytesAl array for performance.
           Span<TPGSquareRecord> squaresSpan = new Span<TPGSquareRecord>(ptrSquareBytes, 64);
-          if (useCompact)
-          {
-            ConvertToTPGRecordSquaresFromCompactHistory(in compactHistories.Span[i], includeHistory, squaresSpan,
-                                                        thesePliesSinceLastMove, lastMovePliesEnabled,
-                                                        thisQNegativeBlunders, thisQPositiveBlunders);
-          }
-          else
-          {
-            ConvertToTPGRecordSquares(in positionsFlat.Span[i], includeHistory, squaresSpan,
-                                      thesePliesSinceLastMove, lastMovePliesEnabled,
-                                      thisQNegativeBlunders, thisQPositiveBlunders);
-          }
+          ConvertToTPGRecordSquaresFromCompactHistory(in compactHistories.Span[i], includeHistory, squaresSpan,
+                                                      thesePliesSinceLastMove, lastMovePliesEnabled,
+                                                      thisQNegativeBlunders, thisQPositiveBlunders);
 
           if (legalMoveIndices != null)
           {

@@ -2619,8 +2619,6 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                               referenceEvaluator: referenceEvaluator as NNEvaluatorTensorRT);
     trtNativeEngine.Options = options;
 
-    EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // Legacy fallback for callers not populating CompactHistories
-
     if (netType == ONNXNetExecutor.NetTypeEnum.TPG)
     {
       trtNativeEngine.ConverterToFlatFromTPG = (opts, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(opts, o, f1.Span);

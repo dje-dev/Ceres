@@ -40,14 +40,6 @@ namespace Ceres.Chess.LC0.Batches
   [Serializable]
   public class EncodedPositionBatchFlat : IEncodedPositionBatchFlat
   {
-    /// <summary>
-    /// Legacy: retains the source EncodedPositionWithHistory array in PositionsBuffer
-    /// (a large per-batch allocation) for consumers such as TPG conversion.
-    /// Only needed by callers not yet populating CompactHistories
-    /// (evaluators advertising InputTypes.CompactHistories use that instead).
-    /// </summary>
-    public static bool RETAIN_POSITION_INTERNALS = false;
-
     // These constants probably belong elsewhere
     public const int NUM_PIECE_PLANES_PER_POS = 13;
     public const int NUM_MISC_PLANES_PER_POS = 8; // constants holding miscellaneous values
@@ -125,17 +117,29 @@ namespace Ceres.Chess.LC0.Batches
     public short PreferredEvaluatorIndex;
 
     /// <summary>
-    /// If originated from EncodedPositionWithHistory then
-    /// this field optionally holds the origin data array.
-    /// </summary>
-    public EncodedPositionWithHistory[] PositionsBuffer;
-
-    /// <summary>
-    /// Optionally the compact per-position history records (preferred over
-    /// PositionsBuffer by TPG conversion; populated when the evaluator
-    /// advertises InputTypes.CompactHistories).
+    /// Optionally the compact per-position history records, the canonical position-history
+    /// representation consumed by TPG/Ceres nets. Populated natively by producers (MCGS SetBatch)
+    /// or derived from the plane arrays at the evaluation choke point (hook 1).
     /// </summary>
     public MGPositionHistoryCompact[] CompactHistories;
+
+    /// <summary>
+    /// Whether the CompactHistories records for rows [0, NumPos) are all currently valid.
+    /// Batches are reused, so a stale flag must never be trusted: when false the contents are
+    /// considered untrustworthy and EnsureCompactHistories() regenerates ALL rows (never relying
+    /// on per-row IsPopulated). Set true by producers that natively populate compact records
+    /// (MCGS SetBatch) and by EnsureCompactHistories(); reset false by both Set() overloads.
+    /// </summary>
+    public bool CompactHistoriesPopulated { get; set; }
+
+    /// <summary>
+    /// Whether the LC0 plane arrays (PosPlaneBitmaps / PosPlaneValues) for rows [0, NumPos) are
+    /// currently valid. Plane arrays are allocated uninitialized (and lazily), so "empty" is not
+    /// detectable from content - this flag is the source of truth. Set true by producers that
+    /// populate planes (both Set() overloads, plane-array constructor, deserializer HasPlanes,
+    /// the materializer); false for compact-only producers (MCGS SetBatch, fresh batches).
+    /// </summary>
+    public bool PlanesPopulated { get; set; }
 
     public bool PositionsUseSecondaryEvaluator { get; set; }
 
@@ -172,11 +176,19 @@ namespace Ceres.Chess.LC0.Batches
         Array.Copy(L, startIndex, l, 0, count);
       }
 
-      byte[] posPlaneValuesEncoded = new byte[count * EncodedPositionWithHistory.NUM_PLANES_TOTAL];
-      Array.Copy(PosPlaneValues, startIndex * EncodedPositionWithHistory.NUM_PLANES_TOTAL, posPlaneValuesEncoded, 0, count * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+      // Planes are lazily allocated: only copy them if this batch actually has them populated
+      // (compact-only batches carry none). The plane-array ctor sets ret.PlanesPopulated from
+      // whether the arrays are non-null.
+      byte[] posPlaneValuesEncoded = null;
+      ulong[] posPlaneBitmaps = null;
+      if (PlanesPopulated)
+      {
+        posPlaneValuesEncoded = new byte[count * EncodedPositionWithHistory.NUM_PLANES_TOTAL];
+        Array.Copy(PosPlaneValues, startIndex * EncodedPositionWithHistory.NUM_PLANES_TOTAL, posPlaneValuesEncoded, 0, count * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
 
-      ulong[] posPlaneBitmaps = new ulong[count * EncodedPositionWithHistory.NUM_PLANES_TOTAL];
-      Array.Copy(PosPlaneBitmaps, startIndex * EncodedPositionWithHistory.NUM_PLANES_TOTAL, posPlaneBitmaps, 0, count * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+        posPlaneBitmaps = new ulong[count * EncodedPositionWithHistory.NUM_PLANES_TOTAL];
+        Array.Copy(PosPlaneBitmaps, startIndex * EncodedPositionWithHistory.NUM_PLANES_TOTAL, posPlaneBitmaps, 0, count * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+      }
 
       EncodedPositionBatchFlat ret = new EncodedPositionBatchFlat(posPlaneBitmaps, posPlaneValuesEncoded, w, l, null, count);
 
@@ -212,6 +224,14 @@ namespace Ceres.Chess.LC0.Batches
         byte[] lastPlies = new byte[count * 64];
         Array.Copy(LastMovePlies, startIndex * 64, lastPlies, 0, count * 64);
         ret.LastMovePlies = lastPlies;
+      }
+
+      if (CompactHistoriesPopulated && CompactHistories != null)
+      {
+        MGPositionHistoryCompact[] compact = new MGPositionHistoryCompact[count];
+        Array.Copy(CompactHistories, startIndex, compact, 0, count);
+        ret.CompactHistories = compact;
+        ret.CompactHistoriesPopulated = true;
       }
 
       return ret;
@@ -304,85 +324,158 @@ namespace Ceres.Chess.LC0.Batches
     //       There is no highly efficient way to centralize this. 
     // Since this is a performance-critical method, we leave both of these in place.
 
-    public void Set(ReadOnlySpan<EncodedPositionWithHistory> positions, int numToProcess, bool setPositions, bool fillInHistoryPlanes = false,
-                    bool? retainPositionsBuffer = null)
+    public void Set(ReadOnlySpan<EncodedPositionWithHistory> positions, int numToProcess, bool setPositions, bool fillInHistoryPlanes = false)
     {
       NumPos = numToProcess;
       TrainingType = EncodedPositionType.PositionOnly;
 
-      // Callers which populate CompactHistories pass false here to avoid this
-      // large per-batch allocation; null defers to the legacy global flag.
-      if (retainPositionsBuffer ?? RETAIN_POSITION_INTERNALS)
-      {
-        PositionsBuffer = positions.Slice(0, numToProcess).ToArray();
-      }
+      // This overload (re)generates planes; any compact records from a prior use of this
+      // reused batch are now stale (a producer that also wants them repopulates afterward).
+      CompactHistoriesPopulated = false;
 
-      int nextOutPlaneIndex = 0;
+      EnsurePlaneArraysAllocated();
 
       if (setPositions)
       {
         SetPositions(positions);
       }
 
-      void WritePairWithValue1(ulong bitmap)
-      {
-        PosPlaneBitmaps[nextOutPlaneIndex] = bitmap;
-        PosPlaneValues[nextOutPlaneIndex] = 1;
-        nextOutPlaneIndex++;
-      }
-
-      void WritePair(ulong bitmap, byte value)
-      {
-        PosPlaneBitmaps[nextOutPlaneIndex] = bitmap;
-        PosPlaneValues[nextOutPlaneIndex] = value;
-        nextOutPlaneIndex++;
-      }
-
-      const int PLANES_WRITTEN = EncodedPositionBoard.NUM_PLANES_PER_BOARD * EncodedPositionBoards.NUM_MOVES_HISTORY;
-
-      //      Unsafe.InitBlock(ref PosPlaneValues[0], 1, (uint)(numToProcess * PLANES_WRITTEN));
-
-      // Initialize planes
+      // Initialize planes (the fillInHistoryPlanes copy stays out of WriteRowPlanes so the
+      // latter uses absolute offsets only and remains parallel-safe for the materializer).
       for (int i = 0; i < numToProcess; i++)
       {
-        // Set planes (NOTE: we move all 8 history planes)
         if (fillInHistoryPlanes)
         {
           EncodedPositionWithHistory positionCopy = positions[i];
           positionCopy.FillInEmptyPlanes();
-          positionCopy.ExtractPlanesValuesIntoArray(EncodedPositionBoards.NUM_MOVES_HISTORY, PosPlaneBitmaps, nextOutPlaneIndex);
+          WriteRowPlanes(in positionCopy, i);
         }
         else
         {
-          positions[i].ExtractPlanesValuesIntoArray(EncodedPositionBoards.NUM_MOVES_HISTORY, PosPlaneBitmaps, nextOutPlaneIndex);
+          WriteRowPlanes(in positions[i], i);
         }
+      }
 
-        // Start by setting all plane values to 1.
-        Unsafe.InitBlock(ref PosPlaneValues[nextOutPlaneIndex], 1, (uint)PLANES_WRITTEN);
-        //        Array.Fill<byte>(PosPlaneValues, 1, nextOutPlaneIndex, PLANES_WRITTEN);
+      PlanesPopulated = true;
+    }
 
-        // Advance
-        nextOutPlaneIndex += PLANES_WRITTEN;
 
-        // Copy in special plane values
-        EncodedPositionMiscInfo miscInfo = positions[i].MiscInfo.InfoPosition;
-        WritePairWithValue1(miscInfo.Castling_US_OOO > 0 ? ulong.MaxValue : 0);
-        WritePairWithValue1(miscInfo.Castling_US_OO > 0 ? ulong.MaxValue : 0);
-        WritePairWithValue1(miscInfo.Castling_Them_OOO > 0 ? ulong.MaxValue : 0);
-        WritePairWithValue1(miscInfo.Castling_Them_OO > 0 ? ulong.MaxValue : 0);
+    /// <summary>
+    /// Writes the LC0 plane representation of one position into the batch plane arrays at the
+    /// absolute row offset (rowIndex * planes-per-position): 104 piece planes (all values 1)
+    /// followed by the 8 miscellaneous planes (castling x4, side to move, Rule50, zeros, edges).
+    /// Uses only absolute offsets (no shared counter), so distinct rows may be written in
+    /// parallel - this is the shared per-row encoder used by both Set() and the materializer.
+    /// </summary>
+    private void WriteRowPlanes(in EncodedPositionWithHistory pos, int rowIndex)
+    {
+      const int PLANES_WRITTEN = EncodedPositionBoard.NUM_PLANES_PER_BOARD * EncodedPositionBoards.NUM_MOVES_HISTORY; // 104
+      int baseOffset = rowIndex * TOTAL_NUM_PLANES_ALL_HISTORIES;
 
-        WritePairWithValue1((ulong)miscInfo.SideToMove > 0 ? ulong.MaxValue : 0);
-        WritePair(ulong.MaxValue, miscInfo.Rule50Count);
-        WritePairWithValue1(0);// "used to be movecount plane, now it's all zeros" // index 110
-        WritePairWithValue1(ulong.MaxValue); // "all ones to help NN find board edges" // index 111
+      // 104 piece planes, all values 1.
+      pos.ExtractPlanesValuesIntoArray(EncodedPositionBoards.NUM_MOVES_HISTORY, PosPlaneBitmaps, baseOffset);
+      Unsafe.InitBlock(ref PosPlaneValues[baseOffset], 1, (uint)PLANES_WRITTEN);
+
+      // 8 miscellaneous planes.
+      int m = baseOffset + PLANES_WRITTEN;
+      EncodedPositionMiscInfo miscInfo = pos.MiscInfo.InfoPosition;
+      PosPlaneBitmaps[m + 0] = miscInfo.Castling_US_OOO > 0 ? ulong.MaxValue : 0; PosPlaneValues[m + 0] = 1;
+      PosPlaneBitmaps[m + 1] = miscInfo.Castling_US_OO > 0 ? ulong.MaxValue : 0; PosPlaneValues[m + 1] = 1;
+      PosPlaneBitmaps[m + 2] = miscInfo.Castling_Them_OOO > 0 ? ulong.MaxValue : 0; PosPlaneValues[m + 2] = 1;
+      PosPlaneBitmaps[m + 3] = miscInfo.Castling_Them_OO > 0 ? ulong.MaxValue : 0; PosPlaneValues[m + 3] = 1;
+      PosPlaneBitmaps[m + 4] = (ulong)miscInfo.SideToMove > 0 ? ulong.MaxValue : 0; PosPlaneValues[m + 4] = 1;
+      PosPlaneBitmaps[m + 5] = ulong.MaxValue; PosPlaneValues[m + 5] = miscInfo.Rule50Count;
+      PosPlaneBitmaps[m + 6] = 0; PosPlaneValues[m + 6] = 1;              // was movecount plane, now zeros (index 110)
+      PosPlaneBitmaps[m + 7] = ulong.MaxValue; PosPlaneValues[m + 7] = 1; // all ones to help NN find board edges (index 111)
+    }
+
+
+    /// <summary>
+    /// Materializes the LC0 plane arrays for all rows [0, NumPos) from the compact history
+    /// records (hook 2), enabling compact-only producers (MCGS) to feed LC0 nets. Requires
+    /// CompactHistoriesPopulated. Idempotent: a no-op once PlanesPopulated is set. The scratch
+    /// encode uses the same SetFromSequentialPositions encoder that native plane producers use,
+    /// so the planes are byte-identical by construction.
+    /// </summary>
+    public void MaterializePlanesFromCompactHistories()
+    {
+      if (PlanesPopulated)
+      {
+        return;
+      }
+
+      if (!CompactHistoriesPopulated)
+      {
+        throw new InvalidOperationException("MaterializePlanesFromCompactHistories requires populated CompactHistories");
+      }
+
+      EnsurePlaneArraysAllocated();
+
+      Parallel.For(0, NumPos, materializeRowAction ??= MaterializeRow);
+
+      PlanesPopulated = true;
+    }
+
+    private Action<int> materializeRowAction;
+
+    private void MaterializeRow(int i)
+    {
+      ref MGPositionHistoryCompact record = ref CompactHistories[i];
+      Span<MGPosition> positions = ((Span<MGPosition>)record.Positions).Slice(0, record.NumPositions);
+
+      EncodedPositionWithHistory scratch = default;
+      scratch.SetFromSequentialPositions(positions, record.FillInHistory);
+      WriteRowPlanes(in scratch, i);
+
+#if DEBUG
+      // Permanent sampled fixed-point canary (~1/997 positions): a record derived back from the
+      // freshly materialized planes must re-materialize to byte-identical planes (planes ->
+      // compact -> planes is stable). Non-tautological: exercises both derivation and encoding.
+      if ((ulong)record.CurrentPosition.A % 997 == 3)
+      {
+        DebugCrossCheckMaterializedRow(i);
+      }
+#endif
+    }
+
+#if DEBUG
+    private void DebugCrossCheckMaterializedRow(int rowIndex)
+    {
+      const int PLANES = TOTAL_NUM_PLANES_ALL_HISTORIES;
+      int baseOffset = rowIndex * PLANES;
+
+      MGPositionHistoryCompact reDerived = default;
+      CompactHistoryDerivation.DeriveFromPlanes(PosPlaneBitmaps.AsSpan(baseOffset, PLANES),
+                                                PosPlaneValues.AsSpan(baseOffset, PLANES), ref reDerived);
+
+      // Re-encode into a fresh probe batch (its own arrays), bypassing the sampled check.
+      EncodedPositionBatchFlat probe = new EncodedPositionBatchFlat(EncodedPositionType.PositionOnly, 1);
+      probe.NumPos = 1;
+      probe.EnsurePlaneArraysAllocated();
+      EncodedPositionWithHistory scratch = default;
+      scratch.SetFromSequentialPositions(((Span<MGPosition>)reDerived.Positions).Slice(0, reDerived.NumPositions),
+                                         reDerived.FillInHistory);
+      probe.WriteRowPlanes(in scratch, 0);
+
+      if (!PosPlaneBitmaps.AsSpan(baseOffset, PLANES).SequenceEqual(probe.PosPlaneBitmaps.AsSpan(0, PLANES))
+        || !PosPlaneValues.AsSpan(baseOffset, PLANES).SequenceEqual(probe.PosPlaneValues.AsSpan(0, PLANES)))
+      {
+        throw new Exception($"MaterializePlanesFromCompactHistories fixed-point mismatch at row {rowIndex}: "
+                          + $"currentPos={reDerived.CurrentPosition.ToPosition.FEN}");
       }
     }
+#endif
 
 
     public void Set(ReadOnlySpan<EncodedTrainingPosition> positions, int numToProcess, EncodedPositionType trainingType, bool setPositions)
     {
       NumPos = numToProcess;
       TrainingType = trainingType;
+
+      // This overload (re)generates planes; any compact records on this reused batch are stale.
+      CompactHistoriesPopulated = false;
+
+      EnsurePlaneArraysAllocated();
 
       if (setPositions)
       {
@@ -445,6 +538,8 @@ namespace Ceres.Chess.LC0.Batches
         WritePairWithValue1(0);// "used to be movecount plane, now it's all zeros" // index 110
         WritePairWithValue1(ulong.MaxValue); // "all ones to help NN find board edges" // index 111
       }
+
+      PlanesPopulated = true;
     }
 
 
@@ -467,8 +562,9 @@ namespace Ceres.Chess.LC0.Batches
 
     void Init(EncodedPositionType trainingType)
     {
-      PosPlaneBitmaps = GC.AllocateUninitializedArray<ulong>(MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
-      PosPlaneValues = GC.AllocateUninitializedArray<byte>(MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+      // Plane arrays are allocated lazily (EnsurePlaneArraysAllocated) the first time a producer
+      // populates planes or the materializer runs. Compact-only configurations (e.g. MCGS + TPG,
+      // remote TPG servers) never touch them, avoiding ~1.03 MB per 1024-batch object.
 
 #if NOT
       // Actually these allocations below are unnecessary, we only (rarely) use W/L/Policy 
@@ -482,6 +578,21 @@ namespace Ceres.Chess.LC0.Batches
 #endif
     }
 
+
+    /// <summary>
+    /// Lazily allocates the plane arrays (sized to MaxBatchSize) the first time a producer needs
+    /// them. A no-op once allocated. Called by both Set() overloads, the materializer, and the
+    /// remote deserializer's HasPlanes branch.
+    /// </summary>
+    internal void EnsurePlaneArraysAllocated()
+    {
+      if (PosPlaneBitmaps == null)
+      {
+        PosPlaneBitmaps = GC.AllocateUninitializedArray<ulong>(MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+        PosPlaneValues = GC.AllocateUninitializedArray<byte>(MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+      }
+    }
+
     const int BATCH_SIZE_ALIGNMENT = 4;
 
 
@@ -492,12 +603,11 @@ namespace Ceres.Chess.LC0.Batches
     }
 
     public EncodedPositionBatchFlat(ReadOnlySpan<EncodedPositionWithHistory> positions, int numToProcess,
-                                    bool setPositions, bool fillInHistoryPlanes = false,
-                                    bool? retainPositionsBuffer = null)
+                                    bool setPositions, bool fillInHistoryPlanes = false)
     {
       MaxBatchSize = (int)MathUtils.RoundedUp(numToProcess, BATCH_SIZE_ALIGNMENT);
       Init(EncodedPositionType.PositionOnly);
-      Set(positions, numToProcess, setPositions, fillInHistoryPlanes, retainPositionsBuffer);
+      Set(positions, numToProcess, setPositions, fillInHistoryPlanes);
     }
 
     public EncodedPositionBatchFlat(ReadOnlySpan<EncodedTrainingPosition> positions, int numToProcess, EncodedPositionType trainingType, bool setPositions)
@@ -515,12 +625,55 @@ namespace Ceres.Chess.LC0.Batches
       L = l;
       PosPlaneBitmaps = posPlaneBitmaps;
       PosPlaneValues = posPlaneValuesEncoded;
+      PlanesPopulated = posPlaneBitmaps != null;
       MaxBatchSize = numPos;
 
       if (policy != null)
       {
         Policy = FP16.ToFP16(policy);
       }
+    }
+
+
+    /// <summary>
+    /// Ensures CompactHistories records exist for all rows [0, NumPos), deriving them from the
+    /// LC0 plane arrays for any batch that carries only planes (e.g. MCTS / the Evaluate helper /
+    /// training-data batches). Idempotent: a no-op once CompactHistoriesPopulated is set.
+    ///
+    /// Invoked at the evaluation choke point (NNEvaluator.PrepareBatchInputs / hook 1) for
+    /// evaluators advertising InputTypes.CompactHistories. Regenerates ALL rows when the flag is
+    /// false rather than trusting per-row IsPopulated (batches are reused).
+    /// </summary>
+    public void EnsureCompactHistories()
+    {
+      if (CompactHistoriesPopulated)
+      {
+        return;
+      }
+
+      Debug.Assert(PosPlaneBitmaps != null && PosPlaneValues != null,
+                   "EnsureCompactHistories requires plane arrays to derive from");
+
+      if (CompactHistories == null || CompactHistories.Length < NumPos)
+      {
+        CompactHistories = new MGPositionHistoryCompact[NumPos];
+      }
+
+      // Cached instance-method delegate (allocated once) reading only instance fields, so this
+      // per-row parallel derivation is allocation-free in the steady state (batches are reused).
+      Parallel.For(0, NumPos, ensureCompactRowAction ??= EnsureCompactHistoriesRow);
+
+      CompactHistoriesPopulated = true;
+    }
+
+    private Action<int> ensureCompactRowAction;
+
+    private void EnsureCompactHistoriesRow(int i)
+    {
+      const int PLANES = TOTAL_NUM_PLANES_ALL_HISTORIES;
+      CompactHistoryDerivation.DeriveFromPlanes(PosPlaneBitmaps.AsSpan(i * PLANES, PLANES),
+                                                PosPlaneValues.AsSpan(i * PLANES, PLANES),
+                                                ref CompactHistories[i]);
     }
 
 
@@ -1354,8 +1507,6 @@ namespace Ceres.Chess.LC0.Batches
     Memory<MGMoveList> IEncodedPositionBatchFlat.Moves { get => Moves.AsMemory(); set => Moves = value.ToArray(); }
 
     Memory<Half[]> IEncodedPositionBatchFlat.States { get => States.AsMemory(); set => States = value.ToArray(); }
-
-    Memory<EncodedPositionWithHistory> IEncodedPositionBatchFlat.PositionsBuffer { get => PositionsBuffer; }
 
     Memory<MGPositionHistoryCompact> IEncodedPositionBatchFlat.CompactHistories { get => CompactHistories; }
 

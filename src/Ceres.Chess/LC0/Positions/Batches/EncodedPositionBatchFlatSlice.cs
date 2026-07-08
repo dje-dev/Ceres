@@ -124,14 +124,6 @@ namespace Ceres.Chess.LC0.Batches
 
 
 
-    public Memory<EncodedPositionWithHistory> PositionsBuffer
-    {
-      get
-      {
-        return SliceParent.PositionsBuffer.IsEmpty ? default : SliceParent.PositionsBuffer.Slice(StartIndex, Length);
-      }
-    }
-
     public Memory<MGPositionHistoryCompact> CompactHistories
     {
       get
@@ -139,6 +131,17 @@ namespace Ceres.Chess.LC0.Batches
         return SliceParent.CompactHistories.IsEmpty ? default : SliceParent.CompactHistories.Slice(StartIndex, Length);
       }
     }
+
+    // Flags and lazy population delegate to the parent: whole-parent (idempotent) derivation is
+    // done once, and EvaluateOversizedBatch processes slices sequentially so the first slice
+    // normalizes the parent before any subsequent slice observes it.
+    public bool CompactHistoriesPopulated => SliceParent.CompactHistoriesPopulated;
+
+    public void EnsureCompactHistories() => SliceParent.EnsureCompactHistories();
+
+    public bool PlanesPopulated => SliceParent.PlanesPopulated;
+
+    public void MaterializePlanesFromCompactHistories() => SliceParent.MaterializePlanesFromCompactHistories();
 
     Memory<Half[]> IEncodedPositionBatchFlat.States
     {

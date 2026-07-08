@@ -264,10 +264,9 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       EncodedPositionBatchFlat ebf = batch as EncodedPositionBatchFlat;
       bool EMIT_PLY_SINCE = ebf?.LastMovePlies != null;
 
-      // NOTE: The RETAIN_POSITION_INTERNALS overhead is now avoided for evaluators advertising
-      //       InputTypes.CompactHistories: ConvertPositionsToRawSquareBytes prefers the compact
-      //       batch.CompactHistories records (per row) over PositionsBuffer, so only
-      //       not-yet-migrated callers still rely on the retained buffer.
+      // ConvertPositionsToRawSquareBytes reads history exclusively from batch.CompactHistories
+      // (the canonical representation, derived from planes at the choke point by hook 1 for
+      // plane-only producers). The former per-batch PositionsBuffer copy no longer exists.
       // TODO: someday handle since ply, does that need to be passed in from the search engine?
 
       byte[] moveBytesAll;
