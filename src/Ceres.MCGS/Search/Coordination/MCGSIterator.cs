@@ -234,21 +234,18 @@ public class MCGSIterator : IDisposable
     }
 
     PathsSet.Dispose();
-    EvaluatorNN?.Dispose();
+
+    // NOTE: EvaluatorNN is intentionally NOT disposed here. It is owned by MCGSManager
+    // (exposed as EvaluatorNN0/EvaluatorNN1) and, in the non-dual-evaluator case, the same
+    // instance is shared by both overlapped iterators. It is disposed exactly once by
+    // MCGSManager.Dispose() rather than per-iterator.
 
     disposed = true;
-
-    GC.SuppressFinalize(this);
   }
 
 
-  /// <summary>
-  /// Finalizer.
-  /// </summary>
-  ~MCGSIterator()
-  {
-    Dispose();
-  }
+
+  // No finalizer by design. This type holds only managed resources.
 
 
   /// <summary>

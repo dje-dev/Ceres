@@ -836,12 +836,15 @@ public partial class MCGSManager : IDisposable
     disposed = true;
     iterator0?.Dispose();
     iterator1?.Dispose();
+
+    // Dispose the per-manager NN evaluator wrapper(s) owned by this manager. Each only
+    // shuts down its own batch buffers (Batch.Shutdown()); the underlying shared
+    // NNEvaluator / EvaluatorsSet is passed in and intentionally NOT released here.
+    EvaluatorNN0?.Dispose();
+    EvaluatorNN1?.Dispose();
     //    EvaluatorsSet?.Dispose(); // do not release, shared (passed in)
-    GC.SuppressFinalize(this);
   }
 
-  ~MCGSManager()
-  {
-    Dispose();
-  }
+
+  // No finalizer by design. This type holds only managed state.
 }
