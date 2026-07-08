@@ -399,8 +399,9 @@ namespace Ceres.Chess.LC0.Batches
     /// </summary>
     public void MaterializePlanesFromCompactHistories()
     {
-      if (PlanesPopulated)
+      if (PlanesPopulated || NumPos == 0)
       {
+        PlanesPopulated = true;
         return;
       }
 
@@ -495,48 +496,12 @@ namespace Ceres.Chess.LC0.Batches
         SetTrainingData(positionsCopy);
       }
 
-      int nextOutPlaneIndex = 0;
-
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      void WritePairWithValue1(ulong bitmap)
-      {
-        PosPlaneBitmaps[nextOutPlaneIndex] = bitmap;
-        PosPlaneValues[nextOutPlaneIndex] = 1;
-        nextOutPlaneIndex++;
-      }
-
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      void WritePair(ulong bitmap, byte value)
-      {
-        PosPlaneBitmaps[nextOutPlaneIndex] = bitmap;
-        PosPlaneValues[nextOutPlaneIndex] = value;
-        nextOutPlaneIndex++;
-      }
-
-      // Initialize planes
+      // Encode each position's planes via the shared per-row encoder (byte-identical layout to the
+      // EncodedPositionWithHistory Set overload and the materializer, whose compact derivation
+      // depends on that exact layout).
       for (int i = 0; i < numToProcess; i++)
       {
-        // Set planes (NOTE: we move all 8 history planes)
-        positionsCopy[i].PositionWithBoards.ExtractPlanesValuesIntoArray(EncodedPositionBoards.NUM_MOVES_HISTORY, PosPlaneBitmaps, nextOutPlaneIndex);
-        const int PLANES_WRITTEN = EncodedPositionBoard.NUM_PLANES_PER_BOARD * EncodedPositionBoards.NUM_MOVES_HISTORY;
-
-        // Set all values to 1.0f
-        Array.Fill<byte>(PosPlaneValues, 1, nextOutPlaneIndex, PLANES_WRITTEN);
-
-        // Advance
-        nextOutPlaneIndex += PLANES_WRITTEN;
-
-        // Copy in special plane values
-        EncodedPositionMiscInfo miscInfo = positionsCopy[i].PositionWithBoards.MiscInfo.InfoPosition;
-        WritePairWithValue1(miscInfo.Castling_US_OOO > 0 ? ulong.MaxValue : 0);
-        WritePairWithValue1(miscInfo.Castling_US_OO > 0 ? ulong.MaxValue : 0);
-        WritePairWithValue1(miscInfo.Castling_Them_OOO > 0 ? ulong.MaxValue : 0);
-        WritePairWithValue1(miscInfo.Castling_Them_OO > 0 ? ulong.MaxValue : 0);
-
-        WritePairWithValue1((ulong)miscInfo.SideToMove > 0 ? ulong.MaxValue : 0);
-        WritePair(ulong.MaxValue, miscInfo.Rule50Count);
-        WritePairWithValue1(0);// "used to be movecount plane, now it's all zeros" // index 110
-        WritePairWithValue1(ulong.MaxValue); // "all ones to help NN find board edges" // index 111
+        WriteRowPlanes(in positionsCopy[i].PositionWithBoards, i);
       }
 
       PlanesPopulated = true;
@@ -646,17 +611,25 @@ namespace Ceres.Chess.LC0.Batches
     /// </summary>
     public void EnsureCompactHistories()
     {
-      if (CompactHistoriesPopulated)
+      if (CompactHistoriesPopulated || NumPos == 0)
       {
+        CompactHistoriesPopulated = true;
         return;
       }
 
-      Debug.Assert(PosPlaneBitmaps != null && PosPlaneValues != null,
-                   "EnsureCompactHistories requires plane arrays to derive from");
-
-      if (CompactHistories == null || CompactHistories.Length < NumPos)
+      // Precondition violation is a mis-sequenced batch (e.g. a heterogeneous pool merge that left
+      // neither representation); throw loudly rather than surface as a NullReferenceException from
+      // inside the parallel loop in release builds (symmetric with MaterializePlanesFromCompactHistories).
+      if (PosPlaneBitmaps == null || PosPlaneValues == null)
       {
-        CompactHistories = new MGPositionHistoryCompact[NumPos];
+        throw new InvalidOperationException("EnsureCompactHistories requires populated plane arrays to derive from");
+      }
+
+      // Sized to MaxBatchSize (not NumPos) so a reused batch reaches steady state after the first
+      // fill - matching the plane arrays and the MCGS producer (no ratcheting reallocation).
+      if (CompactHistories == null || CompactHistories.Length < MaxBatchSize)
+      {
+        CompactHistories = new MGPositionHistoryCompact[MaxBatchSize];
       }
 
       // Cached instance-method delegate (allocated once) reading only instance fields, so this

@@ -1400,13 +1400,16 @@ return true;
         // Build the child batch for the selected indices.
         _batchBuilder = new EncodedPositionBatchBuilder(_positions.NumPos, InputTypes.All);
         Span<Position> historyPositionsScratch = stackalloc Position[MGPositionHistoryCompact.MAX_POSITIONS];
+
+        // Decide the parent's history source once from the batch-level flag (never per-row
+        // IsPopulated, which can be stale on a reused batch - see the CompactHistoriesPopulated
+        // contract): TPG parents carry valid compact records; LC0 parents supply only planes,
+        // from which the record is derived on demand for the few selected rows.
+        bool parentHasCompact = _positions.CompactHistoriesPopulated;
         foreach (int i in _selectedIndices)
         {
-          // Convert the parent's position to a PositionWithHistory from its compact history
-          // record, deriving that record from the parent's planes when the parent evaluator
-          // supplied only planes (e.g. an LC0 parent that never populates CompactHistories).
           MGPositionHistoryCompact ch;
-          if (!_positions.CompactHistories.IsEmpty && _positions.CompactHistories.Span[i].IsPopulated)
+          if (parentHasCompact)
           {
             ch = _positions.CompactHistories.Span[i];
           }

@@ -151,8 +151,25 @@ namespace Ceres.Chess.LC0.Batches
 
 
     /// <summary>
-    /// Zero out the history planes for all positions in the batch.
+    /// Zero out the history planes for this slice's rows, operating directly on the parent's plane
+    /// arrays through the offset plane views (parallels EncodedPositionBatchFlat.ZeroHistoryPlanes).
     /// </summary>
-    public void ZeroHistoryPlanes() => throw new NotImplementedException();
+    public void ZeroHistoryPlanes()
+    {
+      const int STRIDE = EncodedPositionWithHistory.NUM_PLANES_TOTAL;
+      Span<ulong> bitmaps = PosPlaneBitmaps.Span;
+      Span<byte> values = PosPlaneValues.Span;
+
+      for (int i = 0; i < Length; i++)
+      {
+        for (int j = EncodedPositionBatchFlat.NUM_PIECE_PLANES_PER_POS;
+                 j < STRIDE - EncodedPositionBatchFlat.NUM_MISC_PLANES_PER_POS; j++)
+        {
+          int index = i * STRIDE + j;
+          bitmaps[index] = 0;
+          values[index] = 0;
+        }
+      }
+    }
   }
 }
