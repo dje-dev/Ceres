@@ -944,6 +944,7 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
 
       def.NumGamePairs = 2 * 5 * 50;// 110; // was:75
       def.ShowGameMoves = false;
+      def.MiniLogFiles = MiniLogFilesMode.IfLongSearchLimits;
 
       //string baseName = "tcec1819";
       //      string baseName = "4mvs_+90_+99";
@@ -967,7 +968,7 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
 //      baseName = "DFRC_80_120.epd"; // lepned filtered (probably from DFRC_4852_v1)
       //baseName = "tcec_big";
       //baseName = "test1.epd";
-//      baseName = "UHO_Lichess_4582_v1_last_10000.epd";
+      baseName = "UHO_Lichess_4582_v1_last_10000.epd";
       if (false)
       {
         baseName = "eco_test";
