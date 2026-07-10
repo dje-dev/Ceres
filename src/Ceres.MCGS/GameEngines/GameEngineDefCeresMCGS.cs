@@ -102,12 +102,4 @@ public class GameEngineDefCeresMCGS : GameEngineDef
   public override void SetReusePositionEvaluationsFromOther(bool value) => SearchParams.ReusePositionEvaluationsFromOtherGraph = value;
   public override bool GetFutilityPruningStopSearchEnabled() => SearchParams.FutilityPruningStopSearchEnabled;
 
-  public override void ModifyDeviceIndexIfNotPooled(int deviceIndexIncrement)
-  {
-    if (EvaluatorDef.DeviceCombo != NNEvaluatorDeviceComboType.Pooled)
-    {
-      EvaluatorDef.TryModifyDeviceID(EvaluatorDef.DeviceIndices[0] + deviceIndexIncrement);
-    }
-  }
-
 }

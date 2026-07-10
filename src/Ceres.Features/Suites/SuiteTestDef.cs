@@ -210,12 +210,12 @@ namespace Ceres.Features.Suites
                         EnginePlayerDef ceresEngine2Def = null,
                         EnginePlayerDef externalEngineDef = null)
     {
-      if (ceresEngine2Def != null && ceresEngine2Def.EngineDef.GetEvaluatorDef() == null)
+      if (ceresEngine2Def != null && !ceresEngine2Def.EngineDef.IsCeresEngine)
       {
         throw new Exception("ceresEngine2Def is expected to be for a Ceres engine");
       }
 
-      if (externalEngineDef != null && externalEngineDef.EngineDef.GetEvaluatorDef() != null)
+      if (externalEngineDef != null && externalEngineDef.EngineDef.IsCeresEngine)
       {
         throw new Exception("externalEngineDef is not expected to be for a Ceres engine");
       }

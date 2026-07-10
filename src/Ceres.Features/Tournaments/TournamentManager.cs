@@ -41,8 +41,10 @@ namespace Ceres.Features.Tournaments
     public readonly int NumConcurrent = 1;
 
     /// <summary>
-    ///  Optinally a sequence of device IDs over which possible concurrent games are allocated,
-    ///  allocated in order listed (repeating if NumConcurrent is larger than specified sequence).
+    ///  Optionally a pool of device IDs partitioned into consecutive chunks, one per
+    ///  concurrent worker (chunk size = number of devices each engine's evaluator spans).
+    ///  If the pool is smaller than NumConcurrent * devices-per-engine, IDs are reused
+    ///  cyclically (deliberate GPU oversubscription, workers share devices; a warning is emitted).
     /// </summary>
     public int[] DeviceIDs = null;
 
@@ -185,33 +187,113 @@ namespace Ceres.Features.Tournaments
 
 
     /// <summary>
-    /// If running multiple match threads then we need to make sure the 
-    /// neural network evaluators are suitable for parallel execution, either by:
-    ///   - being of type Pooled, so that all evaluator definitions reference
-    ///     the same underlying evaluator which will pool positions from many
-    ///     threads into one batch, or
-    ///   - each thread being assigned to a different GPU
-    ///   
-    /// This method handles the latter case, if the evaluators are not pooled
-    /// then it will sequentially apply them to GPUs with successive indices.
-    /// 
-    /// TODO: detect error condition where the number of threads exceeds number of GPUs.
+    /// If running multiple match threads then the neural network evaluators must be suitable
+    /// for parallel execution, either by:
+    ///   - being of type Pooled, so that all evaluator definitions reference the same underlying
+    ///     evaluator which pools positions from many threads into one batch, or
+    ///   - each concurrent worker being assigned its own (disjoint) set of GPUs.
+    ///
+    /// This method handles the latter case: the DeviceIDs sequence is treated as a flat pool of
+    /// GPU IDs partitioned into disjoint consecutive chunks, one per worker, of length equal to
+    /// the number of devices each engine's evaluator spans (e.g. pool [0,1,2,3] with two workers
+    /// each spanning two GPUs => worker 0 on [0,1], worker 1 on [2,3]). Every engine assigned a
+    /// slice (in-process Ceres engines and external NN engines such as LC0 alike) must reference
+    /// the same number of devices; Pooled evaluators and engines without an evaluator are left
+    /// unchanged. If the pool is smaller than NumConcurrent * devices-per-worker the IDs wrap
+    /// around cyclically, so workers share GPUs (deliberate oversubscription; warned, not fatal).
     /// </summary>
     /// <param name="def"></param>
-    /// <param name="relativeDeviceIndex"></param>
-    static void TrySetRelativeDeviceIDIfNotPooled(TournamentDef def, int relativeDeviceIndex)
+    /// <param name="workerIndex"></param>
+    /// <param name="devicesPerWorker"></param>
+    void AssignWorkerDevicesIfNotPooled(TournamentDef def, int workerIndex, int devicesPerWorker)
     {
-      if (def.Engines != null)
+      if (DeviceIDs == null || devicesPerWorker < 1)
+      {
+        return;
+      }
+
+      int[] deviceSlice = new int[devicesPerWorker];
+      for (int j = 0; j < devicesPerWorker; j++)
+      {
+        deviceSlice[j] = DeviceIDs[(workerIndex * devicesPerWorker + j) % DeviceIDs.Length];
+      }
+
+      foreach (GameEngineDef engineDef in EnginesOf(def))
+      {
+        // No-op for Pooled evaluators and engines without an evaluator.
+        engineDef.TrySetDeviceIndicesIfNotPooled(deviceSlice);
+      }
+    }
+
+
+    /// <summary>
+    /// Determines the number of devices per worker (the device count of the engines that will be
+    /// assigned a slice, which must all match). Returns 0 if no engine is assigned a slice (all
+    /// engines are Pooled or have no evaluator), in which case no pool-based partitioning is done.
+    ///
+    /// Throws if the assigned engines reference differing device counts. If the DeviceIDs pool is
+    /// smaller than NumConcurrent * devices-per-worker only a warning is emitted (device IDs are
+    /// then reused cyclically, i.e. deliberate GPU oversubscription across workers).
+    /// </summary>
+    int ComputeAndValidateDevicePartitioning()
+    {
+      int devicesPerWorker = 0;
+
+      foreach (GameEngineDef engineDef in EnginesOf(Def))
+      {
+        Chess.NNEvaluators.Defs.NNEvaluatorDef evalDef = engineDef.GetEvaluatorDef();
+        if (evalDef == null || evalDef.DeviceCombo == Chess.NNEvaluators.Defs.NNEvaluatorDeviceComboType.Pooled)
+        {
+          continue; // no evaluator (e.g. an external non-NN engine), or Pooled (shared) -> not sliced
+        }
+
+        int n = evalDef.NumDevices;
+        if (n < 1)
+        {
+          throw new Exception($"Engine {engineDef.ID} specification must reference at least one device.");
+        }
+
+        if (devicesPerWorker == 0)
+        {
+          devicesPerWorker = n;
+        }
+        else if (n != devicesPerWorker)
+        {
+          throw new Exception($"All engines assigned GPUs from DeviceIDs must reference the same number "
+                            + $"of devices (found both {devicesPerWorker} and {n}).");
+        }
+      }
+
+      if (devicesPerWorker > 0 && DeviceIDs.Length < NumConcurrent * devicesPerWorker)
+      {
+        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+            $"WARNING: DeviceIDs ({DeviceIDs.Length}) fewer than NumConcurrent ({NumConcurrent}) "
+          + $"* devices-per-engine ({devicesPerWorker}) = {NumConcurrent * devicesPerWorker}; "
+          + $"device IDs will be reused cyclically so concurrent workers share GPU(s) "
+          + $"(deliberate oversubscription; per-engine timing comparability may be reduced).");
+      }
+
+      return devicesPerWorker;
+    }
+
+
+    /// <summary>
+    /// Enumerates the engine definitions of a tournament (the Engines list, or the
+    /// Player1Def/Player2Def pair when no Engines list is populated).
+    /// </summary>
+    static IEnumerable<GameEngineDef> EnginesOf(TournamentDef def)
+    {
+      if (def.Engines != null && def.Engines.Length > 0)
       {
         foreach (EnginePlayerDef engine in def.Engines)
         {
-          engine.EngineDef.ModifyDeviceIndexIfNotPooled(relativeDeviceIndex);
+          yield return engine.EngineDef;
         }
       }
       else
       {
-        def.Player1Def.EngineDef.ModifyDeviceIndexIfNotPooled(relativeDeviceIndex);
-        def.Player2Def.EngineDef.ModifyDeviceIndexIfNotPooled(relativeDeviceIndex);
+        yield return def.Player1Def.EngineDef;
+        yield return def.Player2Def.EngineDef;
       }
     }
 
@@ -338,6 +420,12 @@ namespace Ceres.Features.Tournaments
       }
       Def.parentDef.Observer?.OnTournamentStart(DtoMappers.ToTournamentMeta(Def, numConcurrent));
 
+      // Validate up front that the device pool can give every concurrent worker its own
+      // disjoint set of GPUs, and determine the per-worker device-slice size.
+      int devicesPerWorker = (NumConcurrent > 1 && DeviceIDs != null)
+                             ? ComputeAndValidateDevicePartitioning()
+                             : 0;
+
       // First loop instantiats/warms up all the engines
       // (without concurrency due to potential CUDA synchronization conflicts).
       for (int i = 0; i < numConcurrent; i++)
@@ -347,8 +435,7 @@ namespace Ceres.Features.Tournaments
         // Make sure the threads will use either different or pooled evaluators
         if (NumConcurrent > 1)
         {
-          int deviceID = DeviceIDs == null ? i : DeviceIDs[i % DeviceIDs.Length];
-          TrySetRelativeDeviceIDIfNotPooled(tournamentDefClone, deviceID);
+          AssignWorkerDevicesIfNotPooled(tournamentDefClone, i, devicesPerWorker);
 
           // Spread instances across different devices and
           // and processor groups to distribute computation.

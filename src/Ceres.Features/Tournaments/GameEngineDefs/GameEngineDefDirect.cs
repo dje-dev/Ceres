@@ -44,13 +44,6 @@ namespace Ceres.Features.GameEngines
     } 
 
     public override GameEngine CreateEngine() => Engine;
-
-
-    public override void ModifyDeviceIndexIfNotPooled(int deviceIndexIncrement)
-    {
-      // Nothing to do.
-      // TODO: Possibly log a warning?
-    }
   }
 }
 

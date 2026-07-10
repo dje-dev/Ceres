@@ -453,40 +453,12 @@ namespace Ceres.Chess.NNEvaluators.Defs
 
 
     /// <summary>
-    /// Modifies the evaluator definition to point to a specified device
-    /// instead of the device currently specified.
-    /// </summary>
-    /// <param name="deviceID"></param>
-    public void TryModifyDeviceID(int deviceID)
-    {
-      if (DeviceCombo == NNEvaluatorDeviceComboType.Pooled)
-      {
-        // Nothing to do, we will be sharing the same evaluator
-        return;
-      }
-
-      if (DeviceCombo != NNEvaluatorDeviceComboType.Single)
-      {
-        throw new Exception($"Device combo must be single, was: {DeviceCombo}");
-      }
-
-      if (Devices.Length > 1)
-      {
-        throw new Exception($"Must be single device, was cardinality: {Devices.Length}");
-      }
-
-      Devices[0].Device.DeviceIndex = deviceID;
-    }
-
-
-    /// <summary>
     /// Modifies the evaluator definition so that its devices point to the
     /// specified (absolute) device indices instead of those currently specified.
     ///
-    /// Unlike TryModifyDeviceID this supports evaluators spanning multiple devices
-    /// (such as a Split combo, e.g. "GPU:0,1"); the number of supplied IDs must
-    /// match the number of devices. If the combo is Pooled nothing is done
-    /// (the underlying evaluator is shared).
+    /// Supports evaluators spanning one or multiple devices (such as a Split combo,
+    /// e.g. "GPU:0,1"); the number of supplied IDs must match the number of devices.
+    /// If the combo is Pooled nothing is done (the underlying evaluator is shared).
     /// </summary>
     /// <param name="deviceIDs"></param>
     public void TrySetDeviceIndices(int[] deviceIDs)

@@ -183,11 +183,15 @@ namespace Ceres.Features.Suites
         return null;
       }
 
-      // Each worker gets its own disjoint chunk of the device pool (no wrap-around), so that
-      // concurrent workers never share a GPU. This is validated in ComputeAndValidateDevicePartitioning.
+      // Each worker gets its own consecutive chunk of the device pool. If the pool is smaller
+      // than NumConcurrent * devices-per-worker the IDs wrap around cyclically, so workers
+      // share GPUs (deliberate oversubscription; warned in ComputeAndValidateDevicePartitioning).
       int start = workerIndex * numDevicesPerWorker;
       int[] ret = new int[numDevicesPerWorker];
-      Array.Copy(DeviceIDs, start, ret, 0, numDevicesPerWorker);
+      for (int j = 0; j < numDevicesPerWorker; j++)
+      {
+        ret[j] = DeviceIDs[(start + j) % DeviceIDs.Length];
+      }
       return ret;
     }
 
@@ -233,17 +237,21 @@ namespace Ceres.Features.Suites
                           + $"(engine1 has {numDevicesPerWorker}, engine2 has {evalDef2.NumDevices}).");
       }
 
-      // Require enough device IDs that every concurrent worker is assigned its OWN disjoint
-      // set of GPUs (no sharing across workers). This is essential for fairness: for any
+      // Ideally the pool is large enough that every concurrent worker is assigned its OWN
+      // disjoint set of GPUs (no sharing across workers). This matters for fairness: for any
       // position the two engines run sequentially on the worker's GPU(s), so if a worker had
       // exclusive use of its GPU(s) the measured per-engine execution times are directly
-      // comparable; sharing GPUs between concurrent workers would distort those timings.
+      // comparable. A smaller pool is permitted (IDs are reused cyclically, i.e. deliberate
+      // GPU oversubscription across workers) but a warning is emitted since sharing GPUs
+      // between concurrent workers may distort those timings.
       int numWorkers = NumConcurrent;
       if (DeviceIDs.Length < numWorkers * numDevicesPerWorker)
       {
-        throw new Exception($"Insufficient DeviceIDs ({DeviceIDs.Length}): need at least "
-                          + $"NumConcurrent ({numWorkers}) * devices-per-engine ({numDevicesPerWorker}) "
-                          + $"= {numWorkers * numDevicesPerWorker}, so each concurrent worker has its own GPU(s).");
+        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+            $"WARNING: DeviceIDs ({DeviceIDs.Length}) fewer than NumConcurrent ({numWorkers}) "
+          + $"* devices-per-engine ({numDevicesPerWorker}) = {numWorkers * numDevicesPerWorker}; "
+          + $"device IDs will be reused cyclically so concurrent workers share GPU(s) "
+          + $"(deliberate oversubscription; per-engine timing comparability may be reduced).");
       }
 
       return numDevicesPerWorker;
@@ -911,12 +919,12 @@ namespace Ceres.Features.Suites
       int? numDevicesPerWorker = null;
       foreach (MultiEngineEntry e in Def.MultiEngineDefs)
       {
-        Chess.NNEvaluators.Defs.NNEvaluatorDef evalDef = e.PlayerDef.EngineDef.GetEvaluatorDef();
-        if (evalDef == null)
+        if (!e.IsCeresEngine)
         {
-          continue; // external engine: not assigned a GPU slice
+          continue; // external engine: not assigned a GPU slice (keeps its own device spec)
         }
 
+        Chess.NNEvaluators.Defs.NNEvaluatorDef evalDef = e.PlayerDef.EngineDef.GetEvaluatorDef();
         int n = evalDef.NumDevices;
         if (n < 1)
         {
@@ -942,9 +950,11 @@ namespace Ceres.Features.Suites
       int numWorkers = NumConcurrent;
       if (DeviceIDs.Length < numWorkers * numDevicesPerWorker.Value)
       {
-        throw new Exception($"Insufficient DeviceIDs ({DeviceIDs.Length}): need at least "
-                          + $"NumConcurrent ({numWorkers}) * devices-per-engine ({numDevicesPerWorker.Value}) "
-                          + $"= {numWorkers * numDevicesPerWorker.Value}, so each concurrent worker has its own GPU(s).");
+        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+            $"WARNING: DeviceIDs ({DeviceIDs.Length}) fewer than NumConcurrent ({numWorkers}) "
+          + $"* devices-per-engine ({numDevicesPerWorker.Value}) = {numWorkers * numDevicesPerWorker.Value}; "
+          + $"device IDs will be reused cyclically so concurrent workers share GPU(s) "
+          + $"(deliberate oversubscription; per-engine timing comparability may be reduced).");
       }
 
       return numDevicesPerWorker.Value;

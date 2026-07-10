@@ -105,24 +105,6 @@ public class GameEngineDefCeres : GameEngineDef
   }
 
 
-  /// <summary>
-  /// If applicable, modifies the device index associated with the underlying evaluator.
-  /// The new index will be the current index plus a specified increment.
-  /// </summary>
-  /// <param name="deviceIndexIncrement"></param>
-  public override void ModifyDeviceIndexIfNotPooled(int deviceIndexIncrement)
-  {
-    if (EvaluatorDef.DeviceCombo != NNEvaluatorDeviceComboType.Pooled)
-    {
-      EvaluatorDef.TryModifyDeviceID(EvaluatorDef.DeviceIndices[0] + deviceIndexIncrement);
-    }
-
-    if (EvaluatorDefSecondary  != null && EvaluatorDef.DeviceCombo != NNEvaluatorDeviceComboType.Pooled)
-    {
-      EvaluatorDefSecondary.TryModifyDeviceID(EvaluatorDefSecondary.DeviceIndices[0] + deviceIndexIncrement);
-    }
-  }
-
   /// <inheritdoc/>
   public override void TrySetDeviceIndicesIfNotPooled(int[] deviceIDs)
   {

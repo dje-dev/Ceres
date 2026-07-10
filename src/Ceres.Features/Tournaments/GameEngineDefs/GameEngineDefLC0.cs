@@ -170,17 +170,10 @@ namespace Ceres.Features.GameEngines
 
 
     /// <summary>
-    /// If applicable, modifies the device index associated with the underlying evaluator.
-    /// The new index will be the current index plus a specified increment.
+    /// The neural network evaluator definition used to configure the LC0 backend
+    /// (the source for device assignment). LC0 is an external engine, so IsCeresEngine is false.
     /// </summary>
-    /// <param name="deviceIndexIncrement"></param>
-    public override void ModifyDeviceIndexIfNotPooled(int deviceIndexIncrement)
-    {
-      if (EvaluatorDef.DeviceCombo != NNEvaluatorDeviceComboType.Pooled)
-      {
-        EvaluatorDef.TryModifyDeviceID(EvaluatorDef.DeviceIndices[0] + deviceIndexIncrement);
-      }
-    }
+    public override NNEvaluatorDef GetEvaluatorDef() => EvaluatorDef;
 
     /// <summary>
     /// Returns string summary.

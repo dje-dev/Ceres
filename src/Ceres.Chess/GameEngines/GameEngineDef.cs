@@ -61,29 +61,32 @@ namespace Ceres.Chess.GameEngines
 
 
     /// <summary>
-    /// If applicable, modifies the device index associated with the underlying evaluator.
-    /// The new index will be the current index plus a specified increment.
-    /// </summary>
-    /// <param name="deviceIndexIncrement"></param>
-    public abstract void ModifyDeviceIndexIfNotPooled(int deviceIndexIncrement);
-
-    /// <summary>
     /// If applicable, sets the device indices of the underlying evaluator to the
-    /// specified (absolute) device IDs (unless the evaluator is pooled).
+    /// specified (absolute) device IDs.
     ///
-    /// Unlike ModifyDeviceIndexIfNotPooled (which adds an increment to a single device)
-    /// this supports evaluators spanning multiple devices (e.g. a "GPU:0,1" spec),
-    /// allowing concurrent workers to each be assigned a distinct set of GPUs.
+    /// Supports evaluators spanning one or multiple devices (e.g. a "GPU:0,1" spec); the
+    /// number of supplied IDs must match the evaluator's device count. Pooled evaluators
+    /// (and engines without an evaluator) are left unchanged, allowing concurrent workers
+    /// to each be assigned a distinct set of GPUs. This is the single mechanism for
+    /// (re)assigning the devices of an engine's evaluator.
     /// </summary>
     /// <param name="deviceIDs"></param>
     public virtual void TrySetDeviceIndicesIfNotPooled(int[] deviceIDs)
       => GetEvaluatorDef()?.TrySetDeviceIndices(deviceIDs);
 
     /// <summary>
-    /// If this engine definition is for a Ceres engine (MCTS or MCGS).
+    /// Whether this engine definition is for an in-process Ceres engine (MCTS or MCGS).
+    /// This is the discriminator for Ceres-specific behavior and is independent of
+    /// GetEvaluatorDef (e.g. an external LC0 engine has an evaluator but IsCeresEngine is false).
     /// </summary>
     public virtual bool IsCeresEngine => false;
 
+    /// <summary>
+    /// The neural network evaluator definition of this engine, or null if it has none.
+    /// Returned for any engine that uses an NN evaluator (in-process Ceres as well as
+    /// external engines such as LC0 whose device assignment is derived from it), so it is
+    /// used for device assignment but is NOT a test for "is a Ceres engine" (use IsCeresEngine).
+    /// </summary>
     public virtual NNEvaluatorDef GetEvaluatorDef() => null;
     public virtual void DisableTreeReuse() { }
     public virtual bool GetReusePositionEvaluationsFromOther() => false;

@@ -135,14 +135,8 @@ public class GameEngineDefCeresMCGSUCI : GameEngineDef
 
 
   /// <summary>
-  /// If applicable, modifies the device index associated with the underlying evaluator.
-  /// The new index will be the current index plus a specified increment.
+  /// The neural network evaluator definition (the source for device assignment).
+  /// This is a UCI wrapper that runs Ceres as an external process, so IsCeresEngine is false.
   /// </summary>
-  /// <param name="deviceIndexIncrement"></param>
-  public override void ModifyDeviceIndexIfNotPooled(int deviceIndexIncrement)
-  {
-    // Note that the GameEngineCeresUCI constructor
-    // will verify the evaluator is not Pooled so no need to check here.
-    EvaluatorDef.TryModifyDeviceID(EvaluatorDef.DeviceIndices[0] + deviceIndexIncrement);
-  }
+  public override NNEvaluatorDef GetEvaluatorDef() => EvaluatorDef;
 }
