@@ -32,9 +32,9 @@ namespace Ceres.Chess.EncodedPositions.Basic
   ///   - 1 bit if this is a castling move
   ///  See: https://github.com/LeelaChessZero/lczero-training/blob/master/tf/decode_training.py
   ///  
-  /// N.B. The value stored in training TAR files (such as PlayedIndex) 
-  ///      are just the raw from/to coordinate (first 12 bits) and 
-  ///      do not have promotion code and castling flag set.
+  /// N.B. The move index values stored in training TAR files (such as PlayedIndex and BestIndex)
+  ///      are NOT this raw 16-bit encoding; they are neural network policy indices (0..1857),
+  ///      convertible to/from EncodedMove via FromNeuralNetIndex / IndexNeuralNet.
   /// </summary>
   [Serializable]
   public readonly struct EncodedMove : IEquatable<EncodedMove>
