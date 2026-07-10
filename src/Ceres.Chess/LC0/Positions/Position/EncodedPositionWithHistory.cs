@@ -655,23 +655,40 @@ namespace Ceres.Chess.EncodedPositions
 
       if (CheckMovedTheirPiece(in board0.TheirQueens, in board1.TheirQueens, ref destSquare))
       {
-        CheckMovedTheirPiece(in board1.TheirQueens, in board0.TheirQueens, ref sourceSquare);
+        if (!CheckMovedTheirPiece(in board1.TheirQueens, in board0.TheirQueens, ref sourceSquare))
+        {
+          // No queen vacated a square: this was a pawn promotion to a queen;
+          // the source square is the mover's pawn which disappeared.
+          CheckMovedTheirPiece(in board1.TheirPawns, in board0.TheirPawns, ref sourceSquare);
+        }
         return (PieceType.Queen, sourceSquare, destSquare, false);
       }
 
       if (CheckMovedTheirPiece(in board0.TheirRooks, in board1.TheirRooks, ref destSquare))
       {
-        CheckMovedTheirPiece(in board1.TheirRooks, in board0.TheirRooks, ref sourceSquare);
+        if (!CheckMovedTheirPiece(in board1.TheirRooks, in board0.TheirRooks, ref sourceSquare))
+        {
+          // Pawn promotion to a rook (see queen case above).
+          CheckMovedTheirPiece(in board1.TheirPawns, in board0.TheirPawns, ref sourceSquare);
+        }
         return (PieceType.Rook, sourceSquare, destSquare, false);
       }
       if (CheckMovedTheirPiece(in board0.TheirBishops, in board1.TheirBishops, ref destSquare))
       {
-        CheckMovedTheirPiece(in board1.TheirBishops, in board0.TheirBishops, ref sourceSquare);
+        if (!CheckMovedTheirPiece(in board1.TheirBishops, in board0.TheirBishops, ref sourceSquare))
+        {
+          // Pawn promotion to a bishop (see queen case above).
+          CheckMovedTheirPiece(in board1.TheirPawns, in board0.TheirPawns, ref sourceSquare);
+        }
         return (PieceType.Bishop, sourceSquare, destSquare, false);
       }
       if (CheckMovedTheirPiece(in board0.TheirKnights, in board1.TheirKnights, ref destSquare))
       {
-        CheckMovedTheirPiece(in board1.TheirKnights, in board0.TheirKnights, ref sourceSquare);
+        if (!CheckMovedTheirPiece(in board1.TheirKnights, in board0.TheirKnights, ref sourceSquare))
+        {
+          // Pawn promotion to a knight (see queen case above).
+          CheckMovedTheirPiece(in board1.TheirPawns, in board0.TheirPawns, ref sourceSquare);
+        }
         return (PieceType.Knight, sourceSquare, destSquare, false);
       }
       if (CheckMovedTheirPiece(in board0.TheirPawns, in board1.TheirPawns, ref destSquare))
