@@ -45,22 +45,20 @@ public static class ONNXHelpers
   public static (string name, NodeMetadata metadata, bool isKnownShape, T[] value)[]
     CreateBuffers<T>(IReadOnlyDictionary<string, NodeMetadata> metadata, int maxBatchSize, string[] outputNamesToRetrieve = null) where T : unmanaged
   {
-    var buffers = new (string name, NodeMetadata metadata, bool isKnownShape, T[] value)[metadata.Count];
+    // N.B. Result must contain only the retrieved outputs (no default-valued slots),
+    //      since callers iterate all returned entries and dereference their metadata.
+    List<(string name, NodeMetadata metadata, bool isKnownShape, T[] value)> buffers = new(metadata.Count);
 
-    int i = 0;
     foreach (KeyValuePair<string, NodeMetadata> iv in metadata)
     {
       if (outputNamesToRetrieve == null || outputNamesToRetrieve.Contains(iv.Key))
       {
-
         int maxElements = ProductDimensions(iv.Value.Dimensions, maxBatchSize);
         bool isKnownShape = iv.Value.Dimensions.Length > 0 && Array.LastIndexOf(iv.Value.Dimensions, -1) <= 0; // if any dimension other than batch size unknown
-        buffers[i] = (iv.Key, iv.Value, isKnownShape, new T[maxElements]);
-
-        i++;
+        buffers.Add((iv.Key, iv.Value, isKnownShape, new T[maxElements]));
       }
     }
-    return buffers;
+    return buffers.ToArray();
   }
 
 
