@@ -23,6 +23,7 @@
 #include <atomic>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 // Platform-specific includes for file stat
 #ifdef _WIN32
@@ -360,6 +361,210 @@ static bool IsComputeLayerType(nvinfer1::LayerType type)
     || type == nvinfer1::LayerType::kNORMALIZATION;
 }
 
+// ---------------------------------------------------------------------------
+// Structural detection of decomposed RMSNorm chains (naming-independent).
+//
+// CeresTrain's ONNX exporter (save_model.py, _RMSNormPrimitive) lowers every
+// RMSNorm to primitive ops so the graph stays fused-op-free at opset < 23, and
+// casts the mean-of-squares reduction to fp32 to avoid fp16 overflow. Exported
+// via the TorchDynamo path, the resulting nodes carry GENERIC aten-op names
+// (node_pow_*, node_mean*, node_Sqrt_*, node_rsqrt_*, node_mul_*, node__to_copy*)
+// rather than module-scoped names -- so the substring tests in HasNormName no
+// longer see any norm token, the old name-based detection matches 0 layers, and
+// the reduction is left in fp16 (inf/NaN -> garbage accuracy). See the "Marked
+// 0/N layers as FP32" symptom.
+//
+// Rather than chase node names, detect each RMSNorm by its op signature, which is
+// stable regardless of naming:
+//
+//   X --(Cast fp32)--> Pow(2) --> ReduceMean --> Add(eps) --> Sqrt --> Reciprocal
+//        --> Mul(x32 * rsqrt) --(Cast fp16)--> Mul(* weight) --> ...
+//
+// The ReduceMean (kREDUCE) whose producer is the elementwise square is the anchor;
+// every RMSNorm has exactly one and the transformer body has no other reductions.
+// We collect the fp32-critical math span (square .. Mul(*rsqrt), stopping at the
+// fp16 downcast Cast) and classify the norm by walking back through the fp32 Cast
+// to the tensor being normalized:
+//   producer is a residual/skip Add  -> Residual (post-attention / FFN norm, marked broad)
+//   producer is a Reshape (per-head) -> QKV      (small dim, left fp16 unless scoped)
+//   producer is another elementwise  -> Smolgen  (attention ln1)
+//   anything else (e.g. embedding)   -> Other
+enum class DecomposedNormKind { Residual, QKV, Smolgen, Other };
+
+struct DecomposedNormChain
+{
+  DecomposedNormKind kind;
+  std::vector<int32_t> layers;   // compute layers to force to fp32
+};
+
+// Layers that are pure fp16<->fp32 conversions inserted around the norm math. The
+// backward walk skips these to reach the real producer; the forward collection stops
+// at them (the fp16 downcast marks the end of the fp32 span).
+static bool IsCastLikeLayer(const nvinfer1::ILayer* layer)
+{
+  if (layer->getType() == nvinfer1::LayerType::kCAST)
+    return true;
+  std::string n(layer->getName());
+  return n.find("to_copy") != std::string::npos
+    || n.find("castHelper") != std::string::npos
+    || n.find("ONNXTRT_") != std::string::npos;
+}
+
+// True if a name carries any token specific to the decomposed-RMSNorm op cluster.
+// Used only to corroborate a reduction as a norm when the producer's layer type is
+// unexpected; matching is deliberately narrow to avoid false positives.
+static bool ContainsNormOpToken(const char* name)
+{
+  std::string n(name);
+  return n.find("rms") != std::string::npos
+    || n.find("norm") != std::string::npos
+    || n.find("pow") != std::string::npos
+    || n.find("mean") != std::string::npos
+    || n.find("Sqrt") != std::string::npos
+    || n.find("rsqrt") != std::string::npos;
+}
+
+static std::vector<DecomposedNormChain> AnalyzeDecomposedRMSNorms(
+  const nvinfer1::INetworkDefinition* network, int32_t totalLayers)
+{
+  // producer: output tensor name -> producing layer index
+  std::unordered_map<std::string, int32_t> tensorProducer;
+  // consumers: input tensor name  -> consuming layer indices
+  std::unordered_map<std::string, std::vector<int32_t>> tensorConsumers;
+  for (int32_t i = 0; i < totalLayers; ++i)
+  {
+    auto* layer = network->getLayer(i);
+    for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
+    {
+      auto* t = layer->getOutput(j);
+      if (t && t->getName())
+        tensorProducer[t->getName()] = i;
+    }
+    for (int32_t j = 0; j < layer->getNbInputs(); ++j)
+    {
+      auto* t = layer->getInput(j);
+      if (t && t->getName())
+        tensorConsumers[t->getName()].push_back(i);
+    }
+  }
+
+  auto producerOf = [&](const nvinfer1::ILayer* layer, int32_t inputIdx) -> int32_t
+  {
+    if (inputIdx >= layer->getNbInputs())
+      return -1;
+    auto* t = layer->getInput(inputIdx);
+    if (!t || !t->getName())
+      return -1;
+    auto it = tensorProducer.find(t->getName());
+    return it == tensorProducer.end() ? -1 : it->second;
+  };
+  // Follow input(0) backwards, skipping cast-like layers, to the real producer index.
+  auto realProducerOf = [&](int32_t layerIdx) -> int32_t
+  {
+    int32_t p = producerOf(network->getLayer(layerIdx), 0);
+    for (int guard = 0; p >= 0 && guard < 6; ++guard)
+    {
+      if (!IsCastLikeLayer(network->getLayer(p)))
+        break;
+      p = producerOf(network->getLayer(p), 0);
+    }
+    return p;
+  };
+
+  std::vector<DecomposedNormChain> chains;
+
+  for (int32_t i = 0; i < totalLayers; ++i)
+  {
+    auto* reduce = network->getLayer(i);
+    if (reduce->getType() != nvinfer1::LayerType::kREDUCE)
+      continue;
+
+    // Confirm this reduction is the mean-of-squares of an RMSNorm: its (cast-skipped)
+    // producer must be the elementwise square. This excludes any unrelated mean/sum.
+    int32_t sqIdx = realProducerOf(i);
+    if (sqIdx < 0)
+      continue;
+    auto* square = network->getLayer(sqIdx);
+    bool squareIsElementwise = (square->getType() == nvinfer1::LayerType::kELEMENTWISE);
+    if (!squareIsElementwise
+      && !ContainsNormOpToken(square->getName())
+      && !ContainsNormOpToken(reduce->getName()))
+      continue;
+
+    // Classify by the tensor being normalized: the square's (cast-skipped) input.
+    DecomposedNormKind kind = DecomposedNormKind::Other;
+    int32_t srcIdx = realProducerOf(sqIdx);
+    if (srcIdx >= 0)
+    {
+      auto* src = network->getLayer(srcIdx);
+      std::string sn(src->getName());
+      const bool srcIsAdd = (src->getType() == nvinfer1::LayerType::kELEMENTWISE)
+        && (sn.find("add") != std::string::npos
+          || sn.find("Add") != std::string::npos
+          || sn.find("skip") != std::string::npos);
+      const bool srcIsShuffle = (src->getType() == nvinfer1::LayerType::kSHUFFLE)
+        || sn.find("view") != std::string::npos
+        || sn.find("reshape") != std::string::npos
+        || sn.find("Reshape") != std::string::npos;
+      if (srcIsAdd)
+        kind = DecomposedNormKind::Residual;         // residual/skip stream norm
+      else if (srcIsShuffle)
+        kind = DecomposedNormKind::QKV;              // per-head q/k/v norm
+      else if (src->getType() == nvinfer1::LayerType::kELEMENTWISE)
+        kind = DecomposedNormKind::Smolgen;          // smolgen attention ln1
+      // else: embedding norm (fed by activation) etc. -> Other
+    }
+
+    // Collect the fp32-critical math span: the square + reduce, then forward through the
+    // norm's elementwise/unary chain (Add eps -> Sqrt -> Reciprocal -> Mul(*rsqrt)).
+    // Restrict to compute layer types and stop at the fp16 downcast Cast (and never
+    // cross a MatMul/Shuffle) so we cannot run into the next block's residual add.
+    std::unordered_set<int32_t> chainSet;
+    chainSet.insert(sqIdx);
+    chainSet.insert(i);
+    std::vector<int32_t> frontier = { i };
+    for (int depth = 0; depth < 8 && !frontier.empty(); ++depth)
+    {
+      std::vector<int32_t> next;
+      for (int32_t li : frontier)
+      {
+        auto* L = network->getLayer(li);
+        for (int32_t j = 0; j < L->getNbOutputs(); ++j)
+        {
+          auto* t = L->getOutput(j);
+          if (!t || !t->getName())
+            continue;
+          auto cit = tensorConsumers.find(t->getName());
+          if (cit == tensorConsumers.end())
+            continue;
+          for (int32_t ci : cit->second)
+          {
+            if (chainSet.count(ci))
+              continue;
+            auto ct = network->getLayer(ci)->getType();
+            if (ct == nvinfer1::LayerType::kELEMENTWISE
+              || ct == nvinfer1::LayerType::kUNARY
+              || ct == nvinfer1::LayerType::kREDUCE)
+            {
+              chainSet.insert(ci);
+              next.push_back(ci);
+            }
+            // kCAST / kSHUFFLE / kMATRIX_MULTIPLY / ...: boundary, do not cross.
+          }
+        }
+      }
+      frontier.swap(next);
+    }
+
+    DecomposedNormChain chain;
+    chain.kind = kind;
+    chain.layers.assign(chainSet.begin(), chainSet.end());
+    chains.push_back(std::move(chain));
+  }
+
+  return chains;
+}
+
 // Build set of residual-stream normalization layer indices.
 // For native kNORMALIZATION layers: mark only those fed by a residual Add.
 // For decomposed norms: find entry points on the residual stream, propagate
@@ -446,7 +651,46 @@ static std::unordered_set<int32_t> FindResidualStreamNormLayers(
   }
   else
   {
-    // Path B: decomposed norms - mark compute layers in residual-stream norm chains.
+    // Path B: decomposed norms. Prefer structural detection (handles the generic
+    // aten-op node names emitted by the TorchDynamo exporter, where HasNormName sees
+    // nothing). Only the residual-stream norms are marked here; smolgen norms come
+    // from the separate fp32AllNorms(scope=3) pass, and per-head QKV norms are left
+    // in fp16 (small reduction dim, no overflow).
+    auto decomposed = AnalyzeDecomposedRMSNorms(network, totalLayers);
+    if (!decomposed.empty())
+    {
+      int nRes = 0, nQKV = 0, nSmol = 0, nOther = 0;
+      for (const auto& c : decomposed)
+      {
+        switch (c.kind)
+        {
+        case DecomposedNormKind::Residual: nRes++;   break;
+        case DecomposedNormKind::QKV:      nQKV++;    break;
+        case DecomposedNormKind::Smolgen:  nSmol++;   break;
+        default:                           nOther++;  break;
+        }
+      }
+      // Safety: if classification found no residual norms at all (structure differs
+      // from what we expect) fall back to marking every detected norm chain -- upcasting
+      // extra norms only costs a little speed, but missing one corrupts accuracy.
+      const bool markAll = (nRes == 0);
+      for (const auto& c : decomposed)
+      {
+        if (markAll || c.kind == DecomposedNormKind::Residual)
+        {
+          for (int32_t li : c.layers)
+            residualNormLayers.insert(li);
+        }
+      }
+      fprintf(stderr, "[TensorRT] Decomposed norms (structural): %d residual + %d QKV + %d smolgen "
+        "+ %d other norms; marked %d compute layers on residual stream%s\n",
+        nRes, nQKV, nSmol, nOther, (int)residualNormLayers.size(),
+        markAll ? " (fallback: all norms, no residual class found)" : "");
+      return residualNormLayers;
+    }
+
+    // Legacy fallback: name-based detection for nets whose norm nodes carry
+    // module-scoped names (rms_norm.../ln1/...) recognized by HasNormName.
     // Pass 1: find entry-point norm layers fed by residual Add
     for (int32_t i = 0; i < totalLayers; ++i)
     {
@@ -591,8 +835,37 @@ static std::unordered_set<int32_t> FindAllNormLayers(
   }
   else
   {
-    // Path B: decomposed norms - find entry points and classify by producer type
+    // Path B: decomposed norms. Prefer structural detection (naming-independent) so the
+    // generic aten-op node names from the TorchDynamo exporter are handled. Select chains
+    // by scope, matching the legacy classification semantics below:
+    //   1 = all, 2 = QKV, 3 = smolgen, 4 = QKV+smolgen (residual is only ever in scope 1).
+    auto decomposed = AnalyzeDecomposedRMSNorms(network, totalLayers);
+    if (!decomposed.empty())
+    {
+      int cQKV = 0, cSmol = 0, cRes = 0, cOther = 0;
+      for (const auto& c : decomposed)
+      {
+        bool include = false;
+        switch (c.kind)
+        {
+        case DecomposedNormKind::QKV:      cQKV++;   include = (scope == 1 || scope == 2 || scope == 4); break;
+        case DecomposedNormKind::Smolgen:  cSmol++;  include = (scope == 1 || scope == 3 || scope == 4); break;
+        case DecomposedNormKind::Residual: cRes++;   include = (scope == 1); break;
+        default:                           cOther++; include = (scope == 1 || scope == 4); break;
+        }
+        if (include)
+        {
+          for (int32_t li : c.layers)
+            allNormLayers.insert(li);
+        }
+      }
+      fprintf(stderr, "[TensorRT] AllNorms(scope=%d) structural: %d QKV + %d smolgen + %d residual "
+        "+ %d other norms -> %d layers\n",
+        scope, cQKV, cSmol, cRes, cOther, (int)allNormLayers.size());
+      return allNormLayers;
+    }
 
+    // Legacy fallback: name/index-based detection for module-scoped rms_norm names.
     // Pre-scan: find max sequential ONNX norm index to distinguish from TRT suffixes.
     // ONNX norms are numbered 0,1,2,...,N-1 sequentially. TRT decomposition creates
     // additional layers with large suffix numbers (typically > N).
