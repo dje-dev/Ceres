@@ -1249,44 +1249,18 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
       // ===== Extract Value Head 1 =====
       int posValueOffset = offsets.Value + i * valueSize;
-      if (isWDL)
-      {
-        if (wdlIsLogistic)
-        {
-          float vW = subBatchOutput[posValueOffset];
-          float vD = subBatchOutput[posValueOffset + 1];
-          float vL = subBatchOutput[posValueOffset + 2];
-
-          (float wVal, float lVal) = ExtractAndScaleWDL(vW, vD, vL,
-                                                         valueHead1Temperature, valueHead1TemperatureScaling,
-                                                         uncertaintyV, wdlIsLogistic);
-          w[resultIndex] = (FP16)wVal;
-          l[resultIndex] = (FP16)lVal;
-        }
-        else
-        {
-          w[resultIndex] = (FP16)subBatchOutput[posValueOffset];
-          l[resultIndex] = (FP16)subBatchOutput[posValueOffset + 2];
-        }
-      }
-      else
-      {
-        float v = subBatchOutput[posValueOffset];
-        w[resultIndex] = (FP16)((v + 1) * 0.5f);
-        l[resultIndex] = (FP16)((1 - v) * 0.5f);
-      }
+      (float value1W, float value1L) = ExtractValueHead(subBatchOutput, posValueOffset, isWDL, wdlIsLogistic,
+                                                        valueHead1Temperature, valueHead1TemperatureScaling, uncertaintyV);
+      w[resultIndex] = (FP16)value1W;
+      l[resultIndex] = (FP16)value1L;
 
       // ===== Extract Value Head 2 (if present) =====
       if (hasValueSecondary)
       {
         int posValue2Offset = offsets.Value2 + i * value2Size;
-        float vW2 = subBatchOutput[posValue2Offset];
-        float vD2 = subBatchOutput[posValue2Offset + 1];
-        float vL2 = subBatchOutput[posValue2Offset + 2];
-
-        (float w2Val, float l2Val) = ExtractAndScaleWDL(vW2, vD2, vL2,
-                                                         valueHead2Temperature, valueHead2TemperatureScaling,
-                                                         uncertaintyV, wdlIsLogistic: true);
+        // N.B. head 2 is assumed always WDL when present.
+        (float w2Val, float l2Val) = ExtractValueHead(subBatchOutput, posValue2Offset, isWDL: true, wdlIsLogistic,
+                                                      valueHead2Temperature, valueHead2TemperatureScaling, uncertaintyV);
         w2[resultIndex] = (FP16)w2Val;
         l2[resultIndex] = (FP16)l2Val;
       }
@@ -2050,6 +2024,45 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
 
   /// <summary>
+  /// Extracts a value head (W, L) from the network output at the given offset, applying that head's
+  /// temperature uniformly across all three cases: logistic WDL, non-logistic WDL.
+  ///
+  /// For non-logistic WDL the probabilities are converted to logits (log) before scaling, since
+  /// softmax(log(p)/T) == p^(1/T) renormalized; this is exactly the identity when T==1 and there is
+  /// no uncertainty scaling, so default-temperature behavior is byte-for-byte preserved.
+  /// </summary>
+  private static (float W, float L) ExtractValueHead(float[] subBatchOutput, int posValueOffset,
+                                                     bool isWDL, bool wdlIsLogistic,
+                                                     float temperature, float temperatureScaling, float uncertaintyV)
+  {
+    if (!isWDL)
+    {
+      float v = subBatchOutput[posValueOffset];
+      return ((v + 1) * 0.5f, (1 - v) * 0.5f);
+    }
+
+    float vW = subBatchOutput[posValueOffset];
+    float vD = subBatchOutput[posValueOffset + 1];
+    float vL = subBatchOutput[posValueOffset + 2];
+
+    if (wdlIsLogistic)
+    {
+      return ExtractAndScaleWDL(vW, vD, vL, temperature, temperatureScaling, uncertaintyV, wdlIsLogistic: true);
+    }
+
+    // Non-logistic (probabilities). Fast path preserves exact legacy output at the default temperature.
+    if (temperature == 1.0f && temperatureScaling == 0.0f)
+    {
+      return (vW, vL);
+    }
+
+    const float EPS = 1e-9f;
+    return ExtractAndScaleWDL(MathF.Log(MathF.Max(vW, EPS)), MathF.Log(MathF.Max(vD, EPS)), MathF.Log(MathF.Max(vL, EPS)),
+                              temperature, temperatureScaling, uncertaintyV, wdlIsLogistic: true);
+  }
+
+
+  /// <summary>
   /// Extract results from a sub-batch output buffer into the result arrays.
   /// Uses parallel processing for all per-position extractions (values, policies, etc.)
   /// for improved performance, matching the pattern used in the ONNX backend.
@@ -2111,44 +2124,19 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
       // ===== Extract Value Head 1 =====
       int posValueOffset = offsets.Value + i * valueSize;
-      if (isWDL)
-      {
-        if (wdlIsLogistic)
-        {
-          float vW = subBatchOutput[posValueOffset];
-          float vD = subBatchOutput[posValueOffset + 1];
-          float vL = subBatchOutput[posValueOffset + 2];
-
-          (float wVal, float lVal) = ExtractAndScaleWDL(vW, vD, vL,
-                                                         valueHead1Temperature, valueHead1TemperatureScaling,
-                                                         uncertaintyV, wdlIsLogistic);
-          w[resultIndex] = (FP16)wVal;
-          l[resultIndex] = (FP16)lVal;
-        }
-        else
-        {
-          w[resultIndex] = (FP16)subBatchOutput[posValueOffset];
-          l[resultIndex] = (FP16)subBatchOutput[posValueOffset + 2];
-        }
-      }
-      else
-      {
-        float v = subBatchOutput[posValueOffset];
-        w[resultIndex] = (FP16)((v + 1) * 0.5f);
-        l[resultIndex] = (FP16)((1 - v) * 0.5f);
-      }
+      (float value1W, float value1L) = ExtractValueHead(subBatchOutput, posValueOffset, isWDL, wdlIsLogistic,
+                                                        valueHead1Temperature, valueHead1TemperatureScaling, uncertaintyV);
+      w[resultIndex] = (FP16)value1W;
+      l[resultIndex] = (FP16)value1L;
 
       // ===== Extract Value Head 2 (if present) =====
       if (hasValueSecondary)
       {
         int posValue2Offset = offsets.Value2 + i * value2Size;
-        float vW2 = subBatchOutput[posValue2Offset];
-        float vD2 = subBatchOutput[posValue2Offset + 1];
-        float vL2 = subBatchOutput[posValue2Offset + 2];
-
-        (float w2Val, float l2Val) = ExtractAndScaleWDL(vW2, vD2, vL2,
-                                                         valueHead2Temperature, valueHead2TemperatureScaling,
-                                                         uncertaintyV, wdlIsLogistic: true);
+        // Head 2 is always WDL when present. Pass the real wdlIsLogistic (was hardcoded true): for
+        // all current 2-head nets (Ceres/logistic) this is identical; it closes the non-logistic gap.
+        (float w2Val, float l2Val) = ExtractValueHead(subBatchOutput, posValue2Offset, isWDL: true, wdlIsLogistic,
+                                                      valueHead2Temperature, valueHead2TemperatureScaling, uncertaintyV);
         w2[resultIndex] = (FP16)w2Val;
         l2[resultIndex] = (FP16)l2Val;
       }
@@ -2591,10 +2579,10 @@ public class NNEvaluatorTensorRT : NNEvaluator
     // Smaller batch sizes are used with multiple GPUs because each GPU processes a smaller sub-batch
     int[] batchSizes = gpuIDs.Length switch
     {
-      1           => [8, 32, 64, 96, 132, 168, 208, 224],
-      2           => [8, 24, 40, 56, 72, 88, 104, 120],
+      1 => [8, 32, 64, 96, 132, 168, 208, 224],
+      2 => [8, 24, 40, 56, 72, 88, 104, 120],
       3 or 4 or 5 => [8, 20, 32, 48, 60, 72, 88, 104],
-      _           => [8, 16, 24, 32, 40, 48, 56, 64],
+      _ => [8, 16, 24, 32, 40, 48, 56, 64],
     };
 
     bool forceBF16 = options is NNEvaluatorOptionsCeres optionsCeres && optionsCeres.UseBF16;
