@@ -384,6 +384,16 @@ public class MCGSSelect
                           + $"absorbed={numAbsorbedAtParent} (of {numAttemptedVisits}) "
                           + $"newN={parentNode.N} Q={parentNode.Q:+0.0000;-0.0000}");
         }
+        // Back out the absorbed visits' attempted/pending-backup counters and edge
+        // in-flight on the ancestor edges (edge into parentNode and above), exactly as
+        // the expansion-block and suboptimality drop paths do. BackupToNode above only
+        // bumped parentNode.N; without this backout the backup-phase merge counters at
+        // this node never reach zero, so ancestor backups (including the edge in-flight
+        // decrements all the way to the root) are silently lost - leaking permanent
+        // virtual visits that suppress selection of these edges for the rest of the
+        // (graph-reused) search.
+        pathsSet.RecordDroppedVisits(path, numAbsorbedAtParent);
+
         // Reduce numAttemptedVisits so downstream assertions and processing reflect
         // only the visits that actually went to children.
         numAttemptedVisits = childStats.NumVisitsAccepted;

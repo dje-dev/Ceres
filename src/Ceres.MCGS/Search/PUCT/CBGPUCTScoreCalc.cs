@@ -89,13 +89,20 @@ internal static class CBGPUCTScoreCalc
   internal static double ComputeLambdaNForSelection(ParamsSelect paramsSelect, double sumN, int numChildren,
                                                     ReadOnlySpan<double> mu = default,
                                                     double explorationMultiplier = 1.0)
-    => ComputeLambdaNCore(paramsSelect.CBGPUCT_SelectLambdaSchedule,
-                          paramsSelect.CBGPUCT_SelectLambdaC,
-                          paramsSelect.CBGPUCT_SelectLambdaExp,
-                          ResolveDenomBase(paramsSelect.CBGPUCT_SelectLambdaDenominatorBase, mu, numChildren),
-                          paramsSelect.CBGPUCT_SelectLambdaCLogBase,
-                          paramsSelect.CBGPUCT_SelectLambdaCLogFactor,
-                          sumN, numChildren, explorationMultiplier);
+  {
+    // Optional cap on the schedule's effective sumN (freezes decay beyond the cap).
+    // The log-growth coefficient term deliberately keeps the true sumN so exploration
+    // intensity continues to grow in parallel with standard CPUCT.
+    double cap = paramsSelect.CBGPUCT_SelectLambdaSumNMax;
+    double sumNSchedule = cap > 0 ? Math.Min(cap, sumN) : sumN;
+    return ComputeLambdaNCore(paramsSelect.CBGPUCT_SelectLambdaSchedule,
+                              paramsSelect.CBGPUCT_SelectLambdaC,
+                              paramsSelect.CBGPUCT_SelectLambdaExp,
+                              ResolveDenomBase(paramsSelect.CBGPUCT_SelectLambdaDenominatorBase, mu, numChildren),
+                              paramsSelect.CBGPUCT_SelectLambdaCLogBase,
+                              paramsSelect.CBGPUCT_SelectLambdaCLogFactor,
+                              sumN, sumNSchedule, numChildren, explorationMultiplier);
+  }
 
 
   /// <summary>
@@ -107,12 +114,18 @@ internal static class CBGPUCTScoreCalc
   /// </summary>
   internal static double ComputeLambdaNForBackup(ParamsSelect paramsSelect, double sumN, int numChildren,
                                                  ReadOnlySpan<double> mu = default)
-    => ComputeLambdaNCore(paramsSelect.CBGPUCT_BackupLambdaSchedule,
-                          paramsSelect.CBGPUCT_BackupLambdaC,
-                          paramsSelect.CBGPUCT_BackupLambdaExp,
-                          ResolveDenomBase(paramsSelect.CBGPUCT_BackupLambdaDenominatorBase, mu, numChildren),
-                          cLogBase: 0.0, cLogFactor: 0.0,
-                          sumN, numChildren);
+  {
+    // Optional cap on the schedule's effective sumN: freezes the schedule at its value
+    // at N = cap so backup regularization does not decay to ~0 at high visit counts.
+    double cap = paramsSelect.CBGPUCT_BackupLambdaSumNMax;
+    double sumNEff = cap > 0 ? Math.Min(cap, sumN) : sumN;
+    return ComputeLambdaNCore(paramsSelect.CBGPUCT_BackupLambdaSchedule,
+                              paramsSelect.CBGPUCT_BackupLambdaC,
+                              paramsSelect.CBGPUCT_BackupLambdaExp,
+                              ResolveDenomBase(paramsSelect.CBGPUCT_BackupLambdaDenominatorBase, mu, numChildren),
+                              cLogBase: 0.0, cLogFactor: 0.0,
+                              sumNEff, sumNEff, numChildren);
+  }
 
 
   /// <summary>
@@ -165,13 +178,13 @@ internal static class CBGPUCTScoreCalc
                                            double lambdaC, double lambdaExp,
                                            double denominatorBase,
                                            double cLogBase, double cLogFactor,
-                                           double sumN, int numChildren,
+                                           double sumNForCoefficient, double sumN, int numChildren,
                                            double explorationMultiplier = 1.0)
   {
     double cEffective = lambdaC;
     if (cLogFactor != 0.0 && cLogBase > 0.0)
     {
-      cEffective = lambdaC + cLogFactor * Math.Log((sumN + cLogBase + 1.0) / cLogBase);
+      cEffective = lambdaC + cLogFactor * Math.Log((sumNForCoefficient + cLogBase + 1.0) / cLogBase);
     }
 
     // Scale the effective exploration coefficient (parallels how PUCT applies its per-iterator

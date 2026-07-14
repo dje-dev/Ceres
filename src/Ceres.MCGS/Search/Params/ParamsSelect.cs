@@ -665,6 +665,17 @@ public record ParamsSelect
   public float CBGPUCT_SelectLambdaCLogFactor = DEFAULT_LOG_GROWTH_FACTOR;
 
   /// <summary>
+  /// If > 0, caps the effective sumN used by the SELECTION-phase lambda_N schedule at
+  /// this value (lambda_N is computed as if sumN = min(sumN, cap)), freezing the
+  /// schedule's decay beyond the cap so selection regularization does not vanish at
+  /// high visit counts.  The cap applies only to the base schedule; the log-growth
+  /// coefficient term (CBGPUCT_SelectLambdaCLogFactor) continues to use the true sumN.
+  /// 0 (default) disables the cap.  Note: only relevant when CBGPUCT selection is
+  /// active at large parent N (i.e. CBGPUCT_PUCTAboveN raised above the cap).
+  /// </summary>
+  public float CBGPUCT_SelectLambdaSumNMax = 0;
+
+  /// <summary>
   /// Lambda schedule for the BACKUP phase (V_bar regularized value computation).
   /// </summary>
   public CBGPUCTLambdaScheduleType CBGPUCT_BackupLambdaSchedule = CBGPUCTLambdaScheduleType.AlphaZero;
@@ -685,6 +696,17 @@ public record ParamsSelect
   /// Smaller values cause more rapid decay of lambda_N and thus weaker regularization of Q higher visit counts.
   /// </summary>
   public float CBGPUCT_BackupLambdaExp = 0.5f;
+
+  /// <summary>
+  /// If > 0, caps the effective sumN used by the BACKUP-phase lambda_N schedule at
+  /// this value (lambda_N is computed as if sumN = min(sumN, cap)).  This freezes the
+  /// schedule at its value at N = cap, providing a regularization floor so that V_bar
+  /// does not converge to a pure visit-weighted average (lambda -> 0) at high visit
+  /// counts.  Empirically a cap of ~2000 recovered BackupOnly gains at very high
+  /// nodes-per-move where the uncapped schedule had decayed to no effect.
+  /// 0 (default) disables the cap.
+  /// </summary>
+  public float CBGPUCT_BackupLambdaSumNMax = 0;
 
 
   /// <summary>
