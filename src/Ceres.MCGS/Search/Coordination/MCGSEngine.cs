@@ -126,6 +126,15 @@ public partial class MCGSEngine
 
   internal int nextBatchID;
 
+  /// <summary>
+  /// Optional hook invoked at the end of each iterator batch (MCGSIterator.RunOnce), after the
+  /// batch's backup has fully completed and all coordinator gates have been exited. At that point
+  /// the graph is quiescent in single-iterator harnesses (must not be used with
+  /// DualOverlappedIterators). Used by external instrumentation such as the Q-probe
+  /// training-data harvester (see MCGSIterator.RunProbeSpecs).
+  /// </summary>
+  internal Action<MCGSIterator> PostBatchHook;
+
 
   /// <summary>
   /// Optional logging object.
@@ -149,6 +158,8 @@ public partial class MCGSEngine
     NNEvaluator evaluator0 = Manager.NNEvaluator0;
     cachedNumDevicesInEvaluator = evaluator0?.NumDevices ?? 1;
     cachedNetFileSizeBytes = evaluator0?.Info?.NetworkFileSizeBytes ?? -1;
+
+    PostBatchHook = manager.ParamsSearch.PostBatchHook;
 
     Graph = graph;
     Graph.PTBMaxRepDrawFraction = manager.ParamsSearch.PseudoTranspositionBlendingMaxRepDrawFraction;

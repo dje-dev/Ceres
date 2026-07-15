@@ -264,7 +264,9 @@ public class MCGSSelect
 
     // Reorder unvisited children by PUCT scores (blending policy and action head)
     // on second visit, before any child selection (fast path or full PUCT).
-    if (parentNode.NumEdgesExpanded == 0 && parentNode.N >= 1)
+    // Suppressed in probe mode: reordering permanently permutes the node's unexpanded
+    // edge headers, violating the probe invariant that pre-existing state is unchanged.
+    if (parentNode.NumEdgesExpanded == 0 && parentNode.N >= 1 && !iterator.ProbeSuppressGraphWrites)
     {
       strategy.PossiblyActionResortUnvisitedChildren(parentNode, Engine.Graph);
     }
@@ -342,7 +344,8 @@ public class MCGSSelect
 
       if ((paramsSearch.MoveOrderingPhase == ParamsSearch.MoveOrderingPhaseEnum.ChildSelection
        || paramsSearch.MoveOrderingPhase == ParamsSearch.MoveOrderingPhaseEnum.NodeInitializationAndChildSelect)
-       && !parentNode.IsSearchRoot)
+       && !parentNode.IsSearchRoot
+       && !iterator.ProbeSuppressGraphWrites) // probe mode: no permanent header reordering
       {
         // TODO: possibly this check for reordering could be skipped in many situations (for improved speed).
         //       If using standard FPU and no action head is in use, children are already policy sorted thus likely unnecessary.
@@ -356,7 +359,8 @@ public class MCGSSelect
       // We allow SelectChildren to refresh these edges (if running in graph mode when desynchronization is possible).
       // Ordinarily the edge Q should only be updated in conjunction with a backup to the parent node,
       // but we know that the parent pure Q will be reset using the (refreshed child) computed here.
-      bool REFRESH_STALE_EDGES = graphEnabled; // edges only marked stale in graph mode
+      // Probe mode suppresses the refresh (a write to pre-existing edges).
+      bool REFRESH_STALE_EDGES = graphEnabled && !iterator.ProbeSuppressGraphWrites; // edges only marked stale in graph mode
       childStats = strategy.SelectChildren(parentNode, path.IteratorID, path.NumVisitsInPath, numChildrenToConsider,
                                            numAttemptedVisits, ALSO_COMPUTE_CHILD_SCORES,
                                            cpuctMultiplier, 1,
@@ -375,6 +379,12 @@ public class MCGSSelect
           && paramsSelect.CBGPUCTSelectActive
           && paramsSelect.CBGPUCT_SelectCrossParentNEnabled)
       {
+        if (iterator.ProbeSuppressGraphWrites)
+        {
+          // Absorption performs a real BackupToNode during select which cannot be dropped.
+          throw new NotSupportedException("CBGPUCT cross-parent absorption is not supported in probe mode");
+        }
+
         strategy.BackupToNode(parentNode, numAbsorbedAtParent,
                               parentNode.Q * numAbsorbedAtParent,
                               parentNode.D * numAbsorbedAtParent);
@@ -424,7 +434,8 @@ public class MCGSSelect
       Debug.Assert(parentNode.N == childStats.SumN
                 || (paramsSelect.CBGPUCTSelectActive && paramsSelect.CBGPUCT_SelectCrossParentNEnabled));
 
-      if (MCGSParamsFixed.RESET_Q_DURING_SELECT_PHASE_FROM_ALL_CHILDREN)
+      if (MCGSParamsFixed.RESET_Q_DURING_SELECT_PHASE_FROM_ALL_CHILDREN
+       && !iterator.ProbeSuppressGraphWrites) // probe mode: the reset writes node Q (heals real desync, not a no-op)
       {
         if (paramsSelect.CBGPUCTBackupActive)
         {
@@ -498,8 +509,30 @@ public class MCGSSelect
   internal void ExtendPathFromInnerNode(MCGSIterator iterator, GNode startNode, int numAttemptedVisits)
   {
     Debug.Assert(numAttemptedVisits > 0);
+
+    MCGSPath path = BuildForcedSpinePath(iterator, startNode, numAttemptedVisits);
+    if (path == null)
+    {
+      return;
+    }
+
+    // Continue normal selection (PUCT/CBGPUCT) from startNode.
+    ExtendPathsRecursively(iterator, path, numAttemptedVisits);
+  }
+
+
+  /// <summary>
+  /// Builds a new path consisting of the forced spine searchRoot -> ... -> startNode
+  /// (the shared prefix-construction of ExtendPathFromInnerNode / ExtendPathForcedChild),
+  /// arming every spine hop with numVisitsPerHop attempted visits. Returns null when the
+  /// path cannot be built (start node not reachable from the search root, excessive depth,
+  /// or path pool nearly exhausted) - the caller simply skips the node this round.
+  /// </summary>
+  private MCGSPath BuildForcedSpinePath(MCGSIterator iterator, GNode startNode, int numVisitsPerHop)
+  {
+    Debug.Assert(numVisitsPerHop > 0);
     Debug.Assert(!startNode.IsNull);
-    Debug.Assert(!startNode.IsSearchRoot, "ExtendPathFromInnerNode requires a strict descendant of the search root");
+    Debug.Assert(!startNode.IsSearchRoot, "BuildForcedSpinePath requires a strict descendant of the search root");
 
     // Walk up from startNode to the search root, collecting node indices leaf-to-root. At each step
     // follow the highest-N incoming (parent) edge, but only among parents that are strictly closer
@@ -519,7 +552,7 @@ public class MCGSSelect
       // reachable from the search root via child edges, but its canonical tree parents trace a
       // different line (or it lies deeper than the walk limit). Skip gracefully - the node
       // simply receives no rollout this round.
-      return;
+      return null;
     }
     while (!walk.IsSearchRoot)
     {
@@ -530,7 +563,7 @@ public class MCGSSelect
         // very deep. Skip the node gracefully (it receives no rollout this round);
         // a Debug.Assert here would be compiled out in release and the write below
         // would otherwise overflow the stack buffer.
-        return;
+        return null;
       }
       nodeIndicesLeafToRoot[depth++] = walk.Index.Index;
 
@@ -566,7 +599,7 @@ public class MCGSSelect
     // (a deep spine below would otherwise fail its allocations mid-construction).
     if (iterator.IsApproachingMaxPathCapacity)
     {
-      return;
+      return null;
     }
 
     // Allocate the path and seed it with the search root context, pre-sizing the slots for
@@ -581,24 +614,157 @@ public class MCGSSelect
     }
 
     // Force descent from the search root down to startNode (root-to-leaf order), recording a
-    // single-visit slot for each step so that backup later propagates upward to the search root.
+    // slot with numVisitsPerHop attempted visits for each step so that backup (or the
+    // dropped-visits ledger) later reconciles every hop with the visits carried below.
     MGPosition parentPosMG = Engine.SearchRootPosMG;
     GNode parentNode = Engine.SearchRootNode;
     for (int i = depth - 1; i >= 0; i--)
     {
       GNode childNode = Engine.Graph[nodeIndicesLeafToRoot[i]];
       int childIndex = parentNode.IndexOfChildInChildEdges(childNode.Index);
-      Debug.Assert(childIndex >= 0, "ExtendPathFromInnerNode: tree-parent child edge not found");
+      Debug.Assert(childIndex >= 0, "BuildForcedSpinePath: tree-parent child edge not found");
       GEdge childEdge = parentNode.ChildEdgeAtIndex(childIndex);
-      AddForcedPrefixVisit(path, parentNode, childIndex, childEdge, ref parentPosMG);
+      AddForcedPrefixVisit(path, parentNode, childIndex, childEdge, ref parentPosMG, numVisitsPerHop);
       parentNode = childNode;
     }
 
     Debug.Assert(path.NumVisitsInPath == depth);
     Debug.Assert(path.LeafVisitRef.ParentChildEdge.ChildNode.Index == startNode.Index);
 
-    // Continue normal selection (PUCT/CBGPUCT) from startNode.
-    ExtendPathsRecursively(iterator, path, numAttemptedVisits);
+    return path;
+  }
+
+
+  /// <summary>
+  /// Builds probe path(s) which begin at the search root, forcibly descend to the specified
+  /// parent node along the most-visited ancestor line (as ExtendPathFromInnerNode does), then
+  /// forcibly assign numVisits visits to the child at childIndex (bypassing PUCT selection at
+  /// the parent only), and finally continue stock batched selection below that child (spreading
+  /// the visits over the child's subtree with the usual virtual-loss semantics).
+  ///
+  /// Used by MCGSIterator.RunProbeSpecs (Q-probe training-data harvesting) to answer
+  /// "what would happen if the next k visits through this parent all went to child c".
+  ///
+  /// The child may be unexpanded provided it is the next in-order expansion slot
+  /// (childIndex == parentNode.NumEdgesExpanded); the edge store requires strictly in-order
+  /// expansion. All bookkeeping (path visits, edge in-flight, expansion, evaluation) flows
+  /// through the stock machinery so the resulting paths can either be backed up normally or
+  /// dropped via the standard dropped-visits ledger.
+  /// </summary>
+  internal void ExtendPathForcedChild(MCGSIterator iterator, GNode parentNode, int childIndex, int numVisits)
+  {
+    Debug.Assert(numVisits > 0);
+    Debug.Assert(!parentNode.IsNull);
+    Debug.Assert(parentNode.IsEvaluated);
+    Debug.Assert(!parentNode.Terminal.IsTerminal());
+
+    MCGSPath path;
+    if (parentNode.IsSearchRoot)
+    {
+      // Empty spine: seed a fresh path at the search root
+      // (mirroring the path == null branch of ExtendPathsRecursively).
+      if (iterator.IsApproachingMaxPathCapacity)
+      {
+        return;
+      }
+
+      path = iterator.AllocatedPath();
+      path.RunningHash = Engine.SearchRootRunningHash;
+      if (Engine.NeedsPlySinceLastMove)
+      {
+        Engine.SearchRootPlySinceLastMove.AsSpan().CopyTo(path.PlySinceLastMove.SquarePlySince);
+      }
+      path.InnerSearchStartNode = parentNode;
+      path.InnerSearchStartDepth = 0;
+    }
+    else
+    {
+      path = BuildForcedSpinePath(iterator, parentNode, numVisits);
+      if (path == null)
+      {
+        return;
+      }
+    }
+
+    MGPosition parentPosMG = path.NumVisitsInPath == 0 ? Engine.SearchRootPosMG
+                                                       : path.LeafVisitRef.ChildPosition;
+
+    // The parent lock is held across child processing and released in a finally block
+    // (same discipline as ExtendPathsRecursively).
+    ListBounded<DeferredSubPath> deferredSubPaths;
+    parentNode.AcquireLock();
+    try
+    {
+      deferredSubPaths = ProcessForcedChildAtLockedParent(iterator, path, parentNode, in parentPosMG,
+                                                          childIndex, numVisits);
+    }
+    finally
+    {
+      parentNode.ReleaseLock();
+    }
+
+    DispatchDeferredSubPaths(iterator, deferredSubPaths);
+
+    MCGSParamsFixed.Assert(path.TerminationReason != MCGSPathTerminationReason.NotYetTerminated, "NotYetTerminated");
+  }
+
+
+  /// <summary>
+  /// Performs the per-parent work of ExtendPathForcedChild under the parent node's lock:
+  /// deferred policy copy, capacity check, then dispatch of the forced visits to the single
+  /// specified child through the stock child-processing taxonomy (ProcessChildren).
+  /// PUCT child selection and its side effects (unvisited-children resort, move-order
+  /// rearrangement, select-phase Q reset) are intentionally bypassed.
+  /// </summary>
+  private ListBounded<DeferredSubPath> ProcessForcedChildAtLockedParent(MCGSIterator iterator, MCGSPath path,
+                                                                        GNode parentNode, in MGPosition parentPosMG,
+                                                                        int childIndex, int numVisits)
+  {
+    MCGSPathsSet pathsSet = iterator.PathsSet;
+
+    if (!parentNode.TryDoDeferredPolicyCopyIfNeeded())
+    {
+      // The deferred policy-copy source lock is contended (rare); abort this path
+      // (see remarks in ExtendPathAtLockedParent).
+      path.TerminationReason = MCGSPathTerminationReason.Abort;
+      if (path.NumVisitsInPath > 0)
+      {
+        pathsSet.AddPath(path, 0);
+      }
+      return null;
+    }
+
+    if (childIndex >= parentNode.NumPolicyMoves)
+    {
+      throw new ArgumentException($"childIndex {childIndex} out of range (NumPolicyMoves {parentNode.NumPolicyMoves})");
+    }
+
+    // The edge store requires strictly in-order expansion: only already-expanded children
+    // or the single next unexpanded slot may be forced. This also guarantees the in-order
+    // compaction loop in ProcessChildren performs no header swaps (no pre-existing-state
+    // mutation). Callers normally probe unexpanded children in ascending index order so each
+    // expands the next hole; if an earlier expansion was skipped this spec aborts gracefully.
+    if (childIndex > parentNode.NumEdgesExpanded)
+    {
+      path.TerminationReason = MCGSPathTerminationReason.Abort;
+      if (path.NumVisitsInPath > 0)
+      {
+        pathsSet.AddPath(path, 0);
+      }
+      return null;
+    }
+
+    if (CapacityAbortNeeded(iterator, path, pathsSet))
+    {
+      return null;
+    }
+
+    Span<short> childVisitCounts = stackalloc short[childIndex + 1];
+    childVisitCounts[childIndex] = (short)numVisits;
+
+    return ProcessChildren(iterator, path, numVisits, pathsSet, parentNode, in parentPosMG,
+                           childVisitCounts, childIndex + 1, numVisits,
+                           iterator.CPUCTMultiplier);
   }
 
 
@@ -629,14 +795,17 @@ public class MCGSSelect
 
 
   /// <summary>
-  /// Records a single forced (non-PUCT) visit along an already-expanded child edge while building
-  /// the search-root -> startNode prefix in ExtendPathFromInnerNode. Mirrors the per-visit
+  /// Records a forced (non-PUCT) visit along an already-expanded child edge while building
+  /// the search-root -> startNode prefix in BuildForcedSpinePath. Mirrors the per-visit
   /// bookkeeping of the normal expanded-child descent (position, hashes, edge in-flight, running
-  /// hash, ply) but always assigns exactly one visit to the given child.
+  /// hash, ply), assigning numVisits attempted visits to the given child (1 for ordinary
+  /// deep rollouts; k for k-visit probe specs so the hop's attempted/in-flight ledgers match
+  /// the visits carried below and reconcile exactly on backup or drop).
   /// </summary>
   private void AddForcedPrefixVisit(MCGSPath path, GNode parentNode, int childIndex,
-                                    GEdge childEdge, ref MGPosition parentPosMG)
+                                    GEdge childEdge, ref MGPosition parentPosMG, int numVisits = 1)
   {
+    Debug.Assert(numVisits > 0);
     Debug.Assert(childEdge.Type == GEdgeStruct.EdgeType.ChildEdge);
 
     MGMove moveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(childEdge.Move, in parentPosMG);
@@ -652,9 +821,9 @@ public class MCGSSelect
                           && path.PathMode == PathMode.PositionAndHistoryEquivalence;
     PosHash96 childHash96 = historyHashNeeded ? MGPositionHashing.Hash96(in childPos) : default;
 
-    ref MCGSPathVisit visit = ref path.AddVisit(parentNode, childIndex, in childPos, 1, childHash64, moveIrreversible);
+    ref MCGSPathVisit visit = ref path.AddVisit(parentNode, childIndex, in childPos, numVisits, childHash64, moveIrreversible);
     visit.ParentChildEdge = childEdge;
-    GNodeStruct.UpdateEdgeNInFlightForIterator(childEdge, path.IteratorID, 1);
+    GNodeStruct.UpdateEdgeNInFlightForIterator(childEdge, path.IteratorID, numVisits);
 
     // Maintain the running multiset hash and ply-since-last-move exactly as PossiblyBranched does
     // for an ordinary descended visit (history resets on an irreversible move).

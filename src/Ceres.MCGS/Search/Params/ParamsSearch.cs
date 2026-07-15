@@ -64,6 +64,17 @@ public enum PathMode
 public record ParamsSearch
 {
   /// <summary>
+  /// Optional hook invoked at the end of each iterator batch (MCGSIterator.RunOnce), after
+  /// the batch's backup has fully completed and all coordinator gates have been exited
+  /// (copied onto MCGSEngine.PostBatchHook at engine construction). At that point the graph
+  /// is quiescent in single-iterator harnesses; must not be used with DualOverlappedIterators.
+  /// Used by external instrumentation such as the Q-probe training-data harvester.
+  /// </summary>
+  [field: NonSerialized]
+  [System.Text.Json.Serialization.JsonIgnore]
+  public Action<Coordination.MCGSIterator> PostBatchHook { get; set; }
+
+  /// <summary>
   /// Default fraction of physical RAM to use as maximum memory for each search
   /// (for machines with <= 512GB of RAM).
   /// </summary>

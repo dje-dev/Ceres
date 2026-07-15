@@ -45,7 +45,7 @@ namespace Ceres.MCGS.Search.Coordination;
 /// subject to the rule that at most one of the iterators can be in either select or backup
 /// phase at any one time.
 /// </summary>
-public class MCGSIterator : IDisposable
+public partial class MCGSIterator : IDisposable
 {
   /// <summary>
   /// Tags for metrics about why paths terminated (cached for efficiency).
@@ -534,6 +534,14 @@ public class MCGSIterator : IDisposable
     Engine.Coordinator.ExitBackup(IteratorID, thisBatchID);
     long backupTicks = Stopwatch.GetTimestamp() - tsAfterEval;
     Engine.Coordinator.RecordBackupPhase(backupTicks);
+
+    // Invoke the optional post-batch hook now that this batch is fully committed and all
+    // coordinator gates are exited. In single-iterator harnesses the graph is quiescent here
+    // (no select/evaluate/backup in flight), making this the safe point for external
+    // instrumentation such as the Q-probe harvester to run probe batches of its own.
+    // (Invoking from within the backup gate would deadlock: with in-order backup enforcement,
+    // a nested batch's EnterBackupOrder waits on this batch's ExitBackupOrder.)
+    Engine.PostBatchHook?.Invoke(this);
 
     LogFlush();
 
