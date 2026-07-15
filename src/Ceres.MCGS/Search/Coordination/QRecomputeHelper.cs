@@ -19,6 +19,7 @@ using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Search.Params;
 using Ceres.MCGS.Search.PUCT;
+using Ceres.MCGS.Search.TPS;
 
 #endregion
 

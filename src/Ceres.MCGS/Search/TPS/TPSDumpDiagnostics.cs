@@ -15,60 +15,42 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using System.Text;
 
 using Ceres.Base.Misc;
 using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Search.Params;
-using Ceres.MCGS.Search.RPO;
+using Ceres.MCGS.Search.PUCT;
 
 #endregion
 
-namespace Ceres.MCGS.Search.PUCT;
+namespace Ceres.MCGS.Search.TPS;
 
 /// <summary>
-/// Optional diagnostic dump helpers for the FPU and TPS-backup calculation paths.
-/// Each dump is independently gated by a public const bool below; when all
-/// gates are false the helpers are unreachable and the JIT removes them
-/// (and any call site guards) entirely.
+/// Optional diagnostic dump for the TPS (Tempered Posterior Search) backup path
+/// (TPSScoreCalc.ComputeVBar).  Gated by DEBUG_DUMP_TPS_BACKUP_CALCS below; when the
+/// gate is false the helper (and its windowed running-stats machinery) is unreachable
+/// and the JIT removes it entirely.
 ///
 /// Output format per dump:
-///   - One header line (default color) summarizing inputs to the calculation.
+///   - One header line (default color, or red when significant) summarizing inputs.
 ///   - One row per per-child input vector (default color).
-///   - One row per per-child output vector (yellow), so the result of the
-///     calculation stands out visually in a noisy console stream.
-///
-/// Where useful, the dump also includes the value that the standard
-/// (visit-weighted) path would have produced from the same inputs, so the
-/// effect of the regularizer is immediately visible.
+///   - One row per per-child output vector (yellow), so the result stands out.
 ///
 /// Rows render as "Label                v0 v1 v2 | v3 v4 ..." where the '|'
 /// separator marks the boundary between expanded (visited) children and
-/// unexpanded (FPU-imputed) children.
+/// unexpanded (FPU-imputed) children.  Shared row/value formatting lives in
+/// SearchDumpFormatting (also used by the FPU/RPO dump).
 ///
-/// All output goes through a static lock so that multi-line dumps from
-/// concurrent search threads are not interleaved on the console.
+/// Where useful, the dump also includes the value the standard (visit-weighted)
+/// backup would have produced from the same inputs, so the effect of the tempered
+/// posterior is immediately visible.
 /// </summary>
 internal static class TPSDumpDiagnostics
 {
   /// <summary>
-  /// Gate for PUCTSelector.ApplyRPOImputedFPU dumps.
-  /// </summary>
-  public const bool DEBUG_DUMP_FPU_CALCS = false;
-
-  /// <summary>
   /// Gate for TPSScoreCalc.ComputeVBar (tempered-posterior backup) dumps.
   /// </summary>
   public const bool DEBUG_DUMP_TPS_BACKUP_CALCS = false;
-
-
-  /// <summary>
-  /// When true, dumps are emitted ONLY for calculation invocations where the
-  /// corresponding threshold was exceeded (i.e. the header would have been
-  /// red).  Useful for surfacing just the cases where the TPS / RPO machinery
-  /// actually diverges from the standard algorithm.  Default false.
-  /// </summary>
-  public const bool ONLY_SHOW_SIGNIFICANT = false;
 
 
   /// <summary>
@@ -77,27 +59,6 @@ internal static class TPSDumpDiagnostics
   /// |V - PUCT_Q| &gt; threshold.
   /// </summary>
   public const double BACKUP_DIFF_THRESHOLD = 0.1;
-
-  /// <summary>
-  /// Threshold (absolute Q) for flagging an FPU dump as a significant
-  /// divergence from the prior (non-RPO) FPU algorithm.  Header turns red when
-  /// any unvisited child's imputed Q differs from the scalar default FPU by
-  /// more than this amount.
-  /// </summary>
-  public const double FPU_DIFF_THRESHOLD = 0.1;
-
-
-  /// <summary>
-  /// Width of the leading label column.
-  /// </summary>
-  private const int LABEL_WIDTH = 22;
-
-
-  /// <summary>
-  /// Shared lock that serializes the entire multi-line dump for a single
-  /// invocation, preventing rows from concurrent calc threads from interleaving.
-  /// </summary>
-  private static readonly object consoleLock = new object();
 
 
   /// <summary>
@@ -165,7 +126,7 @@ internal static class TPSDumpDiagnostics
   /// <summary>
   /// Snapshots the bucket counters under stats.Lock (re-checks elapsed time so only
   /// one thread per window flushes), zeros them and updates WindowStartUtc, then prints
-  /// one line per non-empty bucket under consoleLock.  Reports per bucket:
+  /// one line per non-empty bucket under the shared console lock.  Reports per bucket:
   ///   bias          = mean signed (V - PUCT_Q)             -- direction of TPS bias
   ///   mean_abs_diff = mean |V - PUCT_Q|                    -- typical gap size
   ///   std_dev       = sqrt(max(0, sumSqDiff/n - bias^2))   -- dispersion (clamp for FP safety)
@@ -215,7 +176,7 @@ internal static class TPSDumpDiagnostics
       }
     }
 
-    lock (consoleLock)
+    lock (SearchDumpFormatting.ConsoleLock)
     {
       ConsoleUtils.WriteLineColored(ConsoleColor.Cyan,
         $"[TPS-BAK-STATS] last {windowSeconds:F1}s ({nonEmpty} bucket(s), {total} backups)");
@@ -247,67 +208,6 @@ internal static class TPSDumpDiagnostics
 
 
   /// <summary>
-  /// Formats a single row of per-child values with a '|' separator inserted
-  /// after the expanded/unexpanded boundary (i.e. after index boundaryIndex-1).
-  /// If boundaryIndex is &lt;= 0 or &gt;= count, no separator is inserted.
-  /// </summary>
-  public static string FormatRow(string label, int count, int boundaryIndex, Func<int, string> valueFunc)
-  {
-    StringBuilder sb = new();
-    sb.Append(label.PadRight(LABEL_WIDTH));
-    for (int i = 0; i < count; i++)
-    {
-      if (i > 0)
-      {
-        sb.Append(' ');
-      }
-      sb.Append(valueFunc(i));
-      if (i == boundaryIndex - 1 && boundaryIndex > 0 && boundaryIndex < count)
-      {
-        sb.Append(" |");
-      }
-    }
-    return sb.ToString();
-  }
-
-
-  /// <summary>
-  /// Formats a double with a fixed 6-char field width (sign + 0.000).
-  /// </summary>
-  private static string FmtQ(double v)
-  {
-    if (double.IsNaN(v))
-    {
-      return "  NaN ";
-    }
-    return v.ToString("+0.000;-0.000; 0.000").PadLeft(6);
-  }
-
-
-  /// <summary>
-  /// Formats a non-negative double (policy / pi) in [0,1] with 6 chars.
-  /// </summary>
-  private static string FmtP(double v)
-  {
-    if (double.IsNaN(v))
-    {
-      return "  NaN ";
-    }
-    return v.ToString("0.000").PadLeft(6);
-  }
-
-
-  /// <summary>
-  /// Formats an integer-valued visit count (edge.N / child.N) with no decimal point,
-  /// 6-char field to stay column-aligned with the other rows.
-  /// </summary>
-  private static string FmtNInt(double v)
-  {
-    return v.ToString("0").PadLeft(6);
-  }
-
-
-  /// <summary>
   /// Computes the value the standard (non-TPS) backup would produce:
   /// the visit-weighted child Q blended with the node's own network value V.
   /// Mirrors the TPS blend formula but uses empirical edge.N weights instead
@@ -334,98 +234,6 @@ internal static class TPSDumpDiagnostics
       return selfV;
     }
     return (childAvg * (totalN - 1) + selfV) / totalN;
-  }
-
-
-  /// <summary>
-  /// Writes a dump header line.  If significant is true, the header is rendered
-  /// in red to draw the eye; otherwise default color is used.
-  /// </summary>
-  private static void WriteHeaderLine(string header, bool significant)
-  {
-    if (significant)
-    {
-      ConsoleUtils.WriteLineColored(ConsoleColor.Red, header);
-    }
-    else
-    {
-      Console.WriteLine(header);
-    }
-  }
-
-
-  /// <summary>
-  /// Dump for PUCTSelector.ApplyRPOImputedFPU.
-  ///
-  /// Includes a "PUCT_FPU" comparison row showing what the prior non-RPO FPU
-  /// algorithm would have produced for each child: a single scalar defaultFPU
-  /// for every unvisited child, and the actual -W/N for visited children
-  /// (which both algorithms agree on).  The header is red-flagged when any
-  /// unvisited child's RPO-imputed Q differs from defaultFPU by more than
-  /// FPU_DIFF_THRESHOLD.
-  /// </summary>
-  public static void DumpFPURPO(GNode node,
-                                ReadOnlySpan<double> pSpan, ReadOnlySpan<double> nSpan, ReadOnlySpan<double> wSpan,
-                                ReadOnlySpan<double> qOut,
-                                int numToProcess, int numExpanded,
-                                double lambda, RPORegularization regularization, RPOAnchor anchor,
-                                double defaultFPU)
-  {
-    if (!DEBUG_DUMP_FPU_CALCS)
-    {
-      return;
-    }
-
-    string anchorStr = anchor.Mode == RPOAnchorMode.None
-      ? "None"
-      : (anchor.Mode == RPOAnchorMode.MatchChild
-          ? $"MatchChild(idx={anchor.Index},val={anchor.Value:F3})"
-          : $"MatchValue(val={anchor.Value:F3})");
-
-    // Copy spans into local arrays so the row-formatter lambdas (which cannot
-    // capture refs/spans) can read them.
-    double[] p = new double[numToProcess];
-    double[] q = new double[numToProcess];
-    double[] qO = new double[numToProcess];
-    double[] qPrior = new double[numToProcess];
-    double maxFPUDelta = 0.0;
-    for (int i = 0; i < numToProcess; i++)
-    {
-      p[i] = pSpan[i];
-      bool visited = i < numExpanded && nSpan[i] > 0;
-      q[i] = visited ? -wSpan[i] / nSpan[i] : double.NaN;
-      qO[i] = qOut[i];
-      // Prior (non-RPO) algorithm: visited children get their actual q; every
-      // unvisited child gets the same scalar defaultFPU.
-      qPrior[i] = visited ? q[i] : defaultFPU;
-      if (!visited)
-      {
-        double delta = Math.Abs(qO[i] - defaultFPU);
-        if (delta > maxFPUDelta)
-        {
-          maxFPUDelta = delta;
-        }
-      }
-    }
-    double nodeQ = node.Q;
-    bool significant = maxFPUDelta > FPU_DIFF_THRESHOLD;
-    if (ONLY_SHOW_SIGNIFICANT && !significant)
-    {
-      return;
-    }
-
-    lock (consoleLock)
-    {
-      Console.WriteLine();
-      WriteHeaderLine($"[FPU/RPO] NumEdgesExpanded={numExpanded}/{numToProcess} Q={nodeQ:F3} " +
-                      $"tau={lambda:F3} reg={regularization} anchor={anchorStr} " +
-                      $"defaultFPU={defaultFPU:F3} maxFPUDelta={maxFPUDelta:F3}", significant);
-      Console.WriteLine(FormatRow("Q_in (parent persp):", numToProcess, numExpanded, i => FmtQ(q[i])));
-      Console.WriteLine(FormatRow("P:", numToProcess, numExpanded, i => FmtP(p[i])));
-      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
-        FormatRow("Q_out (imputed):", numToProcess, numExpanded, i => FmtQ(qO[i])));
-      Console.WriteLine(FormatRow("PUCT_FPU (prior):", numToProcess, numExpanded, i => FmtQ(qPrior[i])));
-    }
   }
 
 
@@ -514,30 +322,31 @@ internal static class TPSDumpDiagnostics
     }
 
     bool significant = backupDelta > BACKUP_DIFF_THRESHOLD;
-    if (ONLY_SHOW_SIGNIFICANT && !significant)
+    if (SearchDumpFormatting.ONLY_SHOW_SIGNIFICANT && !significant)
     {
       return;
     }
 
     int boundary = numExpanded;
 
-    lock (consoleLock)
+    lock (SearchDumpFormatting.ConsoleLock)
     {
       Console.WriteLine();
-      WriteHeaderLine($"[TPS-BAK] numChildren={numChildren} (expanded={numExpanded}) " +
-                      $"N={totalN} sigmaBar={sigmaBar:F4} tau={tauBackup:F4} meanW={meanShrinkW:F3} " +
-                      $"nodeQ={nodeQ:F3} selfV={selfV:F3} consensusQ={consensusQ:F3} " +
-                      $"delta={backupDelta:F3}", significant);
-      Console.WriteLine(FormatRow("edgeN:", numChildren, boundary, i => FmtNInt(en[i])));
-      Console.WriteLine(FormatRow("childN:", numChildren, boundary, i => FmtNInt(ns[i])));
-      Console.WriteLine(FormatRow("Q_obs:", numChildren, boundary, i => FmtQ(qoDisplay[i])));
-      Console.WriteLine(FormatRow("Q_fpu (target):", numChildren, boundary, i => FmtQ(qfpu[i])));
-      Console.WriteLine(FormatRow("Q_tilde (robust):", numChildren, boundary, i => FmtQ(qt[i])));
-      Console.WriteLine(FormatRow("P:", numChildren, boundary, i => FmtP(m[i])));
+      SearchDumpFormatting.WriteHeaderLine(
+        $"[TPS-BAK] numChildren={numChildren} (expanded={numExpanded}) " +
+        $"N={totalN} sigmaBar={sigmaBar:F4} tau={tauBackup:F4} meanW={meanShrinkW:F3} " +
+        $"nodeQ={nodeQ:F3} selfV={selfV:F3} consensusQ={consensusQ:F3} " +
+        $"delta={backupDelta:F3}", significant);
+      Console.WriteLine(SearchDumpFormatting.FormatRow("edgeN:", numChildren, boundary, i => SearchDumpFormatting.FmtNInt(en[i])));
+      Console.WriteLine(SearchDumpFormatting.FormatRow("childN:", numChildren, boundary, i => SearchDumpFormatting.FmtNInt(ns[i])));
+      Console.WriteLine(SearchDumpFormatting.FormatRow("Q_obs:", numChildren, boundary, i => SearchDumpFormatting.FmtQ(qoDisplay[i])));
+      Console.WriteLine(SearchDumpFormatting.FormatRow("Q_fpu (target):", numChildren, boundary, i => SearchDumpFormatting.FmtQ(qfpu[i])));
+      Console.WriteLine(SearchDumpFormatting.FormatRow("Q_tilde (robust):", numChildren, boundary, i => SearchDumpFormatting.FmtQ(qt[i])));
+      Console.WriteLine(SearchDumpFormatting.FormatRow("P:", numChildren, boundary, i => SearchDumpFormatting.FmtP(m[i])));
       ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
-        FormatRow("pi_tilde:", numChildren, boundary, i => FmtP(pi[i])));
+        SearchDumpFormatting.FormatRow("pi_tilde:", numChildren, boundary, i => SearchDumpFormatting.FmtP(pi[i])));
       ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
-        FormatRow("contribution:", numChildren, boundary, i => FmtQ(contrib[i])));
+        SearchDumpFormatting.FormatRow("contribution:", numChildren, boundary, i => SearchDumpFormatting.FmtQ(contrib[i])));
       ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
         $"V={vBar:F4} (childContrib={childContribution:F4}, totalN={totalN})    PUCT_Q={puctQ:F4}");
     }

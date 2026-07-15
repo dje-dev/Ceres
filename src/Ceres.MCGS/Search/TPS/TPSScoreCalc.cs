@@ -20,10 +20,11 @@ using Ceres.MCGS.Graphs.GEdgeHeaders;
 using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Search.Params;
+using Ceres.MCGS.Search.PUCT;
 
 #endregion
 
-namespace Ceres.MCGS.Search.PUCT;
+namespace Ceres.MCGS.Search.TPS;
 
 /// <summary>
 /// Read-side source for the MUTABLE node/edge statistics consumed by

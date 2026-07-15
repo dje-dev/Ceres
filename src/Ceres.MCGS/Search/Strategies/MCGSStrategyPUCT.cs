@@ -30,6 +30,7 @@ using Ceres.MCGS.Managers;
 using Ceres.MCGS.Search.Coordination;
 using Ceres.MCGS.Search.Params;
 using Ceres.MCGS.Search.PUCT;
+using Ceres.MCGS.Search.TPS;
 
 #endregion
 

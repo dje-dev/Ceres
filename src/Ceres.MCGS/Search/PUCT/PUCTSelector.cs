@@ -365,9 +365,9 @@ public static class PUCTSelector
       result[i] = thisResult > maxQ ? maxQ : thisResult;
     }
 
-    if (TPSDumpDiagnostics.DEBUG_DUMP_FPU_CALCS)
+    if (FPUDumpDiagnostics.DEBUG_DUMP_FPU_CALCS)
     {
-      TPSDumpDiagnostics.DumpFPURPO(node, pSpan, nSpan, wSpan, resultSpan,
+      FPUDumpDiagnostics.DumpFPURPO(node, pSpan, nSpan, wSpan, resultSpan,
                                     numToProcess, numExpanded,
                                     lambda, regularization, anchor, defaultFPU);
     }
