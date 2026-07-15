@@ -1278,16 +1278,12 @@ public unsafe partial class Graph : IDisposable
   /// <param name="dualCollisionFraction"></param>
   /// <param name="stats"></param>
   /// <param name="refreshStaleEdges"></param>
-  /// <param name="crossParentNActive">If true, edges to multi-parent (transposition) children are also
-  /// refreshed from child.Q during gather so that cross-parent backups become visible to ScoreCalc and
-  /// ComputeVBar.  Only meaningful when CBGPUCT_CrossParentNFraction > 0.</param>
   internal void GatherChildInfoViaChildren(GNode node,
                                            int iteratorID,
                                            int maxIndex,
                                            float dualCollisionFraction,
                                            GatheredChildStats stats,
-                                           bool refreshStaleEdges,
-                                           bool crossParentNActive)
+                                           bool refreshStaleEdges)
   {
     Debug.Assert(node.IsSearchRoot || node.IsLocked);
     Debug.Assert(!node.BlockIndexIntoEdgeHeaderStoreIsDeferred);
@@ -1331,29 +1327,12 @@ public unsafe partial class Graph : IDisposable
         int thisEdgeBlockIndex = childEdgeHeaders[i].EdgeStoreBlockIndex;
         ref GEdgeStruct refEdge = ref node.EdgeStructAtIndexRef(thisEdgeBlockIndex, i);
 
-        // Refresh the edge Q if it was marked stale and requested.  Additionally, when CBGPUCT
-        // cross-parent N is active, proactively refresh edges to multi-parent (transposition)
-        // children: their child.Q is updated by backups via OTHER parents and would otherwise
-        // remain unobserved here (see ComputeVBar / ScoreCalc -W/N).  Skip terminal edges
-        // (no destination node) and edges flagged for a known opponent draw at the child
-        // (preserves the deliberate QChild=0 workaround in BackupToEdge).
-        if (refreshStaleEdges)
+        // Refresh the edge Q if it was marked stale and requested.
+        if (refreshStaleEdges && refEdge.IsStale)
         {
-          bool needsRefresh = refEdge.IsStale;
-          if (!needsRefresh
-              && crossParentNActive
-              && refEdge.Type == GEdgeStruct.EdgeType.ChildEdge
-              && !refEdge.ChildNodeHasDrawKnownToExist)
-          {
-            GNode candidateChild = new GNode(node.Graph, refEdge.ChildNodeIndex);
-            needsRefresh = candidateChild.NumParentsMoreThanOne;
-          }
-          if (needsRefresh)
-          {
-            GNode childNode = new GNode(node.Graph, refEdge.ChildNodeIndex);
-            refEdge.QChild = childNode.Q;
-            refEdge.IsStale = false;
-          }
+          GNode childNode = new GNode(node.Graph, refEdge.ChildNodeIndex);
+          refEdge.QChild = childNode.Q;
+          refEdge.IsStale = false;
         }
 
         p[i] = refEdge.P;

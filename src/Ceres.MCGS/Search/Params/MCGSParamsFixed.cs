@@ -94,11 +94,11 @@ public static class MCGSParamsFixed
   public const bool VALIDATE_GRAPH_EACH_BATCH = false;
 
   /// <summary>
-  /// If true, CB-GPUCT (Confidence-Bound Graph PUCT) major operations
-  /// emit console traces: activation banner, V_bar recomputation
-  /// (with vanilla-Q comparison), and root-level selection summaries.
+  /// If true, TPS (Tempered Posterior Search) major operations emit console
+  /// traces: activation banner and backup V recomputation (with vanilla
+  /// visit-weighted-Q comparison when the deviation is large).
   /// </summary>
-  public const bool DEBUG_CBGPUCT = false;
+  public const bool DEBUG_TPS = false;
 
   public const int LOGGING_EXCLUDE_ITERATOR_NUM = -1;
 

@@ -61,20 +61,20 @@ internal static class QRecomputeHelper
   /// flag is cleared since the edge is now exactly current.
   ///
   /// The recompute mirrors the engine's backup rule:
-  ///   - CB-GPUCT backup active : the regularized V_bar (CBGPUCTScoreCalc.ComputeVBar).
-  ///   - otherwise              : pure Q = (sum over children of -edge.Q * edge.N + V) / N.
+  ///   - regularized backup active : the TPS tempered posterior (TPSScoreCalc.ComputeVBar).
+  ///   - otherwise                 : pure Q = (sum over children of -edge.Q * edge.N + V) / N.
   /// Edges with N == 0 are skipped (no contribution; also avoids a NaN * 0). The result is
   /// idempotent: recomputing a node whose children are unchanged yields the same Q.
   /// </summary>
   /// <param name="node"></param>
   /// <param name="snapshotOrEmpty">Snapshot of node Q by index, or empty to read child Q live.</param>
   /// <param name="paramsSelect"></param>
-  /// <param name="cbgPUCTBackupActive"></param>
+  /// <param name="regularizedBackupActive">ParamsSelect.RegularizedBackupActive (hoisted by callers).</param>
   /// <returns>The newly stored Q value.</returns>
   internal static double RecomputeNodeQ(GNode node,
                                         ReadOnlySpan<double> snapshotOrEmpty,
                                         ParamsSelect paramsSelect,
-                                        bool cbgPUCTBackupActive)
+                                        bool regularizedBackupActive)
   {
     bool useSnapshot = !snapshotOrEmpty.IsEmpty;
     int numExpanded = node.NumEdgesExpanded;
@@ -111,11 +111,11 @@ internal static class QRecomputeHelper
       sumChildW += -edge.Q * edge.N;
     }
 
-    if (cbgPUCTBackupActive)
+    if (regularizedBackupActive)
     {
-      // Mirror MCGSStrategyPUCT.BackupToNode under CB-GPUCT (CBGPUCT_Mode BackupOnly or
-      // SelectAndBackup): store the regularized V_bar, recomputed from the now-current child stats.
-      double vBar = CBGPUCTScoreCalc.ComputeVBar(node, paramsSelect);
+      // Mirror MCGSStrategyPUCT.BackupToNode under the TPS backup: store the
+      // tempered-posterior value recomputed from the now-current child stats.
+      double vBar = TPSScoreCalc.ComputeVBar(node, paramsSelect);
       node.NodeRef.Q = vBar;
       return vBar;
     }

@@ -156,11 +156,11 @@ public sealed class SelectiveQPropagator
     long startTicks = Stopwatch.GetTimestamp();
 
     ParamsSelect paramsSelect = Engine.Manager.ParamsSelect;
-    bool cbgPUCTBackupActive = paramsSelect.CBGPUCTBackupActive;
+    bool regularizedBackupActive = paramsSelect.RegularizedBackupActive;
 
     PassStats stats = default;
     Seed(paths, ref stats);
-    Drain(budget, paramsSelect, cbgPUCTBackupActive, ref stats);
+    Drain(budget, paramsSelect, regularizedBackupActive, ref stats);
 
     double passMilliseconds = (Stopwatch.GetTimestamp() - startTicks) * 1000.0 / Stopwatch.Frequency;
 
@@ -218,7 +218,7 @@ public sealed class SelectiveQPropagator
   /// <summary>
   /// Drains up to <paramref name="budget"/> parent recomputes, cascading upward.
   /// </summary>
-  void Drain(int budget, ParamsSelect paramsSelect, bool cbgPUCTBackupActive, ref PassStats stats)
+  void Drain(int budget, ParamsSelect paramsSelect, bool regularizedBackupActive, ref PassStats stats)
   {
     Graph graph = Engine.Graph;
 
@@ -236,7 +236,7 @@ public sealed class SelectiveQPropagator
       }
 
       stats.Pops++;
-      ProcessParents(node, paramsSelect, cbgPUCTBackupActive, ref stats);
+      ProcessParents(node, paramsSelect, regularizedBackupActive, ref stats);
     }
   }
 
@@ -245,7 +245,7 @@ public sealed class SelectiveQPropagator
   /// For each parent P of <paramref name="node"/> whose edge to it is stale, refreshes that edge and
   /// recomputes P (idempotent), cascading to P's parents if P's Q changed by more than epsilon.
   /// </summary>
-  void ProcessParents(GNode node, ParamsSelect paramsSelect, bool cbgPUCTBackupActive, ref PassStats stats)
+  void ProcessParents(GNode node, ParamsSelect paramsSelect, bool regularizedBackupActive, ref PassStats stats)
   {
     double nodeQ = node.Q;
 
@@ -274,7 +274,7 @@ public sealed class SelectiveQPropagator
 
       // Full live recompute refreshes ALL of parent's child edges (incl. this one) and clears their
       // IsStale; idempotent, so it never double-counts with the incremental/lazy paths.
-      double newQ = QRecomputeHelper.RecomputeNodeQ(parent, ReadOnlySpan<double>.Empty, paramsSelect, cbgPUCTBackupActive);
+      double newQ = QRecomputeHelper.RecomputeNodeQ(parent, ReadOnlySpan<double>.Empty, paramsSelect, regularizedBackupActive);
 
       // Keep the (display-only) draw probability D fresh alongside Q. Live reads are safe here:
       // this pass runs in the quiescent post-backup region (no concurrent in-place D writes).

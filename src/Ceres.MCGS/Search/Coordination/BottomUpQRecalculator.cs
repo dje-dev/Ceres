@@ -54,10 +54,9 @@ namespace Ceres.MCGS.Search.Coordination;
 /// For each node the cached child-Q on every outgoing edge is first refreshed from the
 /// snapshot child Q, then Q is recomputed using exactly the backup rule the engine applies,
 /// so the recomputed values remain self-consistent with subsequent search:
-///   - standard mode   : pure Q = (sum over children of -edge.Q * edge.N + V) / N
-///   - CB-GPUCT backup : the regularized V_bar (CBGPUCTScoreCalc.ComputeVBar), which is the
-///                       rule used whenever ParamsSelect.CBGPUCTBackupActive is true (i.e.
-///                       CBGPUCT_Mode is BackupOnly or SelectAndBackup).
+///   - standard mode : pure Q = (sum over children of -edge.Q * edge.N + V) / N
+///   - TPS backup    : the tempered posterior (TPSScoreCalc.ComputeVBar), which is the
+///                     rule used whenever ParamsSelect.TPSBackupActive is true.
 ///
 /// The magnitude of the change (delta) applied to each node's Q is tracked, and once per
 /// (approximately) 60 second interval a single yellow summary line is written to the Console.
@@ -186,7 +185,7 @@ public sealed class BottomUpQRecalculator
   {
     Graph graph = Engine.Graph;
     ParamsSelect paramsSelect = Engine.Manager.ParamsSelect;
-    bool cbgPUCTBackupActive = paramsSelect.CBGPUCTBackupActive;
+    bool regularizedBackupActive = paramsSelect.RegularizedBackupActive;
     int numTotalNodes = graph.NodesStore.NumTotalNodes;
 
     // Ensure snapshot buffer capacity (grown geometrically; never shrunk). Safe without
@@ -237,7 +236,7 @@ public sealed class BottomUpQRecalculator
           }
 
           double oldQ = node.Q;
-          double newQ = QRecomputeHelper.RecomputeNodeQ(node, snapshot, paramsSelect, cbgPUCTBackupActive);
+          double newQ = QRecomputeHelper.RecomputeNodeQ(node, snapshot, paramsSelect, regularizedBackupActive);
 
           // Recompute the (display-only) draw probability D from the D snapshot, in tandem with Q.
           // Delta stats below track Q only; D is maintained for free off the same sweep.

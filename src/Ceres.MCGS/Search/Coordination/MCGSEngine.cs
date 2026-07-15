@@ -563,7 +563,7 @@ public partial class MCGSEngine
   /// root), growing the existing graph. Each round sends exactly one visit to each still-active
   /// node; rollouts are aggregated into shared NN batches and backed up (propagating each value up
   /// to the search root). The exploration term in selection is scaled by explorationMultiplier
-  /// (CPUCT for PUCT, CBGPUCT_SelectLambdaC for CBGPUCT). When stopNodeVisitsIfTerminalReached is
+  /// (CPUCT). When stopNodeVisitsIfTerminalReached is
   /// true, a node whose rollout reaches a terminal leaf is dropped from subsequent rounds.
   ///
   /// startNodes must already be filtered to evaluated, non-terminal, strict descendants of the

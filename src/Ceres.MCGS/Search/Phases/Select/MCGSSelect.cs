@@ -368,47 +368,6 @@ public class MCGSSelect
                                            Engine.Manager.RootMovesPruningStatus,
                                            out childVisitCounts, out scores);
 
-      // CB-GPUCT graph-aware absorption: ScoreCalc may have refused to allocate
-      // some (or all) of the requested visits when every child was already at or
-      // over its pi_bar visit target. The unallocated visits are absorbed at the
-      // parent here - increment N, keep Q stable (delta_W = parent.Q * deltaN so
-      // the visit-weighted Q is unchanged; in V_bar mode the value gets recomputed
-      // from current child stats and is also unchanged since children weren't touched).
-      int numAbsorbedAtParent = numAttemptedVisits - childStats.NumVisitsAccepted;
-      if (numAbsorbedAtParent > 0
-          && paramsSelect.CBGPUCTSelectActive
-          && paramsSelect.CBGPUCT_SelectCrossParentNEnabled)
-      {
-        if (iterator.ProbeSuppressGraphWrites)
-        {
-          // Absorption performs a real BackupToNode during select which cannot be dropped.
-          throw new NotSupportedException("CBGPUCT cross-parent absorption is not supported in probe mode");
-        }
-
-        strategy.BackupToNode(parentNode, numAbsorbedAtParent,
-                              parentNode.Q * numAbsorbedAtParent,
-                              parentNode.D * numAbsorbedAtParent);
-        if (MCGSParamsFixed.DEBUG_CBGPUCT)
-        {
-          Console.WriteLine($"[CBGPUCT] absorb at parent node=#{parentNode.Index.Index} "
-                          + $"absorbed={numAbsorbedAtParent} (of {numAttemptedVisits}) "
-                          + $"newN={parentNode.N} Q={parentNode.Q:+0.0000;-0.0000}");
-        }
-        // Back out the absorbed visits' attempted/pending-backup counters and edge
-        // in-flight on the ancestor edges (edge into parentNode and above), exactly as
-        // the expansion-block and suboptimality drop paths do. BackupToNode above only
-        // bumped parentNode.N; without this backout the backup-phase merge counters at
-        // this node never reach zero, so ancestor backups (including the edge in-flight
-        // decrements all the way to the root) are silently lost - leaking permanent
-        // virtual visits that suppress selection of these edges for the rest of the
-        // (graph-reused) search.
-        pathsSet.RecordDroppedVisits(path, numAbsorbedAtParent);
-
-        // Reduce numAttemptedVisits so downstream assertions and processing reflect
-        // only the visits that actually went to children.
-        numAttemptedVisits = childStats.NumVisitsAccepted;
-      }
-
 #if DEBUG // Temporarily using conditional compilation due to TensorPrimives versioning issue
       Debug.Assert(enablePUCSuboptimalityThreshold || TensorPrimitives.Sum(childVisitCounts) == numAttemptedVisits);
 #endif
@@ -431,17 +390,16 @@ public class MCGSSelect
       //   - we can ask SelectChildren to refresh edges above, safe in the knowledge that these updates will 
       //     be applied to the parent node here (maintaining correctness of the pure Q).
 
-      Debug.Assert(parentNode.N == childStats.SumN
-                || (paramsSelect.CBGPUCTSelectActive && paramsSelect.CBGPUCT_SelectCrossParentNEnabled));
+      Debug.Assert(parentNode.N == childStats.SumN);
 
       if (MCGSParamsFixed.RESET_Q_DURING_SELECT_PHASE_FROM_ALL_CHILDREN
        && !iterator.ProbeSuppressGraphWrites) // probe mode: the reset writes node Q (heals real desync, not a no-op)
       {
-        if (paramsSelect.CBGPUCTBackupActive)
+        if (paramsSelect.TPSBackupActive)
         {
-          // No-op: under CBGPUCT, parent.Q is recomputed by ComputeVBar during BackupToNode,
-          // and edge.QChild for multi-parent transposition edges is now refreshed proactively
-          // in Graph.GatherChildInfoViaChildren (gated on CBGPUCT_CrossParentNEnabled).
+          // No-op: under the TPS backup, parent.Q is recomputed by TPSScoreCalc.ComputeVBar
+          // during BackupToNode - resetting it here from the pure visit-weighted child
+          // average would silently overwrite that value every select.
         }
         else
         {
@@ -1588,20 +1546,6 @@ public class MCGSSelect
       expansionBlocked = true;
       return;
     }
-
-    // CB-GPUCT: when CBGPUCT_CrossParentNFraction > 0, seed edge.QChild from child.Q
-    // for transposition links so that ComputeVBar / ScoreCalc do not read an invalid
-    // -edge.Q=0 before the first BackupToEdge.  edge.N stays at 0 (its per-edge default);
-    // any cross-parent contribution is folded in on the fly by ScoreCalc via the
-    // blend in CBGPUCT_CrossParentNFraction.  Terminal edges have no destination node,
-    // so we skip them.
-    ParamsSelect ps = iterator.Engine.Manager.ParamsSelect;
-    if (ps.CBGPUCTSelectActive && ps.CBGPUCT_SelectCrossParentNEnabled && !wasCollision
-        && childEdge.Type == GEdgeStruct.EdgeType.ChildEdge)
-    {
-      childEdge.QChild = childEdge.ChildNode.Q;
-    }
-
 
     if (childPosInfo.isDrawByRepetitionInCoalesceMode)
     {

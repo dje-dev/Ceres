@@ -108,8 +108,7 @@ public static class PUCTSelector
     //       have special version of Gather which didn't bother with that
 
 
-    graph.GatherChildInfoViaChildren(node, selectorID, maxChildIndex, dualCollisionFraction, stats, refreshStaleEdges,
-                                     crossParentNActive: paramsSelect.CBGPUCTSelectActive && paramsSelect.CBGPUCT_SelectCrossParentNEnabled);
+    graph.GatherChildInfoViaChildren(node, selectorID, maxChildIndex, dualCollisionFraction, stats, refreshStaleEdges);
 
     // Possibly use action head directly
     double[] qWhenNoChildrenComposite = null;
@@ -275,15 +274,11 @@ public static class PUCTSelector
       //   - Per-child FPU (ActionHead or PolicyImputedRPO): the imputed per-child q is not
       //     monotonic in policy, so a later unvisited child can outscore an earlier one.
       //     qWhenNoChildrenComposite is non-null exactly when per-child FPU was built above.
-      //   - CB-GPUCT: the visit-target pi_bar reflects (mu, q) jointly, so cross-parent
-      //     N skew, per-child FPU, and (rarely) fixed-point iteration with clamp-induced
-      //     ties can produce a non-monotonic deficit ordering among unvisited children.
       // Leaving a hole (an unexpanded slot before another that got a visit) corrupts memory
       // in Graph.InitializeNewEdge, so the fixup must run for every per-child path.  It is
       // cheap and only relocates visits when an actual hole is present.
       if (numTargetVisits > 0
-          && (qWhenNoChildrenComposite != null
-              || paramsSelect.CBGPUCTSelectActiveAtN(nodeRef.N)))
+          && qWhenNoChildrenComposite != null)
       {
         FillInSequentialVisitHoles(childVisitCounts, ref node.NodeRef, numToProcess);
       }
@@ -331,13 +326,13 @@ public static class PUCTSelector
       qIn[i] = (i < numExpanded && nSpan[i] > 0) ? -wSpan[i] / nSpan[i] : double.NaN;
     }
 
-    // Anchor VALUE is dispatched by CBGPUCT_QAnchorTypeFPU (default ParentQ = node.Q,
+    // Anchor VALUE is dispatched by FPU_QAnchorType (default ParentQ = node.Q,
     // matching legacy behavior).  Anchor MODE selection (MatchChild vs MatchValue) is
     // independent of the value and stays based on whether child 0 is visited - this
     // affects only the q calibration formula's intercept, not the value being matched.
     // The reverse-KL path ignores the anchor entirely (must be None there).
     RPORegularization regularization = paramsSelect.RPOFPURegularization;
-    double anchorValue = CBGPUCTScoreCalc.ComputeImputationAnchor(paramsSelect.CBGPUCT_QAnchorTypeFPU, node, qIn, numToProcess);
+    double anchorValue = RPOImputation.ComputeImputationAnchor(paramsSelect.FPU_QAnchorType, node, qIn, numToProcess);
     RPOAnchor anchor = regularization == RPORegularization.ReverseKL
       ? RPOAnchor.None
       : (nSpan[0] > 0
@@ -370,11 +365,11 @@ public static class PUCTSelector
       result[i] = thisResult > maxQ ? maxQ : thisResult;
     }
 
-    if (CBGPUCTDumpDiagnostics.DEBUG_DUMP_FPU_CALCS)
+    if (TPSDumpDiagnostics.DEBUG_DUMP_FPU_CALCS)
     {
-      CBGPUCTDumpDiagnostics.DumpFPURPO(node, pSpan, nSpan, wSpan, resultSpan,
-                                        numToProcess, numExpanded,
-                                        lambda, regularization, anchor, defaultFPU);
+      TPSDumpDiagnostics.DumpFPURPO(node, pSpan, nSpan, wSpan, resultSpan,
+                                    numToProcess, numExpanded,
+                                    lambda, regularization, anchor, defaultFPU);
     }
 
     return result;

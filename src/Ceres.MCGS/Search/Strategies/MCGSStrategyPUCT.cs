@@ -669,14 +669,14 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
       // Q should have already been set and will not change.
       Debug.Assert(node.Q >= 0.995);
     }
-    else if (ParamsSelect.CBGPUCTBackupActive)
+    else if (ParamsSelect.TPSBackupActive)
     {
-      // CB-GPUCT regularized backup: store V_bar (Grill reverse-KL) directly as Q.
+      // TPS tempered-posterior backup: store the recomputed value directly as Q.
       // The existing edge.QChild refresh path then propagates it upward unchanged.
-      // deltaW is intentionally ignored: V_bar is recomputed from current child stats.
-      double vBar = CBGPUCTScoreCalc.ComputeVBar(node, ParamsSelect);
+      // deltaW is intentionally ignored: the value is recomputed from current child stats.
+      double vBar = TPSScoreCalc.ComputeVBar(node, ParamsSelect);
 
-      if (MCGSParamsFixed.DEBUG_CBGPUCT)
+      if (MCGSParamsFixed.DEBUG_TPS)
       {
         // Fair vanilla comparison: visit-weighted child Q (parent perspective) plus self V.
         int nc = node.NumEdgesExpanded;
@@ -690,17 +690,14 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
         }
         double vanillaQ = (sumChildW + node.NodeRef.V) / (sumChildN + 1);
 
-        // Suppress trace when V_bar essentially matches the vanilla visit-weighted Q
+        // Suppress trace when V essentially matches the vanilla visit-weighted Q
         // (most backups when the regularization isn't shifting Q meaningfully).
         const double MIN_DELTA_TO_LOG = 0.25;
         if (Math.Abs(vBar - vanillaQ) > MIN_DELTA_TO_LOG)
         {
-          double lambdaN = (nc == 0 || sumChildN == 0)
-            ? 0
-            : CBGPUCTScoreCalc.ComputeLambdaNForBackup(ParamsSelect, sumChildN, nc);
-          Console.WriteLine($"[CBGPUCT] V_bar node=#{node.Index.Index} N={node.N} expanded={nc} "
-                          + $"sumChildN={sumChildN:F0} lambda_N={lambdaN:F4} "
-                          + $"V_bar={vBar:+0.0000;-0.0000} vanilla_Q={vanillaQ:+0.0000;-0.0000} "
+          Console.WriteLine($"[TPS] V node=#{node.Index.Index} N={node.N} expanded={nc} "
+                          + $"sumChildN={sumChildN:F0} "
+                          + $"V={vBar:+0.0000;-0.0000} vanilla_Q={vanillaQ:+0.0000;-0.0000} "
                           + $"delta={(vBar - vanillaQ):+0.0000;-0.0000}");
         }
       }
@@ -727,12 +724,8 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
     }
 
 #if DEBUG
-    // edge.N is always the per-edge visit count (cross-parent N is folded in on the
-    // fly by CBGPUCTScoreCalc.ScoreCalc and not stored in edge.N).  The +1 accounts
-    // for the parent's own first visit.  Under CBGPUCT_CrossParentN, leftover visits
-    // can be absorbed at the parent (MCGSSelect.cs ~line 303) which bumps node.N
-    // without touching any child edge, so the gap can exceed 1; we still require it
-    // to be at least 1.
+    // edge.N is always the per-edge visit count; the +1 accounts for the parent's own
+    // first visit.
     {
       int count = 0;
       for (int i = 0; i < node.NumEdgesExpanded; i++)
@@ -740,14 +733,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
         count += node.ChildEdgeAtIndex(i).N;
       }
       int expected = count + (node.NodeRef.Terminal.IsTerminal() ? node.N : 1);
-      if (ParamsSelect.CBGPUCT_SelectCrossParentNEnabled)
-      {
-        Debug.Assert(node.N >= expected);
-      }
-      else
-      {
-        Debug.Assert(node.N == expected);
-      }
+      Debug.Assert(node.N == expected);
     }
 #endif
   }

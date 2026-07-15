@@ -572,10 +572,20 @@ public static class RegularizedPolicyOptimum
 
     // Bracket [xl, xh] for the strictly-increasing g(a) = 1 - S(a):
     //   xl just above the largest active qEff, where S -> +inf  => g(xl) < 0
-    //   xh grown (doubling the span above maxQEff) until S(xh) < 1 => g(xh) > 0
+    //   xh: analytic upper bound.  At a = maxQEff + sumCoeff every active term satisfies
+    //   coeff_i/(a - qEff_i) <= coeff_i/sumCoeff, so S(a) <= 1; a tiny relative margin makes
+    //   the inequality strict (covers the single-active-child equality case).  This brackets
+    //   in one evaluation and starts the solve far tighter than the historical maxQEff + 1
+    //   (sumCoeff is typically the lambda scale, i.e. << 1).  The doubling expansion below is
+    //   retained purely as an FP-safety fallback.
+    double sumCoeff = 0.0;
+    for (int i = 0; i < coeff.Length; i++)
+    {
+      sumCoeff += coeff[i];
+    }
     double xl = maxQEff + EPS;
-    double xh = maxQEff + 1.0;
-    if (!(xh > xl))
+    double xh = maxQEff + (sumCoeff * (1.0 + 1e-9)) + EPS;
+    if (!(xh > xl) || !IsFinite(xh))
     {
       xh = xl + 1.0;
     }
@@ -685,16 +695,29 @@ public static class RegularizedPolicyOptimum
                                       Span<double> d, Span<double> ratio,
                                       out double s, out double sPrime)
   {
-    // d_i = qEff_i - alpha
-    TensorPrimitives.Subtract(qEff, alpha, d);
-
-    // ratio_i = coeff_i / d_i ;  S = sum_i coeff_i/(alpha - qEff_i) = -sum_i ratio_i
-    TensorPrimitives.Divide(coeff, d, ratio);
-    s = -TensorPrimitives.Sum(ratio);
-
-    // ratio_i <- ratio_i / d_i = coeff_i / d_i^2 = coeff_i/(alpha - qEff_i)^2 ;  S' = -sum_i ratio_i
-    TensorPrimitives.Divide(ratio, d, ratio);
-    sPrime = -TensorPrimitives.Sum(ratio);
+    // Fused single pass with one reciprocal per active element.  This replaced a 5-pass
+    // TensorPrimitives formulation (Subtract, Divide, Sum, Divide, Sum): for the typical
+    // n = 5-80 the per-call dispatch and intermediate span traffic of five vector passes
+    // exceeds the cost of one scalar loop, and the reciprocal-and-multiply form trades the
+    // second division for a multiply.  Results differ from the vector form only by FP
+    // rounding (reassociation of the sums).  The d/ratio scratch spans are retained in the
+    // signature for call-site compatibility but are no longer written.
+    double sum = 0.0;
+    double sumDeriv = 0.0;
+    int n = coeff.Length;
+    for (int i = 0; i < n; i++)
+    {
+      double c = coeff[i];
+      if (c != 0.0)
+      {
+        double inv = 1.0 / (alpha - qEff[i]);
+        double r = c * inv;
+        sum += r;
+        sumDeriv += r * inv;
+      }
+    }
+    s = sum;            // S(alpha)  =  sum_i coeff_i/(alpha - qEff_i)
+    sPrime = -sumDeriv; // S'(alpha) = -sum_i coeff_i/(alpha - qEff_i)^2
   }
 
 
