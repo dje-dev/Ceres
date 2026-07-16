@@ -219,7 +219,10 @@ namespace Ceres.Base.DataType
     /// <returns></returns>
     public static T[][] ToArrayOfArray<T>(Span<T> raw, int numInner)
     {
-      if (raw == null) return null;
+      if (raw.IsEmpty)
+      {
+        return null;
+      }
 
       if (raw.Length % numInner != 0) throw new Exception("does not evenly divide");
       int numOuter = raw.Length / numInner;
@@ -294,7 +297,10 @@ namespace Ceres.Base.DataType
     /// <returns></returns>
     public static T[,] To2D<T>(Span<T> raw, int numInner)
     {
-      if (raw == null) return null;
+      if (raw.IsEmpty)
+      {
+        return null;
+      }
 
       if (raw.Length % numInner != 0)
       {
@@ -319,7 +325,7 @@ namespace Ceres.Base.DataType
     /// <exception cref="Exception"></exception>
     public static T[,,] To3D<T>(Span<T> raw, int dimSecond, int dimThird)
     {
-      if (raw == null)
+      if (raw.IsEmpty)
       {
         return null;
       }
@@ -344,7 +350,10 @@ namespace Ceres.Base.DataType
     /// <returns></returns>
     public static T[,] To2DShuffled<T>(Span<T> raw, int numInner)
     {
-      if (raw == null) return null;
+      if (raw.IsEmpty)
+      {
+        return null;
+      }
 
       if (raw.Length % numInner != 0) throw new Exception("does not evenly divide");
       int numOuter = raw.Length / numInner;
