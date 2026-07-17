@@ -172,6 +172,8 @@ internal static class TPSScoreCalc
   [ThreadStatic] private static double[] bufferQFpu;
   [ThreadStatic] private static double[] bufferQTilde;
   [ThreadStatic] private static double[] bufferPiTilde;
+  [ThreadStatic] private static double[] bufferLearnedSigma;
+  [ThreadStatic] private static double[] bufferLearnedPrior;
 
   #endregion
 
@@ -197,7 +199,9 @@ internal static class TPSScoreCalc
                                      int numChildren,
                                      Span<double> qFpuOut, Span<double> qTildeOut,
                                      out double sigmaBar, out int kVisited,
-                                     out double meanShrinkW, out double consensusQ)
+                                     out double meanShrinkW, out double consensusQ,
+                                     ReadOnlySpan<double> learnedSigma = default,
+                                     ReadOnlySpan<double> learnedPrior = default)
   {
     // Consensus q_bar over visited children (weights mu * saturating support gate).
     double sumW = 0.0;
@@ -248,8 +252,23 @@ internal static class TPSScoreCalc
         ? FrozenS
         : ((n >= MIN_CHILD_N_FOR_OWN_SIGMA && sChild[i] > 0.0) ? sChild[i] : sParent);
       double sigmaHat = Math.Clamp(s / Math.Sqrt(n + 1.0), SIGMA_HAT_MIN, SIGMA_HAT_MAX);
+
+      // Q-uncertainty M5a: the model's learned per-child sigma replaces the closed
+      // form (for shrinkage weighting AND, via medSigma below, the temperature).
+      if (!learnedSigma.IsEmpty && !double.IsNaN(learnedSigma[i]))
+      {
+        sigmaHat = Math.Clamp(learnedSigma[i], SIGMA_HAT_MIN, SIGMA_HAT_MAX);
+      }
+
       double w = sigma0Sq / (sigma0Sq + sigmaHat * sigmaHat);
-      qTildeOut[i] = w * qObs[i] + (1.0 - w) * qFpuOut[i];
+
+      // Q-uncertainty M5b: shrink toward the learned forecast mean instead of the
+      // policy-imputed prior.
+      double shrinkTarget = (!learnedPrior.IsEmpty && !double.IsNaN(learnedPrior[i]))
+        ? learnedPrior[i]
+        : qFpuOut[i];
+
+      qTildeOut[i] = w * qObs[i] + (1.0 - w) * shrinkTarget;
       sumShrinkW += w;
 
       medSigma[medCount] = sigmaHat;
@@ -384,8 +403,14 @@ internal static class TPSScoreCalc
   /// diagnostic/statistics side channels are suppressed (they describe the live search,
   /// not hypothetical replays). Used by the QProbe shadow backup to compute hypothetical
   /// TPS backup values with bit-identical arithmetic.
+  ///
+  /// When quncContext is non-null (live backups only, never overlay replays) and its
+  /// M5a/M5b methods are configured, per-child learned (mu, sigma) forecasts are read
+  /// CACHE-ONLY (populated by select-time gathers; closed-form fallback on miss) and
+  /// substituted into the shrinkage kernel.
   /// </summary>
-  internal static double ComputeVBar(GNode node, ParamsSelect paramsSelect, ITPSStatsOverlay overlay)
+  internal static double ComputeVBar(GNode node, ParamsSelect paramsSelect, ITPSStatsOverlay overlay,
+                                     Search.QProbeSelect.QUncSelectContext quncContext = null)
   {
     int numExpanded = node.NumEdgesExpanded;
     if (numExpanded == 0)
@@ -420,6 +445,19 @@ internal static class TPSScoreCalc
     Span<double> nSupport = (bufferNSupport ??= new double[cap]).AsSpan(0, numChildren);
     Span<double> sChild = (bufferSChild ??= new double[cap]).AsSpan(0, numChildren);
 
+    // Q-uncertainty M5a/M5b: live backups only (never overlay replays). Entries stay
+    // NaN (= use closed forms) unless a fresh cached forecast exists for the child.
+    bool quncActive = quncContext != null && overlay == null && quncContext.BackupMethodsActive;
+    Span<double> learnedSigma = default;
+    Span<double> learnedPrior = default;
+    if (quncActive)
+    {
+      learnedSigma = (bufferLearnedSigma ??= new double[cap]).AsSpan(0, numChildren);
+      learnedPrior = (bufferLearnedPrior ??= new double[cap]).AsSpan(0, numChildren);
+      learnedSigma.Fill(double.NaN);
+      learnedPrior.Fill(double.NaN);
+    }
+
     double sumEdgeN = 0.0;   // for the diagnostic vanilla visit-weighted V (sampler only)
     double sumEdgeW = 0.0;
     for (int i = 0; i < numChildren; i++)
@@ -452,9 +490,27 @@ internal static class TPSScoreCalc
         {
           GNode childNode = edge.ChildNode;
           // True statistical support (cross-parent).
-          nSupport[i] = overlay == null ? childNode.NodeRef.N : overlay.NodeN(childNode);
+          int childN = overlay == null ? childNode.NodeRef.N : overlay.NodeN(childNode);
+          nSupport[i] = childN;
           sChild[i] = overlay == null ? childNode.LeafValueVolatilityDebiased
                                       : overlay.NodeVolatilityDebiased(childNode);
+
+          // Model coverage floor N >= 8 (harvest snapshots start at N=8).
+          if (quncActive && edgeN > 0 && childN >= 8
+           && quncContext.TryGetShortHorizon(childNode.Index.Index, childN,
+                                             out float learnedMu, out float learnedSig))
+          {
+            if (quncContext.TPSLearnedSigma)
+            {
+              learnedSigma[i] = learnedSig;
+            }
+            if (quncContext.TPSLearnedPrior)
+            {
+              // Child-perspective forecast mean Q + mu, converted to the node's own
+              // perspective and clamped exactly like qObs.
+              learnedPrior[i] = Math.Clamp(-(edgeQ + learnedMu), -1.0, 1.0);
+            }
+          }
         }
         else
         {
@@ -480,7 +536,7 @@ internal static class TPSScoreCalc
                    consensusFallbackQ: node.NodeRef.V,
                    numChildren, qFpu, qTilde,
                    out double sigmaBar, out int kVisited, out double meanShrinkW,
-                   out double consensusQ);
+                   out double consensusQ, learnedSigma, learnedPrior);
 
     if (kVisited == 0)
     {

@@ -86,6 +86,21 @@ public readonly partial struct GNode : IComparable<GNode>, IEquatable<GNode>
   public readonly double LeafValueVolatilityDebiased => NodeRef.LeafValueVolatility.RunningStdDevDebiased(N);
 
   /// <summary>
+  /// Exponentially-weighted (~32-visit) TREND of the leaf values backed up through this node:
+  /// the signed mean innovation (incoming leaf value minus the node's Q at fold time).
+  /// First-moment companion to <see cref="LeafValueVolatility"/>; nonzero only when search
+  /// was run with ParamsSearch.TrackLeafValueVolatility enabled.
+  /// </summary>
+  public readonly double QTrendEW => NodeRef.QTrend.Trend;
+
+  /// <summary>
+  /// Bias-corrected variant of <see cref="QTrendEW"/> that removes the EWMA cold-start
+  /// under-reporting (see <see cref="RunningTrendByte.TrendDebiased"/>), supplying this
+  /// node's N as the effective sample count.
+  /// </summary>
+  public readonly double QTrendEWDebiased => NodeRef.QTrend.TrendDebiased(N);
+
+  /// <summary>
   /// Number of policy moves (children)
   /// Possibly this set of moves is incomplete due to either:
   ///   - implementation decision to "throw away" lowest probability moves to save storage, or

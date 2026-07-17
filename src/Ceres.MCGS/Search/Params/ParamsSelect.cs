@@ -329,6 +329,122 @@ public record ParamsSelect
 
   #endregion
 
+  #region Q-uncertainty select (QUnc) - Phase 2, NOT YET WIRED
+
+  // The QUnc parameter block configures the Q-UNCERTAINTY select methods: a small
+  // inline MLP (.qnn v3, see Search/QProbeSelect and the design/testing document
+  // Ceres.MCGS.TestSuite/QProbeTrainPy/PHASE2-INTEGRATION.md) forecasts, per child
+  // node and visit horizon dN, the distribution N(mu, sigma) of the child's QPure
+  // change after dN further visits. The methods below consume (mu, sigma) during
+  // child selection (and optionally TPS backup). ALL METHODS DEFAULT OFF; they
+  // activate only when QUncModel is set AND at least one coefficient is nonzero.
+  // Multiple methods may be combined, but see the double-counting warning on
+  // QUncMuCorrectionCoeff.
+
+  /// <summary>
+  /// Path to the Q-uncertainty inline model (.qnn v3, written by qprobetrainpy
+  /// exportinline). Null (default) = all QUnc methods disabled. Master switch.
+  /// </summary>
+  public string QUncModel = null;
+
+  /// <summary>
+  /// M1 SIGMA EXPLORATION BONUS: adds k * sigma_i (dN = QUncDnShort) to each child's
+  /// PUCT score. The learned analog of a UCB variance bonus: visits flow toward
+  /// children whose value is genuinely unresolved rather than merely under-visited.
+  /// sigma is in Q units, so k is directly comparable to Q differences; suggested
+  /// scan 0.05 / 0.10 / 0.25. 0 = off.
+  /// </summary>
+  public float QUncSigmaBonusCoeff = 0f;
+
+  /// <summary>
+  /// M2 EXPECTED-IMPROVEMENT BONUS: adds k * EI_i to each child's PUCT score, where
+  /// EI_i = s*(z*Phi(z) + phi(z)), z = (qParentPersp_i + mu_i - qBest)/s, s = sigma_i
+  /// (dN = QUncDnLong), qBest = best visited sibling's parent-perspective Q. The
+  /// classic value-of-information quantity: probability-weighted margin by which the
+  /// child would OVERTAKE the current best if its forecast distribution realizes.
+  /// Directional (uses mu): high-sigma children with negative drift earn little.
+  /// Note the SIGN CONVENTION: the model forecasts the child's own-perspective dQ,
+  /// and parent-perspective value is -Q_child, so mu enters parent-perspective
+  /// quantities negated. Suggested scan 0.5 / 1.0 / 2.0 (EI is typically an order
+  /// smaller than sigma). 0 = off.
+  /// </summary>
+  public float QUncExpectedImprovementCoeff = 0f;
+
+  /// <summary>
+  /// M3 MU (DEBIAS) CORRECTION: replaces each child's exploitation Q in the PUCT
+  /// score with Q + k * mu_i (dN = QUncDnShort, applied in the correct perspective) -
+  /// "score where the value is going, not where it is". k in [0,1]; suggested scan
+  /// 0.5 / 1.0. 0 = off.
+  /// WARNING: do not combine with QUncTPSLearnedPrior (the same drift would be
+  /// applied twice, once in select and once in backup shrinkage).
+  /// </summary>
+  public float QUncMuCorrectionCoeff = 0f;
+
+  /// <summary>
+  /// M4 SIGMA-SCALED U TERM: multiplies each child's standard PUCT U term by
+  /// (sigma_i / median sibling sigma)^p (dN = QUncDnShort), redirecting the EXISTING
+  /// exploration budget toward informative children instead of adding score mass
+  /// (p=0 off; suggested scan 0.5 / 1.0). Unlike M1 this is self-normalizing per
+  /// parent and cannot change the overall exploration/exploitation balance.
+  /// </summary>
+  public float QUncUTermSigmaExponent = 0f;
+
+  /// <summary>
+  /// M5a TPS LEARNED SIGMA: in the TPS backup kernel (TPSScoreCalc), replace the
+  /// closed-form child standard error sigma_hat = s_i/sqrt(n_i+1) with the model's
+  /// sigma_i (dN = QUncDnShort) for shrinkage weighting and temperature. Upgrades
+  /// the proven TPS backup component in place; no select-path change at all.
+  /// </summary>
+  public bool QUncTPSLearnedSigma = false;
+
+  /// <summary>
+  /// M5b TPS LEARNED PRIOR MEAN: in the TPS backup kernel, shrink each child's
+  /// search Q toward Q + mu_i instead of the policy-imputed FPU value (the learned
+  /// drift is a better-informed prior mean). See M3 double-counting warning.
+  /// </summary>
+  public bool QUncTPSLearnedPrior = false;
+
+  /// <summary>
+  /// Short query horizon dN for M1/M3/M4/M5 (0 = use the model header's HorizonN1,
+  /// normally 4). The model conditions on dN as an input, so any value is valid.
+  /// </summary>
+  public int QUncDnShort = 0;
+
+  /// <summary>
+  /// Long query horizon dN for M2 (0 = use the model header's HorizonN2, normally 64).
+  /// </summary>
+  public int QUncDnLong = 0;
+
+  /// <summary>
+  /// Parents with N below this run stock scoring with no model inference
+  /// (harvest snapshots start at N=8, so children of very small parents sit outside
+  /// training coverage).
+  /// </summary>
+  public int QUncMinParentN = 8;
+
+  /// <summary>
+  /// Maximum number of (top-policy) children queried per parent; children beyond
+  /// this fall through to their stock PUCT scores.
+  /// </summary>
+  public int QUncMaxChildren = 32;
+
+  /// <summary>
+  /// If per-search QUnc counters (gathers evaluated, cache hit rate, per-method
+  /// bonus magnitudes) are accumulated and printed at search end.
+  /// </summary>
+  public bool QUncEnableStats = false;
+
+  /// <summary>
+  /// True when any QUnc method is configured active (model set and any method on).
+  /// </summary>
+  [JsonIgnore]
+  public bool QUncAnyMethodActive => QUncModel != null
+      && (QUncSigmaBonusCoeff != 0 || QUncExpectedImprovementCoeff != 0
+       || QUncMuCorrectionCoeff != 0 || QUncUTermSigmaExponent != 0
+       || QUncTPSLearnedSigma || QUncTPSLearnedPrior);
+
+  #endregion
+
   /// <summary>
   /// For values > 0, the power mean of the children Q is used in PUCT instead of just Q.
   /// The coefficient used for a given child with N visits is N^POWER_MEAN_N_EXPONENT.
@@ -517,8 +633,45 @@ public record ParamsSelect
     if (TPS_Mode == TPSModeType.SelectOnly || TPS_Mode == TPSModeType.SelectAndBackup)
     {
       throw new NotImplementedException(
-        $"TPS_Mode={TPS_Mode}: TPS select is not yet implemented "
-      + $"(a new SELECT algorithm is forthcoming); use TPS_Mode=BackupOnly or None.");
+        $"TPS_Mode={TPS_Mode}: TPS select is not yet implemented. The Q-uncertainty "
+      + "select methods (QUnc* parameters) are defined but not yet wired - see "
+      + "Ceres.MCGS.TestSuite/QProbeTrainPy/PHASE2-INTEGRATION.md. "
+      + "Use TPS_Mode=BackupOnly or None.");
+    }
+
+    if (QUncAnyMethodActive)
+    {
+      if (!System.IO.File.Exists(QUncModel))
+      {
+        throw new Exception($"QUncModel file not found: {QUncModel}");
+      }
+      if (!QUncModel.EndsWith(".qnn", StringComparison.OrdinalIgnoreCase))
+      {
+        throw new Exception($"QUncModel must be a .qnn inline model file: {QUncModel}");
+      }
+      Search.QProbeSelect.QProbeSelectModelStore.EnsureLoaded(QUncModel); // header-validates; idempotent path-keyed store
+      if (QUncMinParentN < 2)
+      {
+        throw new Exception($"QUncMinParentN must be >= 2 (have {QUncMinParentN}).");
+      }
+      if (QUncMaxChildren < 2 || QUncMaxChildren > 64)
+      {
+        throw new Exception($"QUncMaxChildren must be in [2, 64] (have {QUncMaxChildren}).");
+      }
+      if (QUncDnShort < 0 || QUncDnLong < 0)
+      {
+        throw new Exception($"QUncDnShort/QUncDnLong must be >= 0 (0 = model header horizon).");
+      }
+      if ((QUncTPSLearnedSigma || QUncTPSLearnedPrior) && !TPSBackupActive)
+      {
+        throw new Exception($"QUncTPSLearnedSigma/QUncTPSLearnedPrior require an active TPS backup "
+                          + $"(TPS_Mode=BackupOnly or SelectAndBackup; have {TPS_Mode}).");
+      }
+      if (QUncMuCorrectionCoeff != 0 && QUncTPSLearnedPrior)
+      {
+        throw new Exception("QUncMuCorrectionCoeff and QUncTPSLearnedPrior must not be combined "
+                          + "(the same forecast drift would be applied twice, in select and in backup shrinkage).");
+      }
     }
 
     if (TPS_Mode != TPSModeType.None)
@@ -548,6 +701,13 @@ public record ParamsSelect
     {
       throw new Exception($"TrackLeafValueVolatility must be set to true when a TPS mode is active "
                         + $"(TPS_Mode={TPS_Mode}); the leaf-value volatility tracker is the TPS noise oracle.");
+    }
+
+    if (QUncAnyMethodActive && !paramsSearch.TrackLeafValueVolatility)
+    {
+      throw new Exception("TrackLeafValueVolatility must be set to true when any QUnc method is active; "
+                        + "the LeafVolatility/SigmaHat/QTrendEW model features were populated in every "
+                        + "training row and a live NaN-flagged row would sit off the training manifold.");
     }
 
     if (TPS_Mode != TPSModeType.None)

@@ -24,6 +24,7 @@ using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Managers;
 using Ceres.MCGS.Search.Params;
+using Ceres.MCGS.Search.QProbeSelect;
 using Ceres.MCGS.Search.RPO;
 using Ceres.MCGS.Search.Strategies;
 
@@ -74,6 +75,9 @@ public static class PUCTSelector
   /// <param name="childVisitCounts"></param>
   /// <param name="cpuctMultiplier"></param>
   /// <param name="temperatureMultiplier"></param>
+  /// <param name="quncContext">Optional Q-uncertainty select context (null = exact stock
+  /// behavior). Callers must pass null on probe-suppressed descents (refreshStaleEdges
+  /// false) so data harvesting stays model-free.</param>
   public static NodeSelectAccumulator ComputeTopChildScores(Graph graph, GNode node,
                                                             ParamsSearch paramsSearch, ParamsSelect paramsSelect,
                                                             int selectorID, bool refreshStaleEdges,
@@ -82,7 +86,9 @@ public static class PUCTSelector
                                                             int minChildIndex, int maxChildIndex, int numTargetVisits,
                                                             Span<double> scores, Span<short> childVisitCounts,
                                                             float cpuctMultiplier,
-                                                            float temperatureMultiplier)
+                                                            float temperatureMultiplier,
+                                                            QUncSelectContext quncContext = null,
+                                                            int quncPathDepth = 0)
   {
     Debug.Assert(cpuctMultiplier >= 0);
 
@@ -257,6 +263,18 @@ public static class PUCTSelector
         thresholdPUCTSuboptimalityReject = paramsSearch.VisitSuboptimalityRejectThreshold.Value;
       }
 
+      // Q-uncertainty methods: per-child score bonuses / U multipliers (M1-M4) applied
+      // inside the score kernels. The driver also runs for M5-only configurations
+      // (returning no adjustments) because select-time gathers are what populate the
+      // per-child forecast cache that the TPS backup (M5a/M5b) reads.
+      double[] quncScoreBonus = null;
+      double[] quncUMultiplier = null;
+      if (quncContext != null && numTargetVisits > 0 && numToProcess > 1)
+      {
+        QUncEvalDriver.PrepareAdjustments(quncContext, node, in nodeRef, paramsSelect, numToProcess,
+                                          quncPathDepth, out quncScoreBonus, out quncUMultiplier);
+      }
+
       numVisitsAccepted = PUCTScoreCalcVector.ScoreCalcMulti(paramsSelect,
                                                               node.IsSearchRoot, nodeRef.N,
                                                               parentNumInFlight,
@@ -266,7 +284,9 @@ public static class PUCTSelector
                                                               numToProcess, numTargetVisits,
                                                               scores, childVisitCounts, cpuctMultiplier,
                                                               thresholdPUCTSuboptimalityReject,
-                                                              parentNode: node);
+                                                              parentNode: node,
+                                                              quncScoreBonus: quncScoreBonus,
+                                                              quncUMultiplier: quncUMultiplier);
 
       // Some scoring paths can produce allocations that violate the sequential-expansion
       // invariant ("no child gets a visit before all of its left siblings have at least

@@ -77,6 +77,12 @@ public unsafe static class PUCTScoreCalcVector
   /// <param name="outputChildVisitCounts"></param>
   /// <param name="cpuctMultiplier"></param>
   /// <param name="thresholdPUCTSuboptimalityReject"></param>
+  /// <param name="parentNode"></param>
+  /// <param name="quncScoreBonus">Optional per-child additive score adjustment (Q-uncertainty
+  /// methods M1/M2/M3). Null = exact stock behavior. When non-null, must extend at least
+  /// Vector&lt;double&gt;.Count entries past numChildren with zero fill (SIMD block loads).</param>
+  /// <param name="quncUMultiplier">Optional per-child multiplier on the U (exploration) term
+  /// (Q-uncertainty method M4). Null = exact stock behavior. Same padding contract, fill 1.</param>
   /// <returns></returns>
   internal static int ScoreCalcMulti(ParamsSelect paramsSelect,
                                      bool parentIsRoot, int parentN, double parentNInFlight,
@@ -87,7 +93,9 @@ public unsafe static class PUCTScoreCalcVector
                                      Span<double> outputScores, Span<short> outputChildVisitCounts,
                                      double cpuctMultiplier,
                                      float thresholdPUCTSuboptimalityReject,
-                                     GNode parentNode = default)
+                                     GNode parentNode = default,
+                                     double[] quncScoreBonus = null,
+                                     double[] quncUMultiplier = null)
   {
     Debug.Assert(!double.IsNaN(qParent));
 
@@ -138,7 +146,8 @@ public unsafe static class PUCTScoreCalcVector
                                     parentIsRoot ? paramsSelect.UCTRootNumeratorExponent : paramsSelect.UCTNonRootNumeratorExponent,
                                     cpuctValue, qWhenNoChildren, qWhenNoChildrenPerChild,
                                     parentIsRoot ? paramsSelect.UCTRootDenominatorExponent : paramsSelect.UCTNonRootDenominatorExponent,
-                                    thresholdPUCTSuboptimalityReject);
+                                    thresholdPUCTSuboptimalityReject,
+                                    quncScoreBonus, quncUMultiplier);
     return numVisitsAccepted;
   }
 
@@ -174,7 +183,8 @@ public unsafe static class PUCTScoreCalcVector
                              double cpuctValue,
                              double qWhenNoChildren, double[] qWhenNoChildrenPerChild,
                              double uctDenominatorPower,
-                             float thresholdPUCTSuboptimalityReject)
+                             float thresholdPUCTSuboptimalityReject,
+                             double[] quncScoreBonus = null, double[] quncUMultiplier = null)
   {
     // Load the vectors that do not change
     Span<double> nInFlight = childStats.NInFlightAdjusted.Span;
@@ -196,7 +206,7 @@ public unsafe static class PUCTScoreCalcVector
       double numVisitsByParentToChildren = parentNInFlight + (parentN < 2 ? 1 : parentN - 1);
       double cpuctSqrtParentN = cpuctValue * ParamsSelect.UCTParentMultiplier(numVisitsByParentToChildren, uctParentPower);
       ComputeChildScores(childStats, numChildren, qWhenNoChildren, qWhenNoChildrenPerChild, virtualLossMultiplier,
-                         childScores, cpuctSqrtParentN, uctDenominatorPower);
+                         childScores, cpuctSqrtParentN, uctDenominatorPower, quncScoreBonus, quncUMultiplier);
 
       // Assert that none of the scores were NaN.
 #if DEBUG
@@ -268,7 +278,7 @@ public unsafe static class PUCTScoreCalcVector
           numVisitsByParentToChildren = newNInFlight + parentNInFlight + (parentN < 2 ? 1 : parentN - 1);
           cpuctSqrtParentN = cpuctValue * ParamsSelect.UCTParentMultiplier(numVisitsByParentToChildren, uctParentPower);
           ComputeChildScores(childStats, numChildren, qWhenNoChildren, qWhenNoChildrenPerChild, virtualLossMultiplier,
-                             childScores, cpuctSqrtParentN, uctDenominatorPower);
+                             childScores, cpuctSqrtParentN, uctDenominatorPower, quncScoreBonus, quncUMultiplier);
 
           // Check if the best child was still the same
           if (maxIndex == ArrayUtils.IndexOfElementWithMaxValue(childScores, numChildren))
@@ -319,10 +329,11 @@ public unsafe static class PUCTScoreCalcVector
   /// <param name="cpuctSqrtParentN"></param>
   /// <param name="uctDenominatorPower"></param>
   private static void ComputeChildScores(GatheredChildStats childStats,
-                                         int numChildren, 
+                                         int numChildren,
                                          double qWhenNoChildren, double [] qWhenNoChildrenPerChild,
                                          double virtualLossMultiplier, Span<double> computedChildScores,
-                                         double cpuctSqrtParentN, double uctDenominatorPower)
+                                         double cpuctSqrtParentN, double uctDenominatorPower,
+                                         double[] quncScoreBonus = null, double[] quncUMultiplier = null)
   {
     // Note: SIMD path blends action into Q globally via weight (Q = (1-w)*Q + w*A).
     //       The new FPUType.ActionHead mode uses action values as per-child FPU instead,
@@ -344,22 +355,23 @@ This changes selection behavior even when ACTION_ENABLED is not defined and adds
     {
       ComputeChildScoresSIMD(childStats, numChildren, qWhenNoChildren, qWhenNoChildrenPerChild,
                              virtualLossMultiplier, computedChildScores,
-                             cpuctSqrtParentN, uctDenominatorPower);
+                             cpuctSqrtParentN, uctDenominatorPower, quncScoreBonus, quncUMultiplier);
     }
     else
     {
       ComputeChildScoresNonSIMD(childStats, numChildren, qWhenNoChildren, qWhenNoChildrenPerChild,
-                                virtualLossMultiplier, computedChildScores, 
-                                cpuctSqrtParentN, uctDenominatorPower);
+                                virtualLossMultiplier, computedChildScores,
+                                cpuctSqrtParentN, uctDenominatorPower, quncScoreBonus, quncUMultiplier);
     }
   }
 
 
   private static void ComputeChildScoresSIMD(GatheredChildStats childStats,
-                                             int numChildren, 
+                                             int numChildren,
                                              double qWhenNoChildren, double[] qWhenNoChildrenPerChild,
                                              double virtualLossMultiplier, Span<double> computedChildScores,
-                                             double cpuctSqrtParentN, double uctDenominatorPower)
+                                             double cpuctSqrtParentN, double uctDenominatorPower,
+                                             double[] quncScoreBonus = null, double[] quncUMultiplier = null)
   {
     int simdWidth = Vector<double>.Count;
     int numBlocks = numChildren / simdWidth + (numChildren % simdWidth == 0 ? 0 : 1);
@@ -409,12 +421,32 @@ This changes selection behavior even when ACTION_ENABLED is not defined and adds
       }
       Vector<double> vNInFlight = new(nInFlight[startOffset..]);
 
-      Vector<double> vScore = ComputeScoresSIMD(vW, vN, vP,
+      Vector<double> vScore;
+      if (quncScoreBonus == null && quncUMultiplier == null)
+      {
+        // Stock path: byte-identical kernel when the Q-uncertainty methods are inactive.
+        vScore = ComputeScoresSIMD(vW, vN, vP,
 #if ACTION_ENABLED
-                                                vA,
+                                   vA,
 #endif
-                                                virtualLossMultiplier, cpuctSqrtParentN, uctDenominatorPower,
-                                                vQWhenNoChildren, vNInFlight);
+                                   virtualLossMultiplier, cpuctSqrtParentN, uctDenominatorPower,
+                                   vQWhenNoChildren, vNInFlight);
+      }
+      else
+      {
+        // Adjustment arrays are guaranteed by the caller to extend a full vector past
+        // numChildren with neutral fill (0 bonus / 1 multiplier).
+        Vector<double> vBonus = quncScoreBonus != null
+            ? new Vector<double>(quncScoreBonus.AsSpan(startOffset)) : Vector<double>.Zero;
+        Vector<double> vUMult = quncUMultiplier != null
+            ? new Vector<double>(quncUMultiplier.AsSpan(startOffset)) : Vector<double>.One;
+        vScore = ComputeScoresSIMDQUnc(vW, vN, vP,
+#if ACTION_ENABLED
+                                       vA,
+#endif
+                                       virtualLossMultiplier, cpuctSqrtParentN, uctDenominatorPower,
+                                       vQWhenNoChildren, vNInFlight, vUMult, vBonus);
+      }
 
       vScore.CopyTo(computedChildScores[startOffset..]);
 
@@ -468,26 +500,29 @@ This changes selection behavior even when ACTION_ENABLED is not defined and adds
   /// About 60% as fast as the AVX version.
   /// </summary>
   private unsafe static void ComputeChildScoresNonSIMD(GatheredChildStats childStats,
-                                                       int numChildren, 
+                                                       int numChildren,
                                                        double qWhenNoChildren, double[] qWhenNoChildrenPerChild,
                                                        double virtualLossMultiplier, Span<double> computedChildScores,
-                                                       double cpuctSqrtParentN, double uctDenominatorPower)
+                                                       double cpuctSqrtParentN, double uctDenominatorPower,
+                                                       double[] quncScoreBonus = null, double[] quncUMultiplier = null)
   {
-    ComputeScoresNonSIMD(numChildren, childStats.W.Span, childStats.N.Span, 
+    ComputeScoresNonSIMD(numChildren, childStats.W.Span, childStats.N.Span,
                          childStats.P.Span, childStats.A.Span,
                          virtualLossMultiplier, cpuctSqrtParentN, uctDenominatorPower,
                          qWhenNoChildren, qWhenNoChildrenPerChild,
-                         childStats.NInFlightAdjusted.Span, computedChildScores);
+                         childStats.NInFlightAdjusted.Span, computedChildScores,
+                         quncScoreBonus, quncUMultiplier);
   }
 
 
   private static void ComputeScoresNonSIMD(int numScores, Span<double> vW, Span<double> vN, Span<double> vP, Span<double> vA,
                                            double virtualLossMultiplier,
-                                           double cpuctSqrtParentN, 
+                                           double cpuctSqrtParentN,
                                            double uctDenominatorPower,
-                                           double qWhenNoChildren, double[] qWhenNoChildrenPerChild, 
+                                           double qWhenNoChildren, double[] qWhenNoChildrenPerChild,
                                            Span<double> vNInFlight,
-                                           Span<double> outputVScore)
+                                           Span<double> outputVScore,
+                                           double[] quncScoreBonus = null, double[] quncUMultiplier = null)
   {
     for (int i = 0; i < numScores; i++)
     {
@@ -530,7 +565,18 @@ This changes selection behavior even when ACTION_ENABLED is not defined and adds
       double _vDenominator = 1 + _denominator;
       double _vU = _vUNumerator / _vDenominator;
 
-      outputVScore[i] = _vU + _vQ;
+      // Optional Q-uncertainty adjustments (M4 multiplies U; M1/M2/M3 add to the score).
+      if (quncUMultiplier != null)
+      {
+        _vU *= quncUMultiplier[i];
+      }
+      double _vScore = _vU + _vQ;
+      if (quncScoreBonus != null)
+      {
+        _vScore += quncScoreBonus[i];
+      }
+
+      outputVScore[i] = _vScore;
     }
   }
 
@@ -585,6 +631,56 @@ This changes selection behavior even when ACTION_ENABLED is not defined and adds
     Vector<double> vQ = Vector.ConditionalSelect(maskNoChildren, vQWithChildren, vQWithoutChildren);
 
     Vector<double> vScore = vU + vQ;
+    return vScore;
+  }
+
+
+  /// <summary>
+  /// Variant of ComputeScoresSIMD applying the optional Q-uncertainty adjustments
+  /// (final score = U * uMultiplier + Q + scoreBonus). Kept as a DUPLICATE of the
+  /// stock kernel (rather than folding neutral adjustments into it) so the inactive
+  /// path stays byte-identical - the Phase 2 invariance gate is structural.
+  /// </summary>
+  [MethodImpl(MethodImplOptions.AggressiveInlining)]
+  private static Vector<double> ComputeScoresSIMDQUnc(Vector<double> vW, Vector<double> vN, Vector<double> vP,
+#if ACTION_ENABLED
+                                                      Vector<double> vA,
+#endif
+                                                      double virtualLossMultiplier,
+                                                      double cpuctSqrtParentN, double uctDenominatorPower,
+                                                      Vector<double> vQWhenNoChildren, Vector<double> vNInFlight,
+                                                      Vector<double> vUMultiplier, Vector<double> vScoreBonus)
+  {
+    Vector<double> vNPlusNInFlight = vN + vNInFlight;
+    Vector<double> vVirtualLossMultiplier = new Vector<double>(virtualLossMultiplier);
+
+    Vector<double> denominator;
+    if (uctDenominatorPower == 1.0)
+    {
+      denominator = vNPlusNInFlight;
+    }
+    else if (uctDenominatorPower == 0.5)
+    {
+      denominator = Vector.SquareRoot(vNPlusNInFlight);
+    }
+    else
+    {
+      denominator = ToPowerVector(vNPlusNInFlight, uctDenominatorPower);
+    }
+
+    Vector<double> vLossContrib = vNInFlight * vVirtualLossMultiplier;
+
+    Vector<double> vCPUCTSqrtParentN = new(cpuctSqrtParentN);
+    Vector<double> vUNumerator = vP * vCPUCTSqrtParentN;
+    Vector<double> vDenominator = Vector<double>.One + denominator;
+    Vector<double> vU = vUNumerator / vDenominator;
+
+    Vector<double> vQWithChildren = (vLossContrib - vW) / vNPlusNInFlight;
+    Vector<double> vQWithoutChildren = vQWhenNoChildren + vLossContrib;
+    Vector<long> maskNoChildren = Vector.GreaterThan(vNPlusNInFlight, Vector<double>.Zero);
+    Vector<double> vQ = Vector.ConditionalSelect(maskNoChildren, vQWithChildren, vQWithoutChildren);
+
+    Vector<double> vScore = vU * vUMultiplier + vQ + vScoreBonus;
     return vScore;
   }
 

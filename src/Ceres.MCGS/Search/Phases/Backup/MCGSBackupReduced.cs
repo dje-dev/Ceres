@@ -216,12 +216,14 @@ public partial class MCGSBackup
             double newParentDeltaR = childR * numVisitsAccepted;
 
             // Fold the batch of leaf values backed up through this node into its volatility
-            // estimate, measured about the node's pre-update pure Q. The node-perspective leaf
-            // sum is -sV. Skipped when checkmate is known (Q is pinned, dispersion meaningless).
+            // (second moment) and trend (first moment) estimates, measured about the node's
+            // pre-update pure Q. The node-perspective leaf sum is -sV. Skipped when checkmate
+            // is known (Q is pinned, dispersion meaningless).
             if (trackVol && !parentNode.CheckmateKnownToExistAmongChildren)
             {
               double qRef = parentNode.N > 0 ? parentNode.ComputeQPure() : (-sV / numVisitsAccepted);
               parentNode.NodeRef.LeafValueVolatility.AddBatch(qRef, -sV, sV2, numVisitsAccepted);
+              parentNode.NodeRef.QTrend.AddBatch(qRef, -sV, numVisitsAccepted);
             }
 
             strategy.BackupToNode(parentNode, numVisitsAccepted, parentPerspectiveDeltaW, newParentDeltaD, newParentDeltaR);

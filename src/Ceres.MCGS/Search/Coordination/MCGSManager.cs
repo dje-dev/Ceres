@@ -684,6 +684,9 @@ public partial class MCGSManager : IDisposable
 
     ProgressCallback = progressCallback;
 
+    // Reset per-search Q-uncertainty state (cache generation bump + stats reset).
+    Engine.QUnc?.OnSearchStart();
+
     TimingStats stats = new();
 
     using (new TimingBlock($"MCGS SEARCH {searchLimit}", stats, TimingBlock.LoggingType.None))
@@ -736,6 +739,11 @@ public partial class MCGSManager : IDisposable
     if (Engine.Manager.ParamsSearch.ValidateAfterSearch)
     {
       Engine.Graph.Validate(fastMode: true);
+    }
+
+    if (Engine.QUnc != null && ParamsSelect.QUncEnableStats)
+    {
+      Console.WriteLine(Engine.QUnc.Stats.SummaryLine(stats.ElapsedTimeSecs));
     }
 
     return stats;

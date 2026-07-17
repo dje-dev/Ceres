@@ -64,6 +64,13 @@ public partial class MCGSEngine
   public readonly MCGSSelect Select;
   public readonly MCGSBackup Backup;
 
+  /// <summary>
+  /// Optional Q-uncertainty select context (constructed lazily at strategy creation
+  /// when ParamsSelect.QUncAnyMethodActive; null otherwise). Shared by all search
+  /// threads of this engine.
+  /// </summary>
+  internal Search.QProbeSelect.QUncSelectContext QUnc;
+
   readonly SelectTerminatorPrefetched evaluatorPrecomputed;
 
   // Possible lock to restrict evaluator to single thread

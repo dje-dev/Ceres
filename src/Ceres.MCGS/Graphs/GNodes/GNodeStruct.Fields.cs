@@ -258,7 +258,16 @@ public unsafe partial struct GNodeStruct
   /// </summary>
   private byte repDrawFractionByte;
 
-  public byte UnusedByte;
+  /// <summary>
+  /// Compact (1 byte) exponentially-weighted (~32-visit) estimate of the TREND of leaf
+  /// values backed up through this node - the signed mean innovation (incoming leaf value
+  /// minus the node's Q at fold time). Positive: recent evidence keeps arriving above the
+  /// node's estimate (Q likely to rise); negative: the reverse. First-moment companion to
+  /// LeafValueVolatility, maintained under the same ParamsSearch.TrackLeafValueVolatility
+  /// gate (otherwise stays zero).
+  /// </summary>
+  public RunningTrendByte QTrend;
+
   public byte UnusedByte2;
 
   /// <summary>
