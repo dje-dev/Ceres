@@ -97,11 +97,17 @@ namespace Ceres.Features.Suites
 
     readonly RowDef[] rows;
 
+    // If true, non-baseline cells of baseline-relative rows show raw absolute values
+    // (row.Format) instead of percent deltas (see SuiteTestDef.DisplayRawValues).
+    readonly bool displayRawValues;
 
-    public MultiEngineLiveDisplay(TextWriter output, MultiEngineEntry[] entries, int totalPositions)
+
+    public MultiEngineLiveDisplay(TextWriter output, MultiEngineEntry[] entries, int totalPositions,
+                                  bool displayRawValues = false)
     {
       this.output = output;
       this.totalPositions = totalPositions;
+      this.displayRawValues = displayRawValues;
 
       columnHeaders = entries.Select(e => e.ID + (e.IsBaseline ? "*" : "")).ToArray();
 
@@ -144,9 +150,30 @@ namespace Ceres.Features.Suites
         if (milestone != lastProgressMilestone)
         {
           lastProgressMilestone = milestone;
-          output.WriteLine($"  ... {ProgressLabel(positionsDone)}");
+          output.WriteLine($"  ... {ProgressLabel(positionsDone)}{SolveSummary(engines)}");
         }
       }
+    }
+
+
+    /// <summary>
+    /// Compact per-column solve-score summary appended to the non-interactive progress line
+    /// (so tail -F shows how the sweep is shaping up), e.g. "  solve[0.01*=43.5 0.015=42.9]".
+    /// </summary>
+    private string SolveSummary(MultiEngineEngineResult[] engines)
+    {
+      if (engines == null || engines.Length == 0)
+      {
+        return "";
+      }
+
+      string[] parts = new string[engines.Length];
+      for (int i = 0; i < engines.Length; i++)
+      {
+        float s = engines[i].AvgSolveScorePct;
+        parts[i] = $"{columnHeaders[i]}={(float.IsNaN(s) ? "-" : s.ToString("0.0"))}";
+      }
+      return $"  solve[{string.Join(" ", parts)}]";
     }
 
 
@@ -315,7 +342,8 @@ namespace Ceres.Features.Suites
         {
           text = "";
         }
-        else if (row.BaselineRelativeDelta && !engines[i].IsBaseline && !float.IsNaN(baselineVal)
+        else if (!displayRawValues
+              && row.BaselineRelativeDelta && !engines[i].IsBaseline && !float.IsNaN(baselineVal)
               && (!row.DeltaAsPercent || baselineVal != 0))
         {
           // Non-baseline cell: signed delta from baseline, as a percentage of the baseline value

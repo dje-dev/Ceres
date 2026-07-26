@@ -111,6 +111,14 @@ namespace Ceres.Features.Suites
     public bool DumpEPDInfo = false;
 
     /// <summary>
+    /// If true, every cell in the multiengine live statistics block shows the raw absolute
+    /// value (using the row's format) instead of rendering non-baseline cells of the
+    /// baseline-relative rows (search time, EPS) as percent deltas. Useful when the values
+    /// are to be collected/parsed rather than eyeballed.
+    /// </summary>
+    public bool DisplayRawValues = false;
+
+    /// <summary>
     /// Definition of the player engine for an external (UCI) engine (optional).
     /// </summary>
     public EnginePlayerDef ExternalEngineDef;
@@ -339,38 +347,84 @@ namespace Ceres.Features.Suites
                                                     Action<ParamsSearch, float> paramsSearchModifier = null,
                                                     Action<ParamsSelect, float> paramsSelectModifier = null)
     {
-      if (engineDef == null)
-      {
-        throw new ArgumentNullException(nameof(engineDef));
-      }
       if (paramValues == null || paramValues.Length == 0)
       {
         throw new ArgumentException("At least one parameter value is required.", nameof(paramValues));
       }
 
-      // Take the middle engine to be the baseline.
-      int baselineIndex = paramValues.Length / 2;
-
-      var engines = new (string engineID, EnginePlayerDef enginePlayerDef, bool isBaseline, SearchLimit limit)[paramValues.Length];
-      HashSet<string> usedIDs = new HashSet<string>();
-
+      var configs = new (string label, Action<ParamsSearch, ParamsSelect> apply)[paramValues.Length];
       for (int i = 0; i < paramValues.Length; i++)
       {
         float value = paramValues[i];
+        configs[i] = (value.ToString("0.####", CultureInfo.InvariantCulture),
+                      (search, select) =>
+                      {
+                        paramsSearchModifier?.Invoke(search, value);
+                        paramsSelectModifier?.Invoke(select, value);
+                      });
+      }
+
+      return CreateConfigSweep(id, epdFileName, engineDef, searchLimit, configs);
+    }
+
+
+    /// <summary>
+    /// Generalized form of CreateParameterSweep: each engine is described by an arbitrary
+    /// (label, apply) pair, where apply receives the clone's ParamsSearch AND ParamsSelect and
+    /// may set any number of fields of any type (enums, bools, several parameters at once).
+    /// The label becomes the column id in the live statistics block. By default the middle
+    /// config is the baseline; pass baselineIndex to designate a different one.
+    /// </summary>
+    /// <param name="id">Suite test id.</param>
+    /// <param name="epdFileName">EPD file of test positions.</param>
+    /// <param name="engineDef">The MCGS engine definition to clone for each config.</param>
+    /// <param name="searchLimit">Search limit applied to every engine.</param>
+    /// <param name="configs">One (column label, params mutator) pair per engine.</param>
+    /// <param name="baselineIndex">Index of the baseline config, or -1 for the middle one.</param>
+    public static SuiteTestDef CreateConfigSweep(string id,
+                                                 string epdFileName,
+                                                 GameEngineDefCeresMCGS engineDef,
+                                                 SearchLimit searchLimit,
+                                                 IReadOnlyList<(string label, Action<ParamsSearch, ParamsSelect> apply)> configs,
+                                                 int baselineIndex = -1)
+    {
+      if (engineDef == null)
+      {
+        throw new ArgumentNullException(nameof(engineDef));
+      }
+      if (configs == null || configs.Count == 0)
+      {
+        throw new ArgumentException("At least one config is required.", nameof(configs));
+      }
+      if (baselineIndex >= configs.Count)
+      {
+        throw new ArgumentOutOfRangeException(nameof(baselineIndex));
+      }
+
+      // Default: take the middle engine to be the baseline.
+      if (baselineIndex < 0)
+      {
+        baselineIndex = configs.Count / 2;
+      }
+
+      var engines = new (string engineID, EnginePlayerDef enginePlayerDef, bool isBaseline, SearchLimit limit)[configs.Count];
+      HashSet<string> usedIDs = new HashSet<string>();
+
+      for (int i = 0; i < configs.Count; i++)
+      {
+        (string label, Action<ParamsSearch, ParamsSelect> apply) = configs[i];
 
         // Each engine is an independent deep clone (so its parameters can be modified in isolation
         // and it has its own evaluator/search/select parameter objects).
         GameEngineDefCeresMCGS clone = ObjUtils.DeepClone(engineDef);
-        paramsSearchModifier?.Invoke(clone.SearchParams, value);
-        paramsSelectModifier?.Invoke(clone.SelectParams, value);
+        apply?.Invoke(clone.SearchParams, clone.SelectParams);
 
-        // Build a short, unique id from the parameter value (e.g. "0.04").
-        string baseID = value.ToString("0.####", CultureInfo.InvariantCulture);
-        string engineID = baseID;
+        // Ensure the column id is unique (e.g. "0.04", "0.04#2").
+        string engineID = label;
         int suffix = 2;
         while (!usedIDs.Add(engineID))
         {
-          engineID = $"{baseID}#{suffix++}";
+          engineID = $"{label}#{suffix++}";
         }
 
         EnginePlayerDef playerDef = new EnginePlayerDef(clone, searchLimit, engineID);

@@ -814,7 +814,7 @@ namespace Ceres.Features.Suites
       WriteMultiEngineHeader();
 
       MultiEngineAccumulator acc = new MultiEngineAccumulator(entries, baselineIndexMulti);
-      MultiEngineLiveDisplay display = new MultiEngineLiveDisplay(Def.Output, entries.ToArray(), epds.Count);
+      MultiEngineLiveDisplay display = new MultiEngineLiveDisplay(Def.Output, entries.ToArray(), epds.Count, Def.DisplayRawValues);
 
       using (new TimingBlock("EPDS", Def.Output == Console.Out ? TimingBlock.LoggingType.Console : TimingBlock.LoggingType.None))
       {
