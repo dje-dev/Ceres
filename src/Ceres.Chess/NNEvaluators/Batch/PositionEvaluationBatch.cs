@@ -1453,69 +1453,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
         v3 = Math.Exp((v3 - max) / thisTemp);
       }
 
-      bool TEST_TEMP = temperature == 0.8001f || temperature == 1.001f || temperature == 1.5001f;
-      //Console.WriteLine("TEST_TEMP " + thisTemp + " " + TEST_TEMP);
-
-      if (TEST_TEMP)
-      {
-        double sumP = v1 + v2 + v3;
-        v1 /= sumP;
-        v2 /= sumP;
-        v3 /= sumP;
-
-        // 0.3 +3 Elo +/-8
-        // 0.5 -5 Elo +/-9
-
-        // vs BT4 @50
-        // 0.3 -27+/-23
-        // -0.3 +2 +/-13
-        // -0.5 -8 +/-18
-        // -0.2 -4 +- 15
-        const float BETA = -0.20f;
-        var finalWDL = WdlTemperature.ApplyDrawTemperature((float)v1, (float)v2, (float)v3, BETA);
-
-        w[i] = (FP16)finalWDL.W;
-        l[i] = (FP16)finalWDL.L;
-
-        if (false)
-        {
-          Console.WriteLine();
-          Console.WriteLine(v1 + " " + v3 + "  to  " + finalWDL.W + " " + finalWDL.L);
-          Console.WriteLine((v1 - v3) + "  to  " + (finalWDL.W - finalWDL.L));
-        }
-        return;
-
-        const float D_DIVISOR = 2;
-
-        double wPost = v1;
-        //        double dPost = v2 / D_DIVISOR;
-        double dPost = v2 + (1 - v2) * 0.2;
-        double lPost = v3;
-
-        double sum = wPost + dPost + lPost;
-
-        wPost /= sum;
-        dPost /= sum;
-        lPost /= sum;
-
-        //        w[i] = (FP16)((wPost + lPost) / 2);
-        //        l[i] = (FP16)((wPost - lPost) / 2);
-
-        w[i] = (FP16)(wPost);
-        l[i] = (FP16)(lPost);
-
-        if (FP16.IsNaN(w[i] + l[i]))
-          throw new Exception("badbad");
-
-        return;
-        //max = Math.Max(valueEvals[i * 3 + 0], valueEvals[i * 3 + 2]);
-        //v1 = Math.Exp((valueEvals[i * 3 + 0] - max) / thisTemp);
-        //v2 = 0;
-        //v3 = Math.Exp((valueEvals[i * 3 + 2] - max) / thisTemp);
-
-      }
-
-
       double totl = v1 + v2 + v3;
       Debug.Assert(!double.IsNaN(totl));
 
