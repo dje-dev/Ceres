@@ -290,19 +290,29 @@ public sealed class DeepRolloutSet
   /// <param name="stopNodeVisitsIfTerminalReached">If true, stop rolling out a node once one of its rollouts reaches a terminal.</param>
   /// <param name="deadline">Optional wall-clock deadline; remaining rollout rounds are abandoned once passed.</param>
   /// <param name="dryUpRounds">If positive, stop rolling out a node once this many consecutive rounds yielded no new distinct line.</param>
+  /// <param name="deepRollout">
+  /// If true (the default, preserving historical behavior) the rollouts are run in "deep" mode:
+  /// FPU is temporarily forced to Absolute/1.0 and the transposition sufficiency stop is disabled,
+  /// which biases selection toward committing to the best explored line (appropriate for probing
+  /// the depth of a variation).
+  /// If false the configured ParamsSelect FPU settings and the transposition sufficiency stop are
+  /// left in place, giving a neutral PUCT extension of the subtree. Pass false when the intent is
+  /// simply to raise the visit count of a node without perturbing how those visits are distributed.
+  /// </param>
   /// <returns></returns>
   public static DeepRolloutSet Run(MCGSManager manager, NodeIndex[] startNodes,
                                    int numVisitsPerNode, float explorationMultiplier,
                                    bool stopNodeVisitsIfTerminalReached = true,
                                    DateTime? deadline = null,
-                                   int dryUpRounds = 0)
+                                   int dryUpRounds = 0,
+                                   bool deepRollout = true)
   {
     ArgumentNullException.ThrowIfNull(manager);
     ArgumentNullException.ThrowIfNull(startNodes);
 
     TimingStats timingStats = manager.DoSearchInnerNodes(startNodes, numVisitsPerNode, out var nodeStats,
                                                          explorationMultiplier, stopNodeVisitsIfTerminalReached,
-                                                         deepRollout: true,
+                                                         deepRollout: deepRollout,
                                                          deadline: deadline, dryUpRounds: dryUpRounds);
 
     List<DeepRolloutNodeStats> results = new(nodeStats.Count);
