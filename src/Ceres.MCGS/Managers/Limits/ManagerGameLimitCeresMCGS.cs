@@ -16,6 +16,7 @@
 using System;
 
 using Ceres.Chess;
+using Ceres.Chess.GameEngines;
 using Ceres.MCGS.Search.Params;
 
 #endregion
@@ -149,7 +150,7 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
   /// <returns></returns>
   float FractionOfBasePerMoveToUse(ManagerGameLimitInputs inputs, bool earlyGameExtension, LimitCalcTrace trace = null)
   {
-    int priorRootN = inputs.PriorMoveStats != null && inputs.PriorMoveStats.Count > 1 ? inputs.PriorMoveStats[^2].FinalN : 0;
+    int priorRootN = inputs.PriorMoveStatSelf?.FinalN ?? 0;
     int thisRootN = inputs.RootN;
     float graphReuseShrinkageMultiplier = 1.0f;
     if (inputs.QuickMoveEnabled && priorRootN != 0 && thisRootN != 0)
@@ -355,14 +356,10 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
       return;
     }
 
-    if (earlySmoothingRecordPending
-        && inputs.PriorMoveStats != null
-        && inputs.PriorMoveStats.Count >= 2)
+    if (earlySmoothingRecordPending && inputs.PriorMoveStatSelf is GameMoveStat priorMoveSelf)
     {
-      // PriorMoveStats[^2] is the engine's prior move (the first-move-bonus search).
-      int recordedN = inputs.PriorMoveStats[^2].FinalN;
-
-      earlySmoothingBaselineN = recordedN;
+      // Our prior move was the first-move-bonus search.
+      earlySmoothingBaselineN = priorMoveSelf.FinalN;
       earlySmoothingMovesRemaining = EarlySmoothingWindowMoves(earlySmoothingBaselineN);
       earlySmoothingRecordPending = false;
     }
@@ -391,12 +388,11 @@ public class ManagerGameLimitCeresMCGS : IManagerGameLimit
     // Check if the early game extension mode should be enabled.
     bool earlyGameExtensionMode = false;
     if (inputs.TargetLimitType == SearchLimitType.SecondsPerMove // TODO: Extend this to NodesPerMove?
-     && inputs.PriorMoveStats != null
-     && inputs.PriorMoveStats.Count >= 2 // i.e. not first move
+     && inputs.PriorMoveStatSelf is GameMoveStat priorMoveSelf // i.e. not first move
         )
     {
-      float totalGameTimeAtLeast = inputs.RemainingFixedSelf + inputs.PriorMoveStats[^2].ClockSecondsAlreadyConsumed;
-      float fractionUsed = inputs.PriorMoveStats[^2].ClockSecondsAlreadyConsumed / totalGameTimeAtLeast;
+      float totalGameTimeAtLeast = inputs.RemainingFixedSelf + priorMoveSelf.ClockSecondsAlreadyConsumed;
+      float fractionUsed = priorMoveSelf.ClockSecondsAlreadyConsumed / totalGameTimeAtLeast;
 
       const float EARLY_GAME_FRAC_TIME = 0.4f; // Extension only enabled in first 40% of time used
       if (fractionUsed < EARLY_GAME_FRAC_TIME)

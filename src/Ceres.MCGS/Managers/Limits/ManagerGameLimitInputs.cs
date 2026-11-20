@@ -95,6 +95,13 @@ public record ManagerGameLimitInputs
   public readonly List<GameMoveStat> PriorMoveStats;
 
   /// <summary>
+  /// Statistics of the most recent prior search by the side now to move (null if none).
+  /// Located by side rather than by position in the list, because the history may hold
+  /// a record for every ply (in-process tournaments) or only our own searches (UCI).
+  /// </summary>
+  public GameMoveStat PriorMoveStatSelf => PriorMoveStats?.FindLast(m => m.Side == StartPos.SideToMove);
+
+  /// <summary>
   /// Type of limit (either NodesPerMove or SecondsPerMove).
   /// </summary>
   public readonly SearchLimitType TargetLimitType;
