@@ -1660,15 +1660,22 @@ public partial class UCIManagerMCGS
     GameEngineSearchResultCeresMCGS result = CeresEngine.Search(curPositionAndMoves, searchLimit, gameMoveHistory, callbackPlain) as GameEngineSearchResultCeresMCGS;
     lastSearchResult = result;
 
+    // Clock consumed is the running total of search seconds for the side which just searched
+    // (including this search), the same basis as used by the in-process tournament harness.
+    // It is carried in the history itself, so it restarts whenever the history does.
+    SideType side = curPositionAndMoves.FinalPosition.MiscInfo.SideToMove;
+    float secondsElapsed = (float)result.TimingStats.ElapsedTimeSecs;
+    float secondsConsumed = secondsElapsed + (gameMoveHistory.FindLast(m => m.Side == side)?.ClockSecondsAlreadyConsumed ?? 0);
+
     GameMoveStat moveStat = new(gameMoveHistory.Count,
-                                curPositionAndMoves.FinalPosition.MiscInfo.SideToMove,
+                                side,
                                 curPositionAndMoves.FinalPosition,
                                 result.ScoreQ, result.ScoreCentipawns,
-                                float.NaN, //engine1.CumulativeSearchTimeSeconds, 
+                                secondsConsumed,
                                 curPositionAndMoves.FinalPosition.PieceCount,
                                 result.MAvg, result.FinalN, result.FinalN - result.StartingN,
                                 searchLimit,
-                                (float)result.TimingStats.ElapsedTimeSecs, result.NPS);
+                                secondsElapsed, result.NPS);
 
     gameMoveHistory.Add(moveStat);
 
