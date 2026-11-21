@@ -83,7 +83,7 @@ namespace Ceres.Base.OperatingSystem
     /// Verify it is taking effect during a search with:
     ///   grep AnonHugePages /proc/&lt;pid&gt;/smaps_rollup
     /// </summary>
-    internal const bool USE_TRANSPARENT_HUGE_PAGES = true;
+    internal const bool USE_TRANSPARENT_HUGE_PAGES = false;
 
 
     static bool largePageAllocationEverFailed = false;
