@@ -112,7 +112,7 @@ namespace Ceres.MCTS.Search
 }
 
 
-#if nOT
+#if NOT
           if (nodesNN.Count > 10)
           {
             MCTSNode node = nodesNN[^1];
