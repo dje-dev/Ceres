@@ -581,6 +581,18 @@ namespace Ceres.Chess.NNEvaluators.Remote
 
                   // Serialize result while still holding the lock
                   // (result references evaluator's internal buffers).
+                  // Grow the buffer if this result needs more room than the initial estimate
+                  // (e.g. networks with large State outputs).
+                  int requiredLen = NNRemoteSerializer.RequiredResultSize(result, resultFlags);
+                  if (writeBuffer.Length < requiredLen)
+                  {
+                    writeBuffer = new byte[requiredLen];
+                    if (useCompression)
+                    {
+                      compressBuffer = new byte[ZstdBlockCompress.CompressBound(requiredLen)];
+                    }
+                  }
+
                   int resultLen = NNRemoteSerializer.SerializeBatchResult(
                     result, resultFlags, writeBuffer);
 

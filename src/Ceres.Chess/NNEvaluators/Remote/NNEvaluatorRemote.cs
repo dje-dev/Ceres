@@ -339,6 +339,18 @@ namespace Ceres.Chess.NNEvaluators.Remote
     {
       try
       {
+        // Grow the send buffer if this batch needs more room than the initial estimate
+        // (e.g. large input State vectors).
+        int requiredLen = NNRemoteSerializer.RequiredInputSize(positions, cachedInputsRequired);
+        if (sendBuffer.Length < requiredLen)
+        {
+          sendBuffer = new byte[requiredLen];
+          if (useCompression)
+          {
+            compressBuffer = new byte[ZstdBlockCompress.CompressBound(requiredLen)];
+          }
+        }
+
         // Serialize the input batch.
         int serializedLen = NNRemoteSerializer.SerializeBatchInput(
           positions, cachedInputsRequired, sendBuffer);

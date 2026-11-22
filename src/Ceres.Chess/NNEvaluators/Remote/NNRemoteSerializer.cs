@@ -385,6 +385,64 @@ namespace Ceres.Chess.NNEvaluators.Remote
 
 
     /// <summary>
+    /// Buffer size sufficient to serialize the given result batch: MaxSerializedResultSize for the flags
+    /// actually written (including the ply-bin/PUNIM outputs SerializeBatchResult adds at runtime), with the
+    /// variable-length State outputs sized from their actual lengths. Without this, nets emitting such
+    /// outputs overflow the handshake-sized buffer once the batch is large enough ("Destination is too short").
+    /// </summary>
+    public static int RequiredResultSize(IPositionEvaluationBatch batch, NNRemoteResultFlags flags)
+    {
+      int numPos = batch.NumPos;
+
+      // Include the optional outputs that SerializeBatchResult adds at runtime when present in the batch
+      // (ply-bin: 2 x 512 values per position, PUNIM: 2 x 8). These are not part of the handshake flags,
+      // so a buffer sized from those flags alone overflows for nets that emit them (e.g. C3 nets).
+      if (batch is PositionEvaluationBatch pebRuntime)
+      {
+        if (pebRuntime.HasPlyBinOutputs && !pebRuntime.PlyBinMoveProbs.IsEmpty) flags |= NNRemoteResultFlags.HasPlyBinOutputs;
+        if (pebRuntime.HasPunimOutputs && !pebRuntime.PunimSelfProbs.IsEmpty) flags |= NNRemoteResultFlags.HasPunimOutputs;
+      }
+
+      int size = MaxSerializedResultSize(numPos, flags & ~NNRemoteResultFlags.HasState);
+      if (flags.HasFlag(NNRemoteResultFlags.HasState))
+      {
+        size += numPos * 4;
+        if (batch is PositionEvaluationBatch peb && !peb.States.IsEmpty)
+        {
+          ReadOnlySpan<Half[]> states = peb.States.Span.Slice(0, numPos);
+          for (int i = 0; i < numPos; i++)
+          {
+            size += (states[i]?.Length ?? 0) * sizeof(ushort);
+          }
+        }
+      }
+      return size;
+    }
+
+
+    /// <summary>
+    /// Buffer size sufficient to serialize the given input batch (variable-length input States sized from
+    /// their actual lengths rather than the 256 elements assumed by MaxSerializedInputSize).
+    /// </summary>
+    public static int RequiredInputSize(IEncodedPositionBatchFlat batch, NNEvaluator.InputTypes requiredInputs)
+    {
+      int numPos = batch.NumPos;
+      int size = MaxSerializedInputSize(numPos);
+      if (requiredInputs.HasFlag(NNEvaluator.InputTypes.State) && !batch.States.IsEmpty)
+      {
+        size -= numPos * 256 * sizeof(ushort); // replace the generic allowance with actual lengths
+        ReadOnlySpan<Half[]> states = batch.States.Span.Slice(0, numPos);
+        for (int i = 0; i < numPos; i++)
+        {
+          size += (states[i]?.Length ?? 0) * sizeof(ushort);
+        }
+        size = Math.Max(size, MaxSerializedInputSize(numPos));
+      }
+      return size;
+    }
+
+
+    /// <summary>
     /// Serializes an IPositionEvaluationBatch into a byte buffer.
     /// Returns the number of bytes written.
     /// </summary>
