@@ -92,6 +92,16 @@ public partial class MCGSIterator
   /// </summary>
   internal bool ProbeSuppressGraphWrites;
 
+  /// <summary>
+  /// When true, selection descents made by this iterator never launch the parallel (multipass)
+  /// child-descent path even if Execution.SelectOperationParallelThresholdNumVisits enables it
+  /// globally. Set by RunProbeSpecs for the duration of a probe batch: forced descents are not
+  /// supported by the parallel path (see the childVisitCounts sizing in
+  /// MCGSSelect.ProcessForcedChildAtLockedParent), and the directed-visit consumers were measured
+  /// under serial select. Must be false during ordinary search.
+  /// </summary>
+  internal bool ForceSerialSelect;
+
 
   /// <summary>
   /// Runs a batch of probe specs: for each spec, builds forced path(s) sending the requested
@@ -116,15 +126,18 @@ public partial class MCGSIterator
   ///
   /// Must be called only when the graph is quiescent (between batches of the main search,
   /// e.g. from MCGSEngine.PostBatchHook, or after the search completed), on a dedicated
-  /// iterator constructed like MCGSEngine.RunFromInnerNodes does. Single-iterator harnesses
-  /// only (no DualOverlappedIterators). The caller must chunk specs so that the sum of
-  /// requested visits does not exceed Execution.MaxBatchSize.
+  /// iterator constructed like MCGSEngine.RunFromInnerNodes does. Under DualOverlappedIterators
+  /// the caller must hold the PhaseCoordinator transient solo window (SoloGranted: the peer
+  /// iterator is parked at a batch boundary), which re-creates that quiescent state. Descents
+  /// run with serial select (ForceSerialSelect) regardless of the global parallel-select
+  /// setting. The caller must chunk specs so that the sum of requested visits does not exceed
+  /// Execution.MaxBatchSize.
   /// </summary>
   internal List<ProbePathRecord> RunProbeSpecs(IReadOnlyList<ProbeSpec> specs,
                                                Action<IReadOnlyList<ProbePathRecord>> preBackupCallback = null,
                                                bool commitInsteadOfDrop = false)
   {
-    Debug.Assert(!Manager.ParamsSearch.Execution.DualOverlappedIterators);
+    Debug.Assert(!Manager.ParamsSearch.Execution.DualOverlappedIterators || Engine.Coordinator.SoloGranted(IteratorID));
 
     List<ProbePathRecord> records = new();
     if (specs.Count == 0)
@@ -132,11 +145,15 @@ public partial class MCGSIterator
       return records;
     }
 
-    // Probes reuse iterator lane 0 for in-flight accounting, which is only correct when no
-    // other select/backup is in flight. Verify quiescence at the search root's edges.
+    // Probes reuse this iterator's lane for in-flight accounting, which is only correct when no
+    // other select/backup is in flight. Verify quiescence at the search root's edges, checking
+    // BOTH iterator lanes: under DualOverlappedIterators the peer iterator can be sitting in NN
+    // evaluate with a full batch in flight on the other lane, which a single-lane check would
+    // silently miss. Callers under overlapped iterators must hold the PhaseCoordinator solo
+    // window (peer parked at a batch boundary), so this is a fail-fast backstop.
     foreach (GEdge rootEdge in Engine.SearchRootNode.ChildEdgesExpanded)
     {
-      if (rootEdge.NInFlightForIterator(IteratorID) != 0)
+      if (rootEdge.NumInFlight0 != 0 || rootEdge.NumInFlight1 != 0)
       {
         throw new InvalidOperationException("RunProbeSpecs requires a quiescent graph (found in-flight visits at root)");
       }
@@ -154,7 +171,9 @@ public partial class MCGSIterator
     int firstNewNodeIndex = Engine.Graph.Store.NodesStore.NumUsedNodes + GNodeStore.FIRST_ALLOCATED_INDEX;
 
     bool savedSuppress = ProbeSuppressGraphWrites;
+    bool savedSerial = ForceSerialSelect;
     ProbeSuppressGraphWrites = !commitInsteadOfDrop;
+    ForceSerialSelect = true;
     try
     {
       // STEP 1: build the forced probe paths (one spec at a time; within-batch in-flight
@@ -247,6 +266,7 @@ public partial class MCGSIterator
     finally
     {
       ProbeSuppressGraphWrites = savedSuppress;
+      ForceSerialSelect = savedSerial;
     }
   }
 

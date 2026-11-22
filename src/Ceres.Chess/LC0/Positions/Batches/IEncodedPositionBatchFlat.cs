@@ -155,8 +155,7 @@ namespace Ceres.Chess.LC0.Batches
       if (Moves.IsEmpty && Positions.Length == NumPos)
       {
         MGMoveList[] moves = new MGMoveList[NumPos];
-        ParallelOptions parallelOptions = ParallelUtils.ParallelOptions(NumPos, 96);
-        Parallel.For(0, moves.Length, parallelOptions,
+        ParallelUtils.For(0, moves.Length, 96,
           delegate (int i)
           {
             MGMoveList thisPosMoves = new MGMoveList();

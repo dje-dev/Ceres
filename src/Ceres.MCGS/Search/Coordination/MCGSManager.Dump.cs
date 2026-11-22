@@ -185,6 +185,21 @@ public partial class MCGSManager
         writer.WriteLine("\r\nLIMITS MANAGER DECISION");
         limitInputs?.Dump(writer);
         DumpTimeInfo(writer, searchRootNode);
+
+        // PICKET M1 refutation-grafting statistics (only when the feature was enabled this search).
+        if (ProbeGraft != null)
+        {
+          writer.WriteLine("\r\nPROBE GRAFT (PICKET M1)");
+          ProbeGraft.Stats.Dump(writer);
+          if (ParamsSearch.ProbeGraft.VerboseEventLogging && ProbeGraft.EventLog.Count > 0)
+          {
+            writer.WriteLine("Event log:");
+            foreach (string eventLine in ProbeGraft.EventLog)
+            {
+              writer.WriteLine("  " + eventLine);
+            }
+          }
+        }
       }
 
       if ((sections & DumpFullInfoSections.Moves) != 0)

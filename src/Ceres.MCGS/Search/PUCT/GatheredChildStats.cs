@@ -27,6 +27,16 @@ internal class GatheredChildStats
 {
   const int ALIGNMENT = 64; // For SIMD efficiency
 
+  /// <summary>
+  /// If the per-child uncertainty values (UV and UP) are gathered.
+  ///
+  /// Their only consumer is the value uncertainty adjustment experiment in PUCTSelector, which
+  /// is currently disabled. The two are switched together from here so that when the experiment
+  /// is off the gather is not paid for (it costs about 1ns per child per node visit, for values
+  /// nothing reads), and so that when it is switched back on both buffers are actually filled.
+  /// </summary>
+  internal const bool GATHER_UNCERTAINTY = false;
+
   // N.B. If new summary fields are added here, be sure to
   //      also update the ResetSummaryFields method.
 

@@ -14,6 +14,7 @@
 #region Using directive
 
 using System;
+using System.Diagnostics;
 using Ceres.Base.OperatingSystem;
 
 
@@ -29,7 +30,7 @@ namespace Ceres.MCGS.Graphs.GParents;
 /// per allocation), and segment indices are item indices.
 /// This version uses incremental allocation and an overallocation factor to reduce OS calls.
 /// </summary>
-internal class GParentsDetailStore : MemoryBufferOSBlocked<GParentsDetailsStruct>
+internal unsafe class GParentsDetailStore : MemoryBufferOSBlocked<GParentsDetailsStruct>
 {
   /// <summary>
   /// Number of items (segments) per allocation block. Must be 1: the element type is already a
@@ -41,6 +42,13 @@ internal class GParentsDetailStore : MemoryBufferOSBlocked<GParentsDetailsStruct
   /// incremental-commit padding granularity; at 32 bytes/segment this is ~5 MB).
   /// </summary>
   const int SEGMENTS_EXTRA = 160 * 1024;
+
+  /// <summary>
+  /// Cached pointer to segment 0. The underlying MemoryBufferOS reserves its full virtual
+  /// range once and only commits pages incrementally, so this address is fixed for the
+  /// life of the store.
+  /// </summary>
+  readonly GParentsDetailsStruct* segmentsBasePtr;
 
 
   /// <summary>
@@ -57,6 +65,7 @@ internal class GParentsDetailStore : MemoryBufferOSBlocked<GParentsDetailsStruct
              false,  // useExistingSharedMem
              true)   // useIncrementalAlloc turned on
   {
+    segmentsBasePtr = (GParentsDetailsStruct*)entries.RawMemory;
   }
 
 
@@ -71,8 +80,8 @@ internal class GParentsDetailStore : MemoryBufferOSBlocked<GParentsDetailsStruct
   /// </summary>
   internal new int NextFreeBlockIndex
   {
-    get => nextFreeBlockIndex;
-    set => nextFreeBlockIndex = value;
+    get => nextFreeBlockIndex.Value;
+    set => nextFreeBlockIndex.Value = value;
   }
 
 
@@ -96,8 +105,9 @@ internal class GParentsDetailStore : MemoryBufferOSBlocked<GParentsDetailsStruct
   /// <returns>Reference to the allocated segment.</returns>
   internal ref GParentsDetailsStruct SegmentRef(int index)
   {
-    // Use the base method SpanAtIndex to get a span for one segment and return the first element by reference.
-    return ref SpanAtIndex(index, 1)[0];
+    // With a blocking factor of 1 the segment index is the item index into the buffer.
+    Debug.Assert(index > 0 && index < NumAllocatedItems);
+    return ref segmentsBasePtr[index];
   }
 
 

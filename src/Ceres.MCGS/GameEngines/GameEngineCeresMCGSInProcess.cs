@@ -21,12 +21,14 @@ using System.Text;
 using System.Threading;
 
 using Ceres.Base.Benchmarking;
+using Ceres.Base.DataTypes;
 using Ceres.Base.Misc;
 using Ceres.Base.OperatingSystem;
 using Ceres.Base.Threading;
 using Ceres.Chess;
 using Ceres.Chess.ExternalPrograms.UCI;
 using Ceres.Chess.GameEngines;
+using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.LC0.Positions;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
@@ -49,6 +51,7 @@ using Ceres.MCGS.Managers.Limits;
 using Ceres.MCGS.Search;
 using Ceres.MCGS.Search.Coordination;
 using Ceres.MCGS.Search.Params;
+using Ceres.MCGS.Search.Paths;
 using Ceres.MCGS.Utils;
 using Ceres.MCGS.Visualization.AnalysisGraph;
 using static Ceres.MCGS.Search.Phases.MCGSSelect;
@@ -167,6 +170,19 @@ public class GameEngineCeresMCGSInProcess : GameEngine
   public List<MGMove> ForcedMoves = null;
 
   public WorkerPool<ExtendPathsWorkerInfo>[] SelectWorkerPools = new WorkerPool<ExtendPathsWorkerInfo>[2];
+
+  /// <summary>
+  /// Per-iterator pools of path visit slots. Owned here (rather than by the per-search
+  /// MCGSEngine) so the multi-megabyte buffers are allocated once and reused by every search.
+  /// </summary>
+  public ArraySegmentPool<MCGSPathVisit>[] PathVisitPools = new ArraySegmentPool<MCGSPathVisit>[2];
+
+  /// <summary>
+  /// Per-evaluator neural network input batches. Owned here (rather than by the per-search
+  /// evaluator wrapper) so that the plane / history arrays grown during one search are reused
+  /// by the next instead of being rebuilt (and discarded) on every move.
+  /// </summary>
+  public EncodedPositionBatchFlat[] ReusableNNBatches = new EncodedPositionBatchFlat[2];
 
 
   public bool DisposeGraphAfterSearch;
@@ -1029,7 +1045,9 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     Search?.Manager.Dispose();
     Search = new MCGSSearch(infoLogger);
 
-    Search.Search(Evaluators, reuseGraph, SelectWorkerPools,
+    ResolveProbeSourceIfNeeded();
+    Search.ResolvedProbeSource = resolvedProbeSource;
+    Search.Search(Evaluators, reuseGraph, SelectWorkerPools, PathVisitPools, ReusableNNBatches,
                   SelectParams, SearchParams, GameLimitManager,
                   curPositionAndMoves, searchLimit, verbose, lastSearchStartTime,
                   gameMoveHistory, callback, null, isFirstMoveOfGame,
@@ -1082,6 +1100,30 @@ public class GameEngineCeresMCGSInProcess : GameEngine
 
 
   /// <summary>
+  /// Probe source (ParamsProbeGraft.ProbeSourceID) resolved ONCE PER ENGINE and reused by every
+  /// search of this engine's games, so that a registry factory returning fresh instances yields
+  /// one probe farm (workers, queue, transposition table) per engine: concurrent games share
+  /// nothing. Disposed with the engine (see CeresAlphaBetaProbeSource.InstanceFactory).
+  /// </summary>
+  Ceres.Chess.Probing.IProbeSource resolvedProbeSource;
+
+  void ResolveProbeSourceIfNeeded()
+  {
+    if (resolvedProbeSource != null
+     || SearchParams?.ProbeGraft == null
+     || !SearchParams.ProbeGraft.AnyConsumerEnabled
+     || string.IsNullOrEmpty(SearchParams.ProbeGraft.ProbeSourceID))
+    {
+      return;
+    }
+    if (!Ceres.MCGS.Search.ProbeGraft.ProbeSourceRegistry.TryCreate(SearchParams.ProbeGraft.ProbeSourceID, out resolvedProbeSource))
+    {
+      throw new Exception($"ParamsProbeGraft.ProbeSourceID '{SearchParams.ProbeGraft.ProbeSourceID}' is not registered with ProbeSourceRegistry.");
+    }
+  }
+
+
+  /// <summary>
   /// Diposes underlying search engine.
   /// </summary>
   public override void Dispose()
@@ -1101,10 +1143,19 @@ public class GameEngineCeresMCGSInProcess : GameEngine
     Search?.Manager.Engine.Graph.Dispose();
     Search?.Manager?.Dispose();
     Search = null;
+
+    (resolvedProbeSource as IDisposable)?.Dispose();   // this engine's own probe farm
+    resolvedProbeSource = null;
     Evaluators?.Dispose();
     Evaluators = null;
     SelectWorkerPools[0]?.Dispose();
     SelectWorkerPools[1]?.Dispose();
+    PathVisitPools[0] = null;
+    PathVisitPools[1] = null;
+    ReusableNNBatches[0]?.Shutdown();
+    ReusableNNBatches[1]?.Shutdown();
+    ReusableNNBatches[0] = null;
+    ReusableNNBatches[1] = null;
   }
 
 

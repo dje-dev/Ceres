@@ -147,6 +147,12 @@ public partial class GParentsStore
 
 
   /// <summary>
+  /// Resizes storage of the detail segments to commit only the space currently in use.
+  /// </summary>
+  public void ResizeToCurrent() => DetailSegments.ResizeToCurrent();
+
+
+  /// <summary>
   /// Returns if a child exists for the specified index.
   /// </summary>
   /// <param name="childIndex"></param>

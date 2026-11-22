@@ -64,7 +64,6 @@ public struct SpinLockByte
   /// <summary>
   /// Acquires the lock.
   /// </summary>
-  [MethodImpl(MethodImplOptions.AggressiveInlining)]
   public void Acquire()
   {
     Debug.Assert(state != VALUE_ILLEGAL, "AcquireFoundIllegal");
@@ -79,11 +78,7 @@ public struct SpinLockByte
       }
     }
 
-    int tid = System.Environment.CurrentManagedThreadId;
-    byte stateValueToUse =
-        (CHECK_THREAD_REENTRANCY && IsTrackableThreadId(tid))
-          ? StateValueToUseForThreadID(tid)
-          : VALUE_LOCKED_NO_THREAD_TRACKING;
+    byte stateValueToUse = LockedStateValueForCurrentThread();
 
     // Fast path attempt.
     if (Interlocked.CompareExchange(ref state, stateValueToUse, VALUE_UNLOCKED) == VALUE_UNLOCKED)
@@ -109,9 +104,34 @@ public struct SpinLockByte
   }
 
   /// <summary>
+  /// Returns the state byte to store when this thread takes the lock:
+  /// the bucketized owner thread id when reentrancy checking is enabled,
+  /// otherwise the untracked locked marker.
+  /// </summary>
+  /// <remarks>
+  /// The thread id read stays inside the constant guard deliberately. It is a call which the
+  /// JIT will not elide even once it has proved the result unused (as it does in release, where
+  /// CHECK_THREAD_REENTRANCY is false and the value folds to a constant), and it costs
+  /// about as much again as the uncontended acquire itself.
+  /// </remarks>
+  private static byte LockedStateValueForCurrentThread()
+  {
+    byte stateValueToUse = VALUE_LOCKED_NO_THREAD_TRACKING;
+    if (CHECK_THREAD_REENTRANCY)
+    {
+      int tid = System.Environment.CurrentManagedThreadId;
+      if (IsTrackableThreadId(tid))
+      {
+        stateValueToUse = StateValueToUseForThreadID(tid);
+      }
+    }
+    return stateValueToUse;
+  }
+
+
+  /// <summary>
   /// Maps any positive thread ID into the tracked range [2..253].
   /// </summary>
-  [MethodImpl(MethodImplOptions.AggressiveInlining)]
   private static byte StateValueToUseForThreadID(int threadID)
   {
     Debug.Assert(threadID > 0);
@@ -123,7 +143,6 @@ public struct SpinLockByte
   /// Returns true if thread tracking is feasible for this thread ID.
   /// All positive thread IDs can be tracked (mapped into the bucket range).
   /// </summary>
-  [MethodImpl(MethodImplOptions.AggressiveInlining)]
   private static bool IsTrackableThreadId(int threadID) => threadID > 0;
 
 
@@ -138,11 +157,7 @@ public struct SpinLockByte
   {
     Debug.Assert(state != VALUE_ILLEGAL, "TryAcquireFoundIllegal");
 
-    int tid = System.Environment.CurrentManagedThreadId;
-    byte stateValueToUse =
-        (CHECK_THREAD_REENTRANCY && IsTrackableThreadId(tid))
-          ? StateValueToUseForThreadID(tid)
-          : VALUE_LOCKED_NO_THREAD_TRACKING;
+    byte stateValueToUse = LockedStateValueForCurrentThread();
 
     return Interlocked.CompareExchange(ref state, stateValueToUse, VALUE_UNLOCKED) == VALUE_UNLOCKED;
   }

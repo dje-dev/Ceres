@@ -132,6 +132,15 @@ public partial class MCGSEngine
 
   public WorkerPool<ExtendPathsWorkerInfo>[] SelectWorkerPools;
 
+  /// <summary>
+  /// Per-iterator pools of MCGSPathVisit slots, owned by the caller (typically the game engine)
+  /// and therefore reused across successive searches. Each pool is a multi-megabyte fixed-size
+  /// inline buffer, so allocating one per search would put a large object on the LOH every move.
+  /// Null if the caller does not supply pools (in which case each iterator allocates its own).
+  /// Indexed by iterator ID exactly as SelectWorkerPools.
+  /// </summary>
+  public ArraySegmentPool<MCGSPathVisit>[] PathVisitPools;
+
   internal int nextBatchID;
 
   /// <summary>
@@ -158,7 +167,8 @@ public partial class MCGSEngine
   public MCGSEngine(MCGSManager manager,
                     WorkerPool<ExtendPathsWorkerInfo>[] selectWorkerPools,
                     Graph graph,
-                    GraphRootToSearchRootNodeInfo[] searchRootPathFromGraphRoot)
+                    GraphRootToSearchRootNodeInfo[] searchRootPathFromGraphRoot,
+                    ArraySegmentPool<MCGSPathVisit>[] pathVisitPools = null)
   {
     Manager = manager;
 
@@ -173,6 +183,7 @@ public partial class MCGSEngine
     Graph.PTBMaxRepDrawFraction = manager.ParamsSearch.PseudoTranspositionBlendingMaxRepDrawFraction;
     Strategy = new MCGSStrategyPUCT(this);
     SelectWorkerPools = selectWorkerPools;
+    PathVisitPools = pathVisitPools;
     QRecalculator = new BottomUpQRecalculator(this);
     QPropagator = new SelectiveQPropagator(this);
 
@@ -459,6 +470,30 @@ public partial class MCGSEngine
   }
 
 
+  /// <summary>
+  /// Returns the pool of MCGSPathVisit slots to be used by the iterator with specified ID,
+  /// taken from the caller-owned (search-spanning) set if available, else newly created.
+  /// A recycled pool is fully reset first so no references from the prior search remain live.
+  /// </summary>
+  /// <param name="iteratorID"></param>
+  internal ArraySegmentPool<MCGSPathVisit> GetPathVisitPool(int iteratorID)
+  {
+    if (PathVisitPools == null || iteratorID >= PathVisitPools.Length)
+    {
+      return new ArraySegmentPool<MCGSPathVisit>();
+    }
+
+    ArraySegmentPool<MCGSPathVisit> pool = PathVisitPools[iteratorID];
+    if (pool == null)
+    {
+      return PathVisitPools[iteratorID] = new ArraySegmentPool<MCGSPathVisit>();
+    }
+
+    pool.Reset();
+    return pool;
+  }
+
+
   internal void RunLoop(int hardMaxRootN)
   {
     const bool DEBUG_MODE = false;
@@ -467,11 +502,12 @@ public partial class MCGSEngine
 
     numVisitsInFlight = 0;
     startedOverlapping = false;
+    Coordinator.ResetSolo();
 
     int firstIteratorID = 0;
     int secondIteratorID = 1;
 
-    iterator0 = new(this, firstIteratorID, Manager.EvaluatorNN0);
+    iterator0 = new(this, firstIteratorID, Manager.EvaluatorNN0, GetPathVisitPool(firstIteratorID));
 
     if (!SearchRootNode.IsEvaluated)
     {
@@ -511,7 +547,7 @@ public partial class MCGSEngine
     if (Manager.ParamsSearch.Execution.DualOverlappedIterators && ShouldContinue())
     {
       MCGSEvaluatorNeuralNet evaluator1ToUse = Manager.ParamsSearch.Execution.DualEvaluators ? Manager.EvaluatorNN1 : Manager.EvaluatorNN0;
-      iterator1 = new MCGSIterator(this, secondIteratorID, evaluator1ToUse);
+      iterator1 = new MCGSIterator(this, secondIteratorID, evaluator1ToUse, GetPathVisitPool(secondIteratorID));
 
       startedOverlapping = true;
 
@@ -595,6 +631,58 @@ public partial class MCGSEngine
 
 
   /// <summary>
+  /// Creates a dedicated iterator over the (still-alive) underlying NNEvaluator, suitable for
+  /// running extra committed visits against a quiescent graph outside (or between batches of)
+  /// the main search: deep rollouts (RunFromInnerNodes) and directed/forced visits
+  /// (MCGSIterator.RunProbeSpecs, see Search/ProbeGraft/DirectedVisits.cs).
+  ///
+  /// A prior search's RunLoop disposes its iterator (and thus Manager.EvaluatorNN0's batch /
+  /// pooled buffers), but the underlying NNEvaluator itself is left intact and reusable, so a
+  /// fresh evaluator wrapper is constructed over it. Caller disposes the iterator.
+  /// </summary>
+  /// <param name="cpuctMultiplier">exploration multiplier applied below forced prefixes (1 = stock PUCT)</param>
+  /// <param name="disableTranspositionSufficiencyStop">if true descents always reach a true frontier</param>
+  /// <returns></returns>
+  internal MCGSIterator CreateInnerIterator(float cpuctMultiplier = 1.0f, bool disableTranspositionSufficiencyStop = false)
+  {
+    int maxBatchSize = Manager.ParamsSearch.Execution.MaxBatchSize;
+    MCGSEvaluatorNeuralNet evaluatorNN = new MCGSEvaluatorNeuralNet(
+      Manager.EvaluatorsSet.EvaluatorDef, Manager.NNEvaluator0, null,
+      Manager.ParamsSearch.HistoryFillIn,
+      Math.Min(Manager.NNEvaluator0.MaxBatchSize, maxBatchSize),
+      false, Manager.ParamsSearch.ValueTemperature, Manager.ParamsSearch.EnableState,
+      null, null, Manager.EvaluatorNN0.EngineIsWhite);
+
+    MCGSIterator iterator = new MCGSIterator(this, 0, evaluatorNN);
+    iterator.CPUCTMultiplier = cpuctMultiplier;
+    iterator.DisableTranspositionSufficiencyStop = disableTranspositionSufficiencyStop;
+    return iterator;
+  }
+
+
+  /// <summary>
+  /// Runs an action against a dedicated inner iterator (see CreateInnerIterator), disposing
+  /// the iterator afterwards. The graph must be quiescent (no search in progress).
+  /// </summary>
+  /// <typeparam name="T"></typeparam>
+  /// <param name="action"></param>
+  /// <param name="cpuctMultiplier"></param>
+  /// <returns></returns>
+  internal T RunWithInnerIterator<T>(Func<MCGSIterator, T> action, float cpuctMultiplier = 1.0f)
+  {
+    MCGSIterator iterator = CreateInnerIterator(cpuctMultiplier, false);
+    try
+    {
+      return action(iterator);
+    }
+    finally
+    {
+      iterator.Dispose();
+    }
+  }
+
+
+  /// <summary>
   /// Runs "deep rollout" visits that begin at the specified inner nodes (rather than the search
   /// root), growing the existing graph. Each round sends exactly one visit to each still-active
   /// node; rollouts are aggregated into shared NN batches and backed up (propagating each value up
@@ -652,19 +740,7 @@ public partial class MCGSEngine
     MCGSIterator iterator = null;
     try
     {
-      // Fresh evaluator wrapper over the (still-alive) underlying NNEvaluator: a prior search's
-      // RunLoop disposes its iterator (and thus Manager.EvaluatorNN0's batch / pooled buffers), but
-      // the underlying NNEvaluator itself is left intact and reusable.
-      MCGSEvaluatorNeuralNet evaluatorNN = new MCGSEvaluatorNeuralNet(
-        Manager.EvaluatorsSet.EvaluatorDef, Manager.NNEvaluator0, null,
-        Manager.ParamsSearch.HistoryFillIn,
-        Math.Min(Manager.NNEvaluator0.MaxBatchSize, maxBatchSize),
-        false, Manager.ParamsSearch.ValueTemperature, Manager.ParamsSearch.EnableState,
-        null, null, Manager.EvaluatorNN0.EngineIsWhite);
-
-      iterator = new MCGSIterator(this, 0, evaluatorNN);
-      iterator.CPUCTMultiplier = explorationMultiplier;
-      iterator.DisableTranspositionSufficiencyStop = deepRollout;
+      iterator = CreateInnerIterator(explorationMultiplier, deepRollout);
 
       List<GNode> activeNodes = new(startNodes.Length);
       activeNodes.AddRange(startNodes);

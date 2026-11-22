@@ -38,6 +38,7 @@ SOFTWARE.
 #region Using directives
 
 using System;
+using System.Diagnostics;
 
 #endregion
 
@@ -45,12 +46,32 @@ namespace Ceres.Chess.TBBackends.Fathom
 {
   /// <summary>
   /// List of legal moves in a position being probed in the tablebase.
+  ///
+  /// Instances are pooled per thread and per probe recursion depth
+  /// (see FathomProbe.MoveListAtDepth), so a list is refilled many times
+  /// over its lifetime rather than allocated per move generation.
   /// </summary>
   internal class TBMoveList
   {
     public int NumMoves { private set; get; }
 
     public ushort[] Moves = new ushort[FathomMoveGen.TB_MAX_MOVES];
+
+    /// <summary>
+    /// Empties the list, readying it to be filled again (the move generators
+    /// call this before writing, so a reused list needs no preparation).
+    /// </summary>
+    public void Clear() => NumMoves = 0;
+
+    /// <summary>
+    /// Shrinks the list to its first numMoves entries.
+    /// Used by filters (such as gen_legal) which compact in place.
+    /// </summary>
+    public void TruncateTo(int numMoves)
+    {
+      Debug.Assert(numMoves >= 0 && numMoves <= NumMoves);
+      NumMoves = numMoves;
+    }
 
     public void AddMove(ushort move)
     {

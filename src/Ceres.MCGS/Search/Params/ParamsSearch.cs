@@ -152,6 +152,17 @@ public record ParamsSearch
 
 
   /// <summary>
+  /// Opt-in "refutation grafting" hybrid feature (PICKET M1): important interior nodes are
+  /// asynchronously verified by an external probe source; when a probe refutes the
+  /// currently dominant move at a node (or surfaces a strong low-prior alternative), the probe's
+  /// witness line is grafted into the graph as forced, committed, NN-evaluated visits (plus an
+  /// optional bounded prior nudge). No value is ever written to the graph.
+  /// Disabled by default; see ParamsProbeGraft.
+  /// </summary>
+  public ParamsProbeGraft ProbeGraft = new();
+
+
+  /// <summary>
   /// Implementation related parameters related to execution of a batch
   /// which are potentially recomputed based on the characterstic of the batch.
   /// </summary>
@@ -785,6 +796,33 @@ public record ParamsSearch
   /// </summary>
   public PostBackupQModeType PostBackupQMode = PostBackupQModeType.Off;
 
+
+  /// <summary>
+  /// Detail level of the hybrid (probe/graft) statistics block written to the console at
+  /// the end of every search. Off by default so ordinary play and tournaments stay quiet.
+  ///
+  /// This is separate from ParamsProbeGraft.EnableStatsSummary, which controls only the terse
+  /// single-line summary; when both are set the richer report here wins. Intended for research runs
+  /// where per-search hybrid behavior needs to be inspected directly rather than aggregated.
+  /// </summary>
+  public enum HybridStatsDumpType
+  {
+    /// <summary>No hybrid statistics written.</summary>
+    Off,
+
+    /// <summary>One dense line per search.</summary>
+    Compact,
+
+    /// <summary>Multi-line block per search: probe throughput, triggers, grafts, causal impact, cost.</summary>
+    Full
+  }
+
+  /// <summary>
+  /// If and how hybrid probe/graft statistics are dumped to the console at the end of
+  /// each search. Default Off. See HybridStatsDumpType.
+  /// </summary>
+  public HybridStatsDumpType DumpHybridSearchStats = HybridStatsDumpType.Off;
+
   /// <summary>
   /// Maximum number of parent-node Q recomputes performed per batch when
   /// PostBackupQMode == StaleDrain. Bounds per-batch cost and is the cycle-termination guarantee.
@@ -844,6 +882,7 @@ public record ParamsSearch
   public void Validate()
   {
     RootMinimaxBlend?.Validate();
+    ProbeGraft?.Validate(this);
 
     if (RedescentScaleByVolatility && !TrackLeafValueVolatility)
     {

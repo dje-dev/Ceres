@@ -59,6 +59,15 @@ public partial class MCGSBackup
   private int nextPathIndex;
 
   /// <summary>
+  /// Number of paths a backup worker claims per interlocked update.
+  ///
+  /// Claiming in chunks amortizes the atomic over several paths instead of paying it once
+  /// per path per worker. Kept small so that the tail of a batch cannot leave one worker
+  /// holding a long chunk while every other worker sits idle.
+  /// </summary>
+  private const int PATH_CLAIM_CHUNK = 8;
+
+  /// <summary>
   /// Cached value of ParamsSearch.TrackLeafValueVolatility
   /// (avoids re-traversing the property chain for every backed up path).
   /// </summary>
@@ -75,7 +84,7 @@ public partial class MCGSBackup
   {
     Engine = mcgsCoordinator;
     trackLeafValueVolatility = mcgsCoordinator.Manager.ParamsSearch.TrackLeafValueVolatility;
-    applyLeafNodeUpdatesAction = ApplyLeafNodeUpdates;
+    applyLeafNodeUpdatesAtIndexAction = i => ApplyLeafNodeUpdates(leafPrepPaths[i]);
 
     if (mcgsCoordinator.Manager.ParamsSearch.Execution.BackupMode == BackupMethodEnum.ReductionMultiThread)
     {
@@ -136,14 +145,23 @@ public partial class MCGSBackup
     }
     nextPathIndex = 0;
 
-    int numBackupThreads = MaxConcurrentThreadsForPaths(iterator.numAllocatedPaths);
+    int numBackupThreads = MaxConcurrentThreadsForPaths(iterator.numAllocatedPaths.Value);
 
-    for (int i = 0; i < numBackupThreads; i++)
+    if (numBackupThreads == 1)
     {
-      cachedBackupTasks[i] = Task.Run(() => BackupWorkerLoop(numPaths, strategy, iterator));
+      // Run inline: with a single worker the Tasks (and the closure capturing their arguments)
+      // are pure overhead, as is the round trip through the thread pool.
+      BackupWorkerLoop(numPaths, strategy, iterator);
     }
+    else
+    {
+      for (int i = 0; i < numBackupThreads; i++)
+      {
+        cachedBackupTasks[i] = Task.Run(() => BackupWorkerLoop(numPaths, strategy, iterator));
+      }
 
-    Task.WaitAll(cachedBackupTasks.AsSpan(0, numBackupThreads));
+      Task.WaitAll(cachedBackupTasks.AsSpan(0, numBackupThreads));
+    }
 
 #if DEBUG
     for (int i = 0; i < numPaths; i++)
@@ -179,8 +197,12 @@ public partial class MCGSBackup
 
 
   /// <summary>
-  /// Worker loop for multi-threaded reduction backup; claims successive paths
+  /// Worker loop for multi-threaded reduction backup; claims successive chunks of paths
   /// from cachedPathsBuffer until all numPaths have been claimed.
+  ///
+  /// Backup order is immaterial: BackupReduced serializes each level under the parent's
+  /// NodeLockBlock and the path which drives a visit's counter to zero merges the
+  /// accumulated contributions of the others, so any interleaving yields the same result.
   /// </summary>
   /// <param name="numPaths"></param>
   /// <param name="strategy"></param>
@@ -191,34 +213,22 @@ public partial class MCGSBackup
   {
     while (true)
     {
-      int pathIndex = Interlocked.Increment(ref nextPathIndex) - 1;
-      if (pathIndex >= numPaths)
+      // Claim [chunkStart, chunkEnd), the block this add just reserved for this worker.
+      int chunkEnd = Interlocked.Add(ref nextPathIndex, PATH_CLAIM_CHUNK);
+      int chunkStart = chunkEnd - PATH_CLAIM_CHUNK;
+      if (chunkStart >= numPaths)
       {
         return;
       }
 
-      BackupReduced(strategy, cachedPathsBuffer[pathIndex], iterator.IteratorID);
-    }
-  }
-
-
-  /// <summary>
-  /// Issues processor prefetch memory hint for child edge of parentNode at indexInParent.
-  /// </summary>
-  /// <param name="parentNode"></param>
-  /// <param name="indexInParent"></param>
-  private static void PrefetchChild(GNode parentNode, int indexInParent)
-  {
-    // Possibly start memory prefetch of parent edge.
-    if (MCGSParamsFixed.PrefetchCacheLevel != Prefetcher.CacheLevel.None)
-    {
-      Span<GEdgeHeaderStruct> parentsChildEdgeHeaders = parentNode.EdgeHeadersSpan;
-      unsafe
+      if (chunkEnd > numPaths)
       {
-        void* nodePtr = Unsafe.AsPointer(ref parentNode.EdgeStructAtIndexRef(parentsChildEdgeHeaders[indexInParent].EdgeStoreBlockIndex, indexInParent));
-        Prefetcher.PrefetchLevel1(nodePtr);
+        chunkEnd = numPaths; // final chunk, partially past the end of the batch
+      }
 
-        Debug.Assert(parentNode.ChildEdgeAtIndex(indexInParent).edgeStructPtr == nodePtr);
+      for (int pathIndex = chunkStart; pathIndex < chunkEnd; pathIndex++)
+      {
+        BackupReduced(strategy, cachedPathsBuffer[pathIndex], iterator.IteratorID);
       }
     }
   }

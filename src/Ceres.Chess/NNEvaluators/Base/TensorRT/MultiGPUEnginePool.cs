@@ -171,11 +171,42 @@ public sealed class MultiGPUEnginePool : IDisposable
   /// <summary>
   /// Constructor.
   /// </summary>
+  /// <summary>
+  /// Serializes pool construction process wide (see ConstructionScope).
+  /// </summary>
+  static readonly object constructionLock = new();
+
+
+  /// <summary>
+  /// Scope holding the construction lock for the lifetime of a pool constructor.
+  ///
+  /// Building a pool deserializes engines, creates contexts and streams, and (in Warmup)
+  /// captures CUDA graphs. CUDA invalidates a capture in progress if another thread touches the
+  /// device meanwhile (error 901, stream capture isolation), which surfaces as "Failed to capture
+  /// CUDA graph" and can take the process down. Construction happens once per evaluator, so
+  /// serializing it costs nothing at steady state.
+  /// </summary>
+  private readonly struct ConstructionScope : IDisposable
+  {
+    public ConstructionScope(object lockObject)
+    {
+      LockObject = lockObject;
+      Monitor.Enter(LockObject);
+    }
+
+    readonly object LockObject;
+
+    public void Dispose() => Monitor.Exit(LockObject);
+  }
+
+
   public MultiGPUEnginePool(TensorRT trt, string onnxPath, int[][] sizesPerGPU, EnginePoolMode mode,
                              TensorRTBuildOptions options, int inputElementsPerPos, int outputElementsPerPos,
                              int[] deviceIds, int minBatchSizePerGPU, string cacheDir,
                              MultiGPUEnginePool referencePool = null)
   {
+    using ConstructionScope constructionScope = new(constructionLock);
+
     this.trt = trt;
     this.onnxPath = onnxPath;
     this.buildOptions = options;

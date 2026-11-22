@@ -671,9 +671,9 @@ namespace Ceres.Chess.TBBackends.Fathom
     /*
      * Generate all captures, including all underpomotions
      */
-    internal static TBMoveList gen_captures(in FathomPos pos)
+    internal static void gen_captures(in FathomPos pos, TBMoveList moves)
     {
-      TBMoveList moves = new TBMoveList();
+      moves.Clear();
 
       ulong occ = pos.White | pos.Black;
       ulong us = (pos.Turn ? pos.White : pos.Black),
@@ -739,15 +739,14 @@ namespace Ceres.Chess.TBBackends.Fathom
           add_move(moves, (rank(to) == 7 || rank(to) == 0), from, to);
         }
       }
-      return moves;
     }
 
     /*
      * Generate all moves.
      */
-    static internal TBMoveList gen_moves(in FathomPos pos)
+    static internal void gen_moves(in FathomPos pos, TBMoveList moves)
     {
-      TBMoveList moves = new();
+      moves.Clear();
       ulong occ = pos.White | pos.Black;
       ulong us = (pos.Turn ? pos.White : pos.Black),
                them = (pos.Turn ? pos.Black : pos.White);
@@ -822,7 +821,6 @@ namespace Ceres.Chess.TBBackends.Fathom
           add_move(moves, (rank(to) == 7 || rank(to) == 0), from, to);
         }
       }
-      return moves;
     }
 
     /*
@@ -1080,19 +1078,20 @@ namespace Ceres.Chess.TBBackends.Fathom
     /// Return if the king is in checkmate.
     /// </summary>
     /// <param name="pos"></param>
+    /// <param name="scratchMoves">list used to hold the generated moves</param>
     /// <returns></returns>
-    internal static bool is_mate(in FathomPos pos)
+    internal static bool is_mate(in FathomPos pos, TBMoveList scratchMoves)
     {
       if (!is_check(pos))
       {
         return false;
       }
 
-      TBMoveList moves = gen_moves(pos);
-      for (int i = 0; i < moves.NumMoves; i++)
+      gen_moves(pos, scratchMoves);
+      for (int i = 0; i < scratchMoves.NumMoves; i++)
       {
         FathomPos pos1 = default;
-        if (do_move(ref pos1, in pos, moves.Moves[i]))
+        if (do_move(ref pos1, in pos, scratchMoves.Moves[i]))
         {
           return false;
         }
@@ -1106,20 +1105,24 @@ namespace Ceres.Chess.TBBackends.Fathom
     /// Generates all legal moves.
     /// </summary>
     /// <param name="pos"></param>
-    /// <returns></returns>
-    internal static TBMoveList gen_legal(in FathomPos pos)
+    /// <param name="moves">list to receive the legal moves</param>
+    internal static void gen_legal(in FathomPos pos, TBMoveList moves)
     {
-      TBMoveList ret = new TBMoveList();
+      gen_moves(pos, moves);
 
-      TBMoveList moves = gen_moves(pos);
+      // Retain only the legal moves, compacting in place. The write position never
+      // runs ahead of the read position, so no second list is needed for the output.
+      int numLegal = 0;
       for (int i = 0; i < moves.NumMoves; i++)
       {
-        if (legal_move(pos, moves.Moves[i]))
+        ushort move = moves.Moves[i];
+        if (legal_move(pos, move))
         {
-          ret.AddMove(moves.Moves[i]);
+          moves.Moves[numLegal++] = move;
         }
       }
-      return ret;
+
+      moves.TruncateTo(numLegal);
     }
 
   }

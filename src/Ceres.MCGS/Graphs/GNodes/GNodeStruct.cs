@@ -182,5 +182,10 @@ public partial struct GNodeStruct
     //Debug.Assert(System.Runtime.GCSettings.LargeObjectHeapCompactionMode == GCLargeObjectHeapCompactionMode.Default);
 
     Debug.Assert(Marshal.SizeOf<NodeIndex>() == 4);
+
+    // The cached-base-pointer accessors in Graph/GNode rely upon these layout properties.
+    Debug.Assert(Unsafe.SizeOf<Ceres.Base.Threading.PaddedInt32>() == 128);
+    Debug.Assert(Unsafe.SizeOf<GEdges.GEdgeStructBlocked>() == GEdges.GEdgeStore.NUM_EDGES_PER_BLOCK * Unsafe.SizeOf<GEdges.GEdgeStruct>());
+    Debug.Assert(System.Numerics.BitOperations.IsPow2(GEdges.GEdgeStore.NUM_EDGES_PER_BLOCK)); // EdgeStructAtIndexRef masks with (NUM_EDGES_PER_BLOCK - 1)
   }
 }

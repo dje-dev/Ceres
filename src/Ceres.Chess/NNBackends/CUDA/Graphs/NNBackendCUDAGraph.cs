@@ -84,7 +84,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       exec = default;
       node = default;
       Device.GraphCaptureRWLock.EnterWriteLock();
-      CUDAUtils.Check(DriverAPINativeMethods.Streams.cuStreamBeginCapture(stream.Stream, CUstreamCaptureMode.Global));
+      CUDAUtils.Check(DriverAPINativeMethods.Streams.cuStreamBeginCapture(stream.Stream, CUstreamCaptureMode.Local));
     }
 
 

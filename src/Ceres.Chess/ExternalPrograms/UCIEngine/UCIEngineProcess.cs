@@ -134,7 +134,10 @@ namespace Ceres.Chess.External.CEngine
 
     void ErrorReceviedEvent(object sender, DataReceivedEventArgs e)
     {
-      Console.WriteLine($"UCIEngineProcessError: {e.Data}");
+      if (!string.IsNullOrEmpty(e.Data))   // the terminating null event at process exit is not an error
+      {
+        Console.WriteLine($"UCIEngineProcessError: {e.Data}");
+      }
     }
 
     void ReceviedEvent(object sender, DataReceivedEventArgs e)

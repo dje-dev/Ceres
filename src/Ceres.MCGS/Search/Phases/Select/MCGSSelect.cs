@@ -17,6 +17,7 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Numerics.Tensors;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
@@ -29,6 +30,7 @@ using Ceres.Chess.Positions;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.MCGS.Graphs.GEdgeHeaders;
 using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Search.Coordination;
@@ -255,6 +257,13 @@ public class MCGSSelect
       return null;
     }
 
+    if (MCGSParamsFixed.PREFETCH_SELECT_FIRST_EDGE_BLOCK
+     && MCGSParamsFixed.PrefetchCacheLevel != Prefetcher.CacheLevel.None
+     && Prefetcher.IsPrefetchSupported)
+    {
+      PrefetchFirstEdgeBlock(parentNode);
+    }
+
     const bool ALSO_COMPUTE_CHILD_SCORES = false;
 
     MGPosition parentPosMG = path.NumVisitsInPath == 0 ? path.Engine.SearchRootPosMG : path.LeafVisitRef.ChildPosition;
@@ -378,6 +387,17 @@ public class MCGSSelect
       }
     }
 
+    // The visit counts of expanded children are final here (the compaction in ProcessChildren
+    // only permutes unexpanded slots), so their node structs can be prefetched now and the
+    // misses overlap with the Q reset, capacity check and child position computation below.
+    if (MCGSParamsFixed.PREFETCH_SELECT_CHILD_NODES
+     && MCGSParamsFixed.PrefetchCacheLevel != Prefetcher.CacheLevel.None
+     && Prefetcher.IsPrefetchSupported
+     && parentNode.NumEdgesExpanded > 0)
+    {
+      PrefetchChildNodesReceivingVisits(parentNode, childVisitCounts);
+    }
+
     Debug.Assert(!double.IsNaN(childStats.SumW));
 
     if (graphEnabled) // node Q values can only become desynchronized if graph mode enabled
@@ -443,6 +463,86 @@ public class MCGSSelect
                            parentNode, in parentPosMG, childVisitCounts,
                            numChildrenToConsider, numVisitsRemaining,
                            cpuctMultiplier);
+  }
+
+
+  /// <summary>
+  /// Issues prefetches for the first expanded edge block of the node (both cache lines
+  /// if more than two edges are expanded). The gather of child statistics reads this block
+  /// first, as a dependent miss via the edge header; issuing the prefetch at the start of
+  /// the frame overlaps that miss with the child selection setup work.
+  /// Requires that any deferred policy copy has already been performed.
+  /// </summary>
+  private static unsafe void PrefetchFirstEdgeBlock(GNode node)
+  {
+    int numEdgesExpanded = node.NumEdgesExpanded;
+    if (numEdgesExpanded == 0)
+    {
+      return;
+    }
+
+    byte* block = (byte*)Unsafe.AsPointer(ref node.EdgeStructAtIndexRef(node.EdgeHeadersSpan[0].EdgeStoreBlockIndex, 0));
+    Prefetcher.PrefetchLevel1(block);
+    if (numEdgesExpanded > 2)
+    {
+      Prefetcher.PrefetchLevel1(block + 64); // second cache line of the block (edges 2 and 3)
+    }
+  }
+
+
+  /// <summary>
+  /// Issues prefetches for the GNodeStruct of every expanded child about to receive visits.
+  /// The edge headers and edge structs are already in cache from the gather, so the child
+  /// node indices are available at low cost; the child structs themselves are otherwise
+  /// first touched in ProcessExpandedChild, one dependent miss after another.
+  /// </summary>
+  private static unsafe void PrefetchChildNodesReceivingVisits(GNode parentNode, ReadOnlySpan<short> childVisitCounts)
+  {
+    int numExpanded = Math.Min(parentNode.NumEdgesExpanded, childVisitCounts.Length);
+    Span<GEdgeHeaderStruct> headers = parentNode.EdgeHeadersSpan;
+    for (int k = 0; k < numExpanded; k++)
+    {
+      if (childVisitCounts[k] > 0)
+      {
+        NodeIndex childIndex = parentNode.EdgeStructAtIndexRef(headers[k].EdgeStoreBlockIndex, k).ChildNodeIndex;
+        if (!childIndex.IsNull) // null for terminal edges
+        {
+          Prefetcher.PrefetchLevel1(parentNode.Graph.NodePtr(childIndex));
+        }
+      }
+    }
+  }
+
+
+  /// <summary>
+  /// Issues prefetches for the edge header block of a child into which descent has just
+  /// been deferred, so the block is (at least partly) in cache when that descent begins
+  /// after the parent lock is released.
+  /// The child is not locked here: its header block index field is read exactly once, and
+  /// the prefetch is skipped if the copy of the policy is still deferred or the field is
+  /// transiently cleared (policy copy in progress on another thread).
+  /// </summary>
+  private static unsafe void PrefetchChildEdgeHeaders(GNode childNode, int numVisitsThisChild)
+  {
+    EdgeHeaderBlockIndexOrNodeIndex headerBlock = childNode.NodeRef.edgeHeaderBlockIndexOrDeferredNode;
+    int numPolicyMoves = childNode.NumPolicyMoves;
+    if (headerBlock.IsNodeIndex || headerBlock.IsNull || numPolicyMoves == 0)
+    {
+      return;
+    }
+
+    byte* block = (byte*)(childNode.Graph.EdgeHeadersBasePtr
+                        + GEdgeHeadersStore.NUM_EDGE_HEADERS_PER_BLOCK * headerBlock.BlockIndexIntoEdgeHeaderStore);
+    Prefetcher.PrefetchLevel1(block);
+
+    // The descent reads headers [0, NumEdgesExpanded + numVisitsThisChild), at most NumPolicyMoves.
+    // Also prefetch the second cache line of the block if those extend beyond the first.
+    int headersPerLine = 64 / sizeof(GEdgeHeaderStruct);
+    int numHeadersRead = Math.Min(numPolicyMoves, childNode.NumEdgesExpanded + numVisitsThisChild);
+    if (numHeadersRead > headersPerLine)
+    {
+      Prefetcher.PrefetchLevel1(block + 64);
+    }
   }
 
 
@@ -1032,7 +1132,8 @@ public class MCGSSelect
 
     // Stochastic/warmup redescent override probability (0 = disabled; see IsTranspositionSufficientN).
     float redescentStochasticProbability = paramsSearch.RedescentStochasticProbability;
-    bool parallelEnabled = paramsSearch.Execution.SelectOperationParallelThresholdNumVisits < int.MaxValue;
+    bool parallelEnabled = paramsSearch.Execution.SelectOperationParallelThresholdNumVisits < int.MaxValue
+                        && !iterator.ForceSerialSelect;   // probe/forced descents stay serial (RunProbeSpecs)
     int THRESHOLD_PARALLEL = ParallelThresholdToUse;
 
     // Multipass (parallel-launch) scanning is only useful when enough visits flow
@@ -1299,13 +1400,17 @@ public class MCGSSelect
         ? PosHash96MultisetRunning.EpochStartFinalized(info.childPositionHash96)
         : path.RunningHash.Finalized(info.childPositionHash96);
     }
-    else
+    else if (path.Graph.HasPositionAndSequenceDictionary)
     {
       // Replace hash code with standalone hash so all edges map to a shared node.
       // Use extra available slot with another hash to reduce hash collision probability.
       int extraHash = HashCode.Combine(info.childPos.A, info.childPos.B, info.childPos.C, info.childPos.D);
       info.childPositionAndSequenceHashFinalized = new PosHash96MultisetFinalized((uint)extraHash, info.childPositionHash64.Hash);
     }
+    // Otherwise left default. The sole consumer of this field (Graph.AddEdgeToNewOrExistingNode)
+    // reads it only to key the 96-bit position+sequence dictionary, so with no such dictionary the
+    // hash was computed per child and then discarded. Testing for the dictionary rather than for
+    // the mode keeps this correct should SINGLE_DICTIONARY_POSITION_MODE ever be turned back off.
 
     // Update repetition count in position (including considering prehistory)
     info.positionDuplicate = path.HashFoundInHistoryOrPrehistory(info.childPositionHash64);
@@ -1402,6 +1507,14 @@ public class MCGSSelect
         deferredSubPaths ??= GetDeferredSubPathsList();
         deferredSubPaths.Add(new DeferredSubPath(subPath, numVisitsThisChild, canLaunchParallel));
         childVisitCounts[childIndex] = 0;
+
+        if (MCGSParamsFixed.PREFETCH_SELECT_CHILD_HEADERS
+         && MCGSParamsFixed.PrefetchCacheLevel != Prefetcher.CacheLevel.None
+         && Prefetcher.IsPrefetchSupported
+         && !canLaunchParallel) // a parallel descent runs on another core
+        {
+          PrefetchChildEdgeHeaders(childNode, numVisitsThisChild);
+        }
       }
       else
       {

@@ -1,5 +1,4 @@
-﻿#define VERY_UNSAFE
-#region License notice
+﻿#region License notice
 
 /*
   This file is part of the Ceres project at https://github.com/dje-dev/ceres.
@@ -299,17 +298,14 @@ public readonly unsafe partial struct GNode : IComparable<GNode>, IEquatable<GNo
   /// <param name="edgeStoreBlockIndex"></param>
   /// <param name="childIndex"></param>
   /// <returns></returns>
-  internal ref GEdgeStruct EdgeStructAtIndexRef(int edgeStoreBlockIndex, int childIndex)
+  internal readonly ref GEdgeStruct EdgeStructAtIndexRef(int edgeStoreBlockIndex, int childIndex)
   {
-    int offsetInBlock = childIndex % GEdgeStore.NUM_EDGES_PER_BLOCK;
+    Debug.Assert(childIndex >= 0);
 
-#if VERY_UNSAFE
-    ref GEdgeStructBlocked refBlock = ref Graph.EdgesStore.edgeStoreMemoryBuffer[edgeStoreBlockIndex];
-    return ref Unsafe.Add(ref Unsafe.As<GEdgeStructBlocked, GEdgeStruct>(ref refBlock), offsetInBlock);
-#else
-    Span<GEdgeStruct> edgeSpan = Graph.EdgesStore.SpanAtBlockIndex(edgeStoreBlockIndex);
-    return ref edgeSpan[offsetInBlock];
-#endif
+    // NUM_EDGES_PER_BLOCK is a power of two (verified in GNodeStruct.ValidateMCGSNodeStruct),
+    // so the offset within the block is a mask rather than a (signed) modulus.
+    int offsetInBlock = childIndex & (GEdgeStore.NUM_EDGES_PER_BLOCK - 1);
+    return ref ((GEdgeStruct*)(Graph.EdgeBlocksBasePtr + edgeStoreBlockIndex))[offsetInBlock];
   }
 
 
@@ -334,12 +330,11 @@ public readonly unsafe partial struct GNode : IComparable<GNode>, IEquatable<GNo
       Debug.Assert(childIndex < NumEdgesExpanded);
 
       GEdgeHeaderStruct header = Graph.ChildEdgeHeaderAtIndex(BlockIndexIntoEdgeHeaderStore, childIndex);
-      Span<GEdgeStruct> edgeSpan = Graph.EdgesStore.SpanAtBlockIndex(header.EdgeStoreBlockIndex);
+      ref GEdgeStruct edgeRef = ref EdgeStructAtIndexRef(header.EdgeStoreBlockIndex, childIndex);
 
-      int offsetInBlock = childIndex % GEdgeStore.NUM_EDGES_PER_BLOCK;
-      return new GEdge(edgeRef: ref edgeSpan[offsetInBlock], 
-                       parent : this, 
-                       child: new GNode(Graph, edgeSpan[offsetInBlock].ChildNodeIndex));
+      return new GEdge(edgeRef: ref edgeRef,
+                       parent : this,
+                       child: new GNode(Graph, edgeRef.ChildNodeIndex));
     }
     else
     {
@@ -369,7 +364,8 @@ public readonly unsafe partial struct GNode : IComparable<GNode>, IEquatable<GNo
     [DebuggerStepThrough]
     get
     {
-      return new NodeIndex((int)GraphStore.NodesStore.IndexOfNodeAtAddress(nodePtr));
+      // Pointer difference against the (fixed) base of the node store.
+      return new NodeIndex((int)(nodePtr - Graph.NodesBasePtr));
     }
   }
 
@@ -417,7 +413,7 @@ public readonly unsafe partial struct GNode : IComparable<GNode>, IEquatable<GNo
 
   public readonly ParentNodesEnumerable Parents => new(Graph, Index);
 
-  public bool NumParentsMoreThanOne => !IsGraphRoot && !Graph.NodesBufferOS[Index.Index].ParentsHeader.IsDirectEntry;
+  public bool NumParentsMoreThanOne => !IsGraphRoot && !NodeRef.ParentsHeader.IsDirectEntry;
   
   public readonly int NumParents
   {
@@ -428,8 +424,7 @@ public readonly unsafe partial struct GNode : IComparable<GNode>, IEquatable<GNo
         return 0;
       }
 
-      // TODO: make this use an accessor
-      GParentsHeader parentHeaderPointer = Graph.NodesBufferOS[Index.Index].ParentsHeader;
+      GParentsHeader parentHeaderPointer = NodeRef.ParentsHeader;
 
       if (parentHeaderPointer.IsDirectEntry) // Single entry inline.
       {
@@ -486,8 +481,7 @@ public readonly unsafe partial struct GNode : IComparable<GNode>, IEquatable<GNo
       NodeRef.NumPolicyMoves = (byte)numEdgeHeaders;
       BlockIndexIntoEdgeHeaderStore = (int)GraphStore.EdgeHeadersStore.AllocateEntriesStartBlock(numEdgeHeaders);
 
-      Span<GEdgeHeaderStruct> span = GraphStore.EdgeHeadersStore.SpanAtBlockIndex(BlockIndexIntoEdgeHeaderStore, (byte)numEdgeHeaders);
-      return new GNodeEdgeHeaders(this, span);
+      return new GNodeEdgeHeaders(this, EdgeHeadersSpan);
     }
   }
 
@@ -567,17 +561,22 @@ public readonly unsafe partial struct GNode : IComparable<GNode>, IEquatable<GNo
   }
 
 
-  public Span<GEdgeHeaderStruct> EdgeHeadersSpan
+  public readonly Span<GEdgeHeaderStruct> EdgeHeadersSpan
   {
     get
     {
-      if (NodeRef.NumPolicyMoves == 0)
+      int numPolicyMoves = NodeRef.NumPolicyMoves;
+      if (numPolicyMoves == 0)
       {
+        // N.B. Must not compute the block address here: BlockIndexIntoEdgeHeaderStore asserts
+        //      that no deferred policy copy is pending, which may not hold for a leaf.
         return [];
       }
       else
       {
-        return GraphStore.EdgeHeadersStore.SpanAtBlockIndex(BlockIndexIntoEdgeHeaderStore, NodeRef.NumPolicyMoves);
+        return new Span<GEdgeHeaderStruct>(Graph.EdgeHeadersBasePtr
+                                           + GEdgeHeadersStore.NUM_EDGE_HEADERS_PER_BLOCK * BlockIndexIntoEdgeHeaderStore,
+                                           numPolicyMoves);
       }
     }
   }

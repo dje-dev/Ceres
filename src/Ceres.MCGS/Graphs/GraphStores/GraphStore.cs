@@ -448,6 +448,7 @@ public partial class GraphStore : IDisposable
     NodesStore.ResizeToCurrent();
     EdgeHeadersStore.ResizeToCurrent();
     EdgesStore.ResizeToCurrent();
+    ParentsStore.ResizeToCurrent();
     NodeIndexSetStore.ResizeToCurrent();
   }
 

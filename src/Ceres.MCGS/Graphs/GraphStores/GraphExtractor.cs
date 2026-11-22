@@ -307,7 +307,7 @@ public static unsafe class GraphExtractor
     }
 
     // Establish the used-node count for the new graph (null node 0 + nodes [1..numReachable]).
-    newGraph.NodesStore.nextFreeIndex = numReachable + 1;
+    newGraph.NodesStore.nextFreeIndex.Value = numReachable + 1;
     if (hasState)
     {
       newGraph.NodesStore.AllStates = newGraph.Store.AllStateVectors;

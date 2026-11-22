@@ -833,7 +833,7 @@ public sealed class MCGSStrategyPUCT : MCGSSelectBackupStrategyBase
       return;
     }
 
-    double newChildQ = childNode.Q;
+    double newChildQ = ProbeGraft.ProbeStamps.ProjectChildQ(childNode, childNode.Q);
     bool shouldContinueMoreLevels = levelsRemaining > 1;
 
     foreach (GEdge edge in childNode.ParentEdges)

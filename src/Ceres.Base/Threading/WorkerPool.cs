@@ -28,6 +28,10 @@ namespace Ceres.Base.Threading;
 /// The pool starts with a configurable number of threads and can grow on demand
 /// up to a specified maximum when work saturation is detected.
 /// 
+/// Idle workers spin on the queue for a short budget before parking, so that a burst of
+/// submissions is picked up without a kernel transition in either direction; the producer
+/// only signals the event when a worker has actually parked.
+///
 /// Thread-safety: All public methods are thread-safe and support concurrent access.
 /// Nested work submissions (submitting work from within a work item callback) are supported.
 /// 
@@ -37,7 +41,8 @@ namespace Ceres.Base.Threading;
 /// <typeparam name="T">The type of state object passed to work item delegates.</typeparam>
 public sealed class WorkerPool<T> : IDisposable
 {
-  private readonly BlockingCollection<(Action<T>, T)> pendingWork;
+  private readonly ConcurrentQueue<(Action<T>, T)> pendingWork;
+  private readonly ManualResetEventSlim workAvailableEvent;
   private readonly ManualResetEventSlim drainedEvent;
   private readonly List<Thread> workers;
   private readonly object workerListLock = new object();
@@ -50,13 +55,28 @@ public sealed class WorkerPool<T> : IDisposable
   private volatile bool shutdownRequested;
   private volatile bool disposed;
 
-  private static int unexpectedExceptionLogged; // 0/1 flag to log warning only once.
-
   private int pendingWorkCount;          // Enqueued-but-not-finished actions.
   private int activeWorkerCount;         // Currently executing actions.
   private int peakActiveWorkerCount;     // High-water mark.
   private int createdThreadCount;        // Threads created.
   private int growthLock;                // 0/1 guard to serialize growth.
+  private int numWaiting;                // Workers parked on workAvailableEvent.
+
+  /// <summary>
+  /// How long a worker polls the queue before parking on the event.
+  ///
+  /// Sized to comfortably span the gap between the submissions in one burst, so that a
+  /// worker which has just finished an item picks up the next one without any kernel
+  /// transition. A park/wake pair costs tens of microseconds, so spinning for a fraction
+  /// of that before giving up is a favorable trade even when it is often wasted.
+  /// </summary>
+  private static readonly long SPIN_BUDGET_TIMESTAMP_TICKS = (long)(Stopwatch.Frequency * 20e-6);
+
+  /// <summary>
+  /// Yields attempted after the spin budget is exhausted, as a last chance to pick up
+  /// work that is arriving right now before paying for the kernel wait.
+  /// </summary>
+  private const int YIELD_ATTEMPTS_BEFORE_PARK = 2;
 
 
   /// <summary>
@@ -79,8 +99,8 @@ public sealed class WorkerPool<T> : IDisposable
     maxThreads = maximumThreads.HasValue ? System.Math.Max(initialThreads, maximumThreads.Value) : int.MaxValue;
     this.threadNamePrefix = threadNamePrefix ?? "WorkerPool";
 
-    // BlockingCollection provides a blocking Take() over a concurrent queue.
     pendingWork = new();
+    workAvailableEvent = new ManualResetEventSlim(false); // no work yet => nothing to signal
     drainedEvent = new ManualResetEventSlim(true); // no work yet => "drained"
     workers = new List<Thread>();
     shutdownTokenSource = new CancellationTokenSource();
@@ -111,8 +131,21 @@ public sealed class WorkerPool<T> : IDisposable
       drainedEvent.Reset();
     }
 
-    // Unbounded add; returns immediately.
-    pendingWork.Add((action, workItem));
+    // Unbounded enqueue; returns immediately.
+    pendingWork.Enqueue((action, workItem));
+
+    // Order the enqueue ahead of the numWaiting read below. Store-then-load is the one
+    // reordering x86 permits, and without the fence this read could be hoisted above the
+    // enqueue: a worker that registers as waiting in between would then be left parked
+    // with work sitting in the queue and no signal coming.
+    Interlocked.MemoryBarrier();
+
+    // Only pay for a kernel wake when a worker has actually parked. While workers are
+    // spinning (the common case within a burst) they find this item by polling.
+    if (Volatile.Read(ref numWaiting) > 0)
+    {
+      workAvailableEvent.Set();
+    }
 
     // If we're nearly saturated, consider growing.
     int active = Volatile.Read(ref activeWorkerCount);
@@ -231,34 +264,19 @@ public sealed class WorkerPool<T> : IDisposable
   {
     while (true)
     {
-      (Action<T> action, T state) workItem;
-      try
+      if (shutdownRequested)
       {
-        // Blocks until an item arrives or disposal cancels.
-        workItem = pendingWork.Take(shutdownTokenSource.Token);
+        return;
       }
-      catch (OperationCanceledException)
+
+      if (!TryDequeueWithSpin(out (Action<T> action, T state) workItem))
       {
-        if (shutdownRequested)
+        // Spinning did not turn up work; park until signalled (or shutdown).
+        if (!WaitForWork())
         {
           return;
-        }
-        continue;
-      }
-      catch (InvalidOperationException ex)
-      {
-        // BlockingCollection is marked as CompleteAdding (we don't use that here),
-        // but handle defensively. Log warning on first occurrence.
-        if (Interlocked.Exchange(ref unexpectedExceptionLogged, 1) == 0)
-        {
-          Console.WriteLine($"WARNING: WorkerPool caught unexpected InvalidOperationException (logging once):");
-          Console.WriteLine(ex.ToString());
         }
 
-        if (shutdownRequested)
-        {
-          return;
-        }
         continue;
       }
 
@@ -279,6 +297,116 @@ public sealed class WorkerPool<T> : IDisposable
           drainedEvent.Set();
         }
       }
+    }
+  }
+
+
+  /// <summary>
+  /// Attempts to take a work item, polling the queue for a bounded period before giving up.
+  /// </summary>
+  /// <param name="workItem">The item taken, if any.</param>
+  /// <returns>true if an item was taken; false if the caller should park (or shut down).</returns>
+  private bool TryDequeueWithSpin(out (Action<T> action, T state) workItem)
+  {
+    if (pendingWork.TryDequeue(out workItem))
+    {
+      return true;
+    }
+
+    long deadline = Stopwatch.GetTimestamp() + SPIN_BUDGET_TIMESTAMP_TICKS;
+    SpinWait spinner = new();
+    int iteration = 0;
+
+    while (true)
+    {
+      // sleep1Threshold -1 keeps SpinWait off Thread.Sleep(1), whose ~15 ms granularity
+      // would defeat the point of spinning (it still escalates to Yield/Sleep(0)).
+      spinner.SpinOnce(sleep1Threshold: -1);
+
+      if (pendingWork.TryDequeue(out workItem))
+      {
+        return true;
+      }
+
+      if (shutdownRequested)
+      {
+        return false;
+      }
+
+      // Consult the clock sparingly; reading it every pass would dominate the early,
+      // very cheap spins.
+      if ((++iteration & 15) == 0 && Stopwatch.GetTimestamp() >= deadline)
+      {
+        break;
+      }
+    }
+
+    for (int i = 0; i < YIELD_ATTEMPTS_BEFORE_PARK; i++)
+    {
+      Thread.Yield();
+
+      if (pendingWork.TryDequeue(out workItem))
+      {
+        return true;
+      }
+
+      if (shutdownRequested)
+      {
+        return false;
+      }
+    }
+
+    return false;
+  }
+
+
+  /// <summary>
+  /// Parks this worker until work is signalled or shutdown is requested.
+  /// </summary>
+  /// <returns>true if the caller should look for work again; false to exit the worker.</returns>
+  /// <remarks>
+  /// Registering in numWaiting before re-checking the queue is what closes the lost wakeup
+  /// window. If a producer read numWaiting as zero (and so did not signal), its enqueue is
+  /// ordered before that read, and the interlocked increment here is a full fence, so the
+  /// re-check below is guaranteed to observe the item. Conversely an enqueue that lands
+  /// after the increment sees a non-zero count and signals.
+  /// </remarks>
+  private bool WaitForWork()
+  {
+    Interlocked.Increment(ref numWaiting);
+    try
+    {
+      if (shutdownRequested)
+      {
+        return false;
+      }
+
+      // Clear the signal, then re-check. Any enqueue preceding the Reset is visible to the
+      // check below; any enqueue following it re-signals, since this worker is registered.
+      workAvailableEvent.Reset();
+
+      if (!pendingWork.IsEmpty)
+      {
+        // Work arrived in the window just before the Reset, which may have swallowed a
+        // signal intended for another parked worker - restore it rather than consume it.
+        workAvailableEvent.Set();
+        return true;
+      }
+
+      try
+      {
+        workAvailableEvent.Wait(shutdownTokenSource.Token);
+      }
+      catch (OperationCanceledException)
+      {
+        return false;
+      }
+
+      return !shutdownRequested;
+    }
+    finally
+    {
+      Interlocked.Decrement(ref numWaiting);
     }
   }
 
@@ -317,8 +445,10 @@ public sealed class WorkerPool<T> : IDisposable
     disposed = true;
     shutdownRequested = true;
 
-    // Signal cancellation to wake up all blocked workers.
+    // Signal cancellation to wake up all blocked workers, and set the event as well so
+    // that a worker between its shutdown check and its Wait is released too.
     shutdownTokenSource.Cancel();
+    workAvailableEvent.Set();
 
     // Wait for all worker threads to finish.
     List<Thread> threadsToJoin;
@@ -335,7 +465,7 @@ public sealed class WorkerPool<T> : IDisposable
       }
     }
 
-    pendingWork.Dispose();
+    workAvailableEvent.Dispose();
     drainedEvent.Dispose();
     shutdownTokenSource.Dispose();
   }

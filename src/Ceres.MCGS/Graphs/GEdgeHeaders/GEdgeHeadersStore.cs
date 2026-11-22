@@ -117,8 +117,8 @@ public class GEdgeHeadersStore : MemoryBufferOSBlocked<GEdgeHeaderStruct>
   /// </summary>
   internal new int NextFreeBlockIndex
   {
-    get => nextFreeBlockIndex;
-    set => nextFreeBlockIndex = value;
+    get => nextFreeBlockIndex.Value;
+    set => nextFreeBlockIndex.Value = value;
   }
 
 
@@ -128,6 +128,6 @@ public class GEdgeHeadersStore : MemoryBufferOSBlocked<GEdgeHeaderStruct>
   /// <returns></returns>
   public override string ToString()
   {
-    return $"<GEdgeHeadersStore NumAllocatedItems={NumAllocatedItems} UsedNodes~{nextFreeBlockIndex * NUM_EDGE_HEADERS_PER_BLOCK}>";
+    return $"<GEdgeHeadersStore NumAllocatedItems={NumAllocatedItems} UsedNodes~{nextFreeBlockIndex.Value * NUM_EDGE_HEADERS_PER_BLOCK}>";
   }
 }

@@ -18,6 +18,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Ceres.Base.OperatingSystem;
+using Ceres.Base.Threading;
 using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Graphs.GraphStores;
 
@@ -63,7 +64,7 @@ public class GEdgeStore
   /// <summary>
   /// Keep track of index of next available block.
   /// </summary>
-  internal int nextFreeBlockIndex = 1; // never allocate index 0 (null node)
+  internal PaddedInt32 nextFreeBlockIndex = new() { Value = 1 }; // never allocate index 0 (null node)
 
   /// <summary>
   /// Low-level operating system data structure holding children nodes.
@@ -146,7 +147,7 @@ public class GEdgeStore
   /// <summary>
   /// Returns the number of allocated blocks in the store.
   /// </summary>
-  internal long NumAllocatedBlocks => nextFreeBlockIndex; // includes reserved null entry at 0
+  internal long NumAllocatedBlocks => nextFreeBlockIndex.Value; // includes reserved null entry at 0
 
 
   /// <summary>
@@ -158,7 +159,7 @@ public class GEdgeStore
   /// <summary>
   /// Resizes memory store to exactly fit current used space.
   /// </summary>
-  public void ResizeToCurrent() => ResizeToNumBlocks(nextFreeBlockIndex);
+  public void ResizeToCurrent() => ResizeToNumBlocks(nextFreeBlockIndex.Value);
 
 
   /// <summary>
@@ -168,7 +169,7 @@ public class GEdgeStore
   /// <exception cref="Exception"></exception>
   void ResizeToNumBlocks(long numBlocks)
   {
-    if (numBlocks < nextFreeBlockIndex)
+    if (numBlocks < nextFreeBlockIndex.Value)
     {
       throw new ArgumentException("Attempt to resize GEdgeStore to size smaller than current number of used blocks.");
     }
@@ -188,7 +189,7 @@ public class GEdgeStore
   public long AllocatedNewBlock()
   {
     // Take next available (lock-free)
-    long newNextFreeBlockIndex = Interlocked.Add(ref nextFreeBlockIndex, 1);
+    long newNextFreeBlockIndex = Interlocked.Add(ref nextFreeBlockIndex.Value, 1);
 
     // Check for overflow (with padding for page effects).
     long newNumBlocks = newNextFreeBlockIndex + 1 + BUFFER_EXTRA_BLOCKS;
@@ -244,7 +245,7 @@ public class GEdgeStore
   /// <returns></returns>
   public override string ToString()
   {
-    return $"<GEdgeStore NumAllocatedChildren={NumAllocatedEdges} UsedNodes~{nextFreeBlockIndex * NUM_EDGES_PER_BLOCK}>";
+    return $"<GEdgeStore NumAllocatedChildren={NumAllocatedEdges} UsedNodes~{nextFreeBlockIndex.Value * NUM_EDGES_PER_BLOCK}>";
   }
 
 }

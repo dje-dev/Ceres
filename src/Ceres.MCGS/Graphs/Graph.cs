@@ -22,6 +22,7 @@ using System.Threading;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Misc;
 using Ceres.Base.OperatingSystem;
+using Ceres.Base.Threading;
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.Positions;
@@ -80,9 +81,77 @@ public unsafe partial class Graph : IDisposable
   public readonly GraphStore Store;
 
   /// <summary>
+  /// Probe-stamp projection weight for THIS graph's searches (K = kappa x n0 pseudo-visits;
+  /// 0 = the projection is the identity). Set from ParamsSelect.TPS_ProbeStampKappa at every
+  /// search start (MCGSSearch); a per-graph field rather than a process-wide static so that
+  /// engines with different configurations can search concurrently in one process (the static
+  /// raced: a baseline engine's search start turned the stamp term off for a concurrently
+  /// searching stamp engine -- found 2026-08-23 in the first head-to-head tournament).
+  /// </summary>
+  public float ProbeStampKappa;
+
+  /// <summary>
+  /// Optional attention directives for THIS graph's searches (null = feature inert): a small
+  /// immutable snapshot of (parent, child) pairs whose selection score receives a fading
+  /// exploration bonus (see ProbeAttentionEntry and ParamsSelect.AttentionBonusEpsilon).
+  /// Writers must swap the snapshot only while the graph is quiescent (between searches) or
+  /// under the backup gate; select threads read the volatile reference without locking.
+  /// Cleared on graph rewrite (node indices change) so a stale snapshot can never misdirect.
+  /// </summary>
+  volatile ProbeAttentionEntry[] attentionEntries;
+
+  /// <summary>
+  /// Current attention snapshot (null when none). See attentionEntries.
+  /// </summary>
+  public ProbeAttentionEntry[] AttentionEntries => attentionEntries;
+
+  /// <summary>
+  /// Atomically replaces the attention snapshot (null or empty clears it). The array is cloned
+  /// so callers cannot mutate a published snapshot. Entries are validated defensively: the
+  /// select hot path trusts W/K without checks.
+  /// </summary>
+  public void SetAttentionEntries(ProbeAttentionEntry[] entries)
+  {
+    if (entries == null || entries.Length == 0)
+    {
+      attentionEntries = null;
+      return;
+    }
+    if (entries.Length > 64)
+    {
+      throw new ArgumentException($"attention snapshot too large ({entries.Length} > 64)");
+    }
+    foreach (ProbeAttentionEntry e in entries)
+    {
+      if (e.ParentNodeIndex < 1 || e.ChildNodeIndex < 1
+       || !(e.W >= 0 && e.W <= 1) || !(e.K > 0))
+      {
+        throw new ArgumentException($"invalid attention entry {e}");
+      }
+    }
+    attentionEntries = (ProbeAttentionEntry[])entries.Clone();
+  }
+
+  /// <summary>
   /// Cached pointer to first (unused reserved) node.
   /// </summary>
   internal readonly GNodeStruct* NodesBasePtr;
+
+  /// <summary>
+  /// Cached pointer to the first edge block in the edge store
+  /// (each block holds GEdgeStore.NUM_EDGES_PER_BLOCK edges).
+  /// The underlying MemoryBufferOS reserves its full virtual range once and only
+  /// commits pages incrementally, so this address is fixed for the life of the store,
+  /// and the store is never replaced for a live Graph.
+  /// </summary>
+  internal readonly GEdgeStructBlocked* EdgeBlocksBasePtr;
+
+  /// <summary>
+  /// Cached pointer to the first edge header in the edge headers store
+  /// (headers are allocated in blocks of GEdgeHeadersStore.NUM_EDGE_HEADERS_PER_BLOCK).
+  /// Fixed for the life of the store (see EdgeBlocksBasePtr).
+  /// </summary>
+  internal readonly GEdgeHeaderStruct* EdgeHeadersBasePtr;
 
   /// <summary>
   /// Boolean flag used for ad-hoc diagnostics/testing.
@@ -111,6 +180,15 @@ public unsafe partial class Graph : IDisposable
   /// mapping their hash to corresponding node index.
   /// </summary>
   internal IConcurrentDictionary<PosHash96MultisetFinalized, int> transpositionPositionAndSequence;
+
+  /// <summary>
+  /// If the 96-bit position+sequence dictionary above exists for this graph.
+  ///
+  /// It is absent in MCTS mode (no graph at all) and in the single-dictionary PositionEquivalence
+  /// mode, where dedup runs entirely through the 64-bit standalone dictionary. Callers use this
+  /// to skip computing a key that nothing would look up.
+  /// </summary>
+  internal bool HasPositionAndSequenceDictionary => transpositionPositionAndSequence != null;
 
   /// <summary>
   /// Dictionary mapping hash to NodeIndexSetIndex (reference to set of nodes with same standalone hash).
@@ -143,7 +221,21 @@ public unsafe partial class Graph : IDisposable
         transpositionsPosStandalone.Count);
 
 
-  public int NumLinksToExistingNodes;
+  /// <summary>
+  /// Count of edges created which linked to an already existing (transposition) node.
+  /// Kept on its own cache line: it is incremented from the parallel select workers
+  /// while those same workers read the cached base pointers on this object.
+  /// </summary>
+  PaddedInt32 numLinksToExistingNodes;
+
+  /// <summary>
+  /// Count of edges created which linked to an already existing (transposition) node.
+  /// </summary>
+  public int NumLinksToExistingNodes
+  {
+    get => numLinksToExistingNodes.Value;
+    set => numLinksToExistingNodes.Value = value;
+  }
 
   /// <summary>
   /// Stress-test knob: when the environment variable CERES_CHAOS_NONBLOCK contains '1',
@@ -182,11 +274,6 @@ public unsafe partial class Graph : IDisposable
 
 
   #region Local copies of store references (cache here for performance)
-
-  /// <summary>
-  // Reference to raw GEdgeHeaderStruct array cached here for fast access.
-  /// </summary>
-  readonly MemoryBufferOS<GEdgeHeaderStruct> edgeHeaderBufferOS;
 
   /// <summary>
   /// Underlying storage for tree nodes.
@@ -228,11 +315,7 @@ public unsafe partial class Graph : IDisposable
   #endregion
 
   public GEdgeHeaderStruct ChildEdgeHeaderAtIndex(int nodeBlockIndexIntoEdgeHeaderStore, int childIndex)
-  {
-    // TODO: simplify!
-    long offsetEdgeHeader = GEdgeHeadersStore.NUM_EDGE_HEADERS_PER_BLOCK * nodeBlockIndexIntoEdgeHeaderStore + childIndex;
-    return edgeHeaderBufferOS[offsetEdgeHeader];
-  }
+    => EdgeHeadersBasePtr[GEdgeHeadersStore.NUM_EDGE_HEADERS_PER_BLOCK * nodeBlockIndexIntoEdgeHeaderStore + childIndex];
 
 
   /// <summary>
@@ -270,6 +353,8 @@ public unsafe partial class Graph : IDisposable
     Store = new GraphStore(maxNodes, hasAction, hasState, graphEnabled, coalescedMode, tryEnableLargePages, priorHistory, maintainSiblingSets);
 
     NodesBasePtr = (GNodeStruct*)Unsafe.AsPointer(ref Store.NodesStore.nodes[0]);
+    EdgeBlocksBasePtr = (GEdgeStructBlocked*)Store.EdgesStore.RawMemory;
+    EdgeHeadersBasePtr = (GEdgeHeaderStruct*)Store.EdgeHeadersStore.RawMemory;
     NodesRootNodePtr = (GNodeStruct*)Unsafe.AsPointer(ref Store.NodesStore.nodes[GraphStore.ROOT_NODE_INDEX]);
     GraphRootNode = this[GraphStore.ROOT_NODE_INDEX];
     NodesWithOneVisitMayHaveDifferentQ = nodesWithOneVisitMayHaveDifferentQ;
@@ -285,7 +370,6 @@ public unsafe partial class Graph : IDisposable
     EdgeHeadersStore = Store.EdgeHeadersStore;
     EdgesStore = Store.EdgesStore;
     ParentsStore = Store.ParentsStore;
-    edgeHeaderBufferOS = Store.EdgeHeadersStore.Entries;
     NodeIndexSetStore = Store.NodeIndexSetStore;
   }
 
@@ -1004,7 +1088,7 @@ public unsafe partial class Graph : IDisposable
       }
       else
       {
-        NumLinksToExistingNodes++;
+        Interlocked.Increment(ref numLinksToExistingNodes.Value);
       }
     }
     else if (!wasCollision)
@@ -1128,13 +1212,7 @@ public unsafe partial class Graph : IDisposable
     // Rewrite the GEdgeHeaderStruct to point to this block
     edgeHeaderStructsSpan[indexOfChildInParent].SetAsExpandedToEdgeBlock(edgesStartBlockIndex);
 
-#if VERY_UNSAFE
-    ref GEdgeStructBlocked refBlock = ref Store.EdgesStore.edgeStoreMemoryBuffer[edgesStartBlockIndex];
-    return ref Unsafe.Add(ref Unsafe.As<GEdgeStructBlocked, GEdgeStruct>(ref refBlock), edgesIndexInBlock);
-#else
-    Span<GEdgeStruct> edgeSpanThisBlock = Store.EdgesStore.SpanAtBlockIndex(edgesStartBlockIndex);
-    return ref edgeSpanThisBlock[edgesIndexInBlock];
-#endif
+    return ref ((GEdgeStruct*)(EdgeBlocksBasePtr + edgesStartBlockIndex))[edgesIndexInBlock];
   }
 
 
@@ -1315,7 +1393,9 @@ public unsafe partial class Graph : IDisposable
     Span<float> nInFlightAdjusted = stats.NInFlightAdjusted.Span;
     Span<float> p = stats.P.Span;
     Span<float> w = stats.W.Span;
-    Span<float> uv = stats.UV.Span;
+    // Only bound when their consumer is enabled; see GatheredChildStats.GATHER_UNCERTAINTY.
+    Span<float> uv = GatheredChildStats.GATHER_UNCERTAINTY ? stats.UV.Span : default;
+    Span<float> up = GatheredChildStats.GATHER_UNCERTAINTY ? stats.UP.Span : default;
 #if ACTION_ENABLED
     Span<float> a = stats.A.Span;
 #endif
@@ -1323,17 +1403,42 @@ public unsafe partial class Graph : IDisposable
     int numEdgesExpanded = node.NumEdgesExpanded;
     bool isIteratorIDZero = iteratorID == 0;
 
+    // Prefetch the edge blocks the loop below will read. Their block indices are in the
+    // header block (already loaded), so these misses can all be outstanding at once rather
+    // than one at a time. The up-front burst is capped to stay within the line fill buffer
+    // capacity; beyond the cap the loop below falls back to prefetching one block ahead.
+    // (Block 0 is normally already in flight, see MCGSParamsFixed.PREFETCH_SELECT_FIRST_EDGE_BLOCK,
+    // in which case its prefetch here is a cache hit.)
+    const bool PREFETCH = MCGSParamsFixed.PrefetchCacheLevel != Prefetcher.CacheLevel.None;
+    int numExpandedToRead = Math.Min(numEdgesExpanded, maxIndex + 1);
+    int upfrontBound = 0;
+    if (PREFETCH && MCGSParamsFixed.PREFETCH_GATHER_ALL_EDGE_BLOCKS)
+    {
+      const int MAX_UPFRONT_EDGES = 8 * GEdgeStore.NUM_EDGES_PER_BLOCK; // 8 blocks, at most 16 cache lines
+      upfrontBound = Math.Min(numExpandedToRead, MAX_UPFRONT_EDGES);
+      for (int i = 0; i < upfrontBound; i += GEdgeStore.NUM_EDGES_PER_BLOCK)
+      {
+        byte* block = (byte*)Unsafe.AsPointer(ref node.EdgeStructAtIndexRef(childEdgeHeaders[i].EdgeStoreBlockIndex, 0));
+        Prefetcher.PrefetchLevel1(block);
+        if (i + 2 < numExpandedToRead)
+        {
+          Prefetcher.PrefetchLevel1(block + 64); // second cache line of the block (edges 2 and 3)
+        }
+      }
+    }
+
     for (int i = 0; i <= maxIndex; i++)
     {
-      // Possibly start prefetching edge data future child blocks
+      // Possibly start prefetching the edge block one block ahead (only beyond the up-front window above).
       const int NUM_BLOCKS_PREFETCH_AHEAD = 1;
       int prefetchI = i + NUM_BLOCKS_PREFETCH_AHEAD * GEdgeStore.NUM_EDGES_PER_BLOCK;
-      if (MCGSParamsFixed.PrefetchCacheLevel != Prefetcher.CacheLevel.None
-        && prefetchI % GEdgeStore.NUM_EDGES_PER_BLOCK == 0
-       && prefetchI < numEdgesExpanded)
+      if (PREFETCH
+       && prefetchI % GEdgeStore.NUM_EDGES_PER_BLOCK == 0
+       && prefetchI >= upfrontBound
+       && prefetchI < numExpandedToRead)
       {
-        void* nodePtr = Unsafe.AsPointer(ref node.EdgeStructAtIndexRef(childEdgeHeaders[prefetchI].EdgeStoreBlockIndex, 0));
-        Prefetcher.PrefetchLevel1(nodePtr);
+        void* blockPtr = Unsafe.AsPointer(ref node.EdgeStructAtIndexRef(childEdgeHeaders[prefetchI].EdgeStoreBlockIndex, 0));
+        Prefetcher.PrefetchLevel1(blockPtr);
       }
 
 
@@ -1349,7 +1454,7 @@ public unsafe partial class Graph : IDisposable
         if (refreshStaleEdges && refEdge.IsStale)
         {
           GNode childNode = new GNode(node.Graph, refEdge.ChildNodeIndex);
-          refEdge.QChild = childNode.Q;
+          refEdge.QChild = Ceres.MCGS.Search.ProbeGraft.ProbeStamps.ProjectChildQ(childNode, childNode.Q);
           refEdge.IsStale = false;
         }
 
@@ -1358,8 +1463,13 @@ public unsafe partial class Graph : IDisposable
 #if ACTION_ENABLED
         a[i] = (float)childEdgeHeaders[i].ActionV; // Read from header (survives expansion; edge struct has no storage)
 #endif
-        // Extract value uncertainty with fill-in if missing
-        uv[i] = (float)refEdge.UncertaintyV;
+        if (GatheredChildStats.GATHER_UNCERTAINTY)
+        {
+          // N.B. UP is filled here as well. It never was before, so the (disabled) consumer
+          //      would have read zeros for policy uncertainty had it been switched on.
+          uv[i] = refEdge.UncertaintyV;
+          up[i] = refEdge.UncertaintyP;
+        }
 
         // W is accumulated in double and narrowed once: Q is double and N can be large, so forming
         // the product in float first would lose more than the final rounding does.
@@ -1384,7 +1494,11 @@ public unsafe partial class Graph : IDisposable
 #if ACTION_ENABLED
         a[i] = (float)childEdgeHeaders[i].ActionV;
 #endif
-        uv[i] = 0;
+        if (GatheredChildStats.GATHER_UNCERTAINTY)
+        {
+          uv[i] = 0;
+          up[i] = 0;
+        }
         w[i] = 0;
         nInFlightAdjusted[i] = 0;
         sumVisitedThisChild = 0;

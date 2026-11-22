@@ -18,6 +18,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using Ceres.Base.OperatingSystem;
+using Ceres.Base.Threading;
 using Ceres.MCGS.Graphs.GraphStores;
 
 #endregion
@@ -50,17 +51,18 @@ public partial class GNodeIndexSetStore
   /// <summary>
   /// Returns the number of sets allocated so far.
   /// </summary>
-  public int NumUsedSets => nextFreeIndex - FIRST_ALLOCATED_INDEX;
+  public int NumUsedSets => nextFreeIndex.Value - FIRST_ALLOCATED_INDEX;
 
   /// <summary>
   /// Returns the number of sets in use (all allocated sets plus one unused root node at beginning).
   /// </summary>
-  public int NumTotalSets => nextFreeIndex; // includes reserved null entry at 0
+  public int NumTotalSets => nextFreeIndex.Value; // includes reserved null entry at 0
 
   /// <summary>
   /// The index indicating the next free set slot.
+  /// Padded onto its own cache line (bumped by every thread that allocates a set).
   /// </summary>
-  internal int nextFreeIndex = FIRST_ALLOCATED_INDEX; // Index 0 reserved, indicates null set
+  internal PaddedInt32 nextFreeIndex = new() { Value = FIRST_ALLOCATED_INDEX }; // Index 0 reserved, indicates null set
 
   /// <summary>
   /// Parent store to which this sets store belongs.
@@ -118,7 +120,7 @@ public partial class GNodeIndexSetStore
   public int AllocateNext()
   {
     // Take next available (lock-free)
-    int gotIndex = Interlocked.Increment(ref nextFreeIndex) - 1;
+    int gotIndex = Interlocked.Increment(ref nextFreeIndex.Value) - 1;
 
     // Check for overflow (with page buffer)
     if (sets.NumItemsAllocated <= gotIndex + BUFFER_SETS)

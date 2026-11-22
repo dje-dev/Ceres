@@ -16,15 +16,18 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json.Serialization;
+
 using Ceres.Base.Math;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NetEvaluation.Batch;
+
 #endregion
 
 namespace Ceres.Chess.EncodedPositions
@@ -111,18 +114,23 @@ namespace Ceres.Chess.EncodedPositions
     const float HALF_INCREMENT = (float)(0.5 / 65536.0);
 
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ushort EncodedProbability(float v)
     {
       // Rounding is simulated by an increment v of a half-step (since we end up truncating in integer space)
       v += HALF_INCREMENT; // since we truncate
 
       if (v >= 1.0)
+      {
         return ushort.MaxValue;
+      }
       else if (v <= 0)
+      {
         return ushort.MinValue;
+      }
       else
+      {
         return (ushort)(v * 65536.0f);
+      }
     }
 
 
@@ -906,7 +914,13 @@ namespace Ceres.Chess.EncodedPositions
 
 
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    /// <remarks>
+    /// The returned enumerable holds a reference to this vector rather than a copy of it (the
+    /// struct is several hundred bytes, and it would otherwise be copied once into the enumerable
+    /// and again into the enumerator). UnscopedRef is therefore required, and callers must keep
+    /// the vector alive for as long as they enumerate - which the ref-safety rules enforce.
+    /// </remarks>
+    [UnscopedRef]
     public ProbabilityTupleEnumerable EnumerateProbabilityTuples(float minProbability = 0.0f, int topN = int.MaxValue)
     {
       if (topN > NUM_MOVE_SLOTS)
@@ -914,43 +928,40 @@ namespace Ceres.Chess.EncodedPositions
         topN = NUM_MOVE_SLOTS;
       }
 
-      return new ProbabilityTupleEnumerable(this, minProbability, topN);
+      return new ProbabilityTupleEnumerable(in this, minProbability, topN);
     }
 
     public readonly ref struct ProbabilityTupleEnumerable
     {
-      private readonly CompressedPolicyVector _owner;
+      private readonly ref readonly CompressedPolicyVector _owner;
       private readonly float _minProbability;
       private readonly int _topN;
 
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      internal ProbabilityTupleEnumerable(CompressedPolicyVector owner, float minProbability, int topN)
+      internal ProbabilityTupleEnumerable(in CompressedPolicyVector owner, float minProbability, int topN)
       {
-        _owner = owner;
+        _owner = ref owner;
         _minProbability = minProbability;
         _topN = topN;
       }
 
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
       public ProbabilityTupleEnumerator GetEnumerator()
       {
-        return new ProbabilityTupleEnumerator(_owner, _minProbability, _topN);
+        return new ProbabilityTupleEnumerator(in _owner, _minProbability, _topN);
       }
     }
 
     public ref struct ProbabilityTupleEnumerator
     {
-      private readonly CompressedPolicyVector _owner;
+      private readonly ref readonly CompressedPolicyVector _owner;
       private readonly float _minProbability;
       private readonly int _topN;
       private int _index;
       private int _yielded;
       private (int, EncodedMove, float) _current;
 
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      internal ProbabilityTupleEnumerator(CompressedPolicyVector owner, float minProbability, int topN)
+      internal ProbabilityTupleEnumerator(in CompressedPolicyVector owner, float minProbability, int topN)
       {
-        _owner = owner;
+        _owner = ref owner;
         _minProbability = minProbability;
         _topN = topN;
         _index = -1;
@@ -960,11 +971,9 @@ namespace Ceres.Chess.EncodedPositions
 
       public (int, EncodedMove, float) Current
       {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get => _current;
       }
 
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
       public bool MoveNext()
       {
         if (_yielded >= _topN)

@@ -71,6 +71,15 @@ public sealed class ArraySegmentPool<T> where T : struct
 
 
   /// <summary>
+  /// Highest value ever reached by <see cref="nextFreeIndex"/> since the last <see cref="Reset"/>,
+  /// delimiting the prefix of the buffer which may still hold stale item data (and therefore
+  /// any object references embedded in T). Updated only from Clear/Reset (not thread-safe, as
+  /// documented for those methods).
+  /// </summary>
+  private int highWaterIndex;
+
+
+  /// <summary>
   /// Allocates a new segment of the given number of items 
   /// (rounded up to the nearest multiple of <see cref="GROWTH_QUANTUM"/>).
   /// This method is thread-safe and lock-free.
@@ -149,6 +158,11 @@ public sealed class ArraySegmentPool<T> where T : struct
   public void Clear(bool clearMem = true)
   {
     int allocated = nextFreeIndex;
+    if (allocated > highWaterIndex)
+    {
+      highWaterIndex = allocated;
+    }
+
     if (allocated == 0)
     {
       return;
@@ -160,6 +174,25 @@ public sealed class ArraySegmentPool<T> where T : struct
     }
 
     nextFreeIndex = 0;
+  }
+
+
+  /// <summary>
+  /// Restores the pool to its as-constructed state, zeroing every slot ever handed out
+  /// (not merely those in use at the last Clear) so that no object references embedded in T
+  /// remain reachable. Intended for pools which are recycled across independent uses.
+  /// WARNING: This method is NOT thread-safe. Ensure no other threads are accessing the pool.
+  /// </summary>
+  public void Reset()
+  {
+    int extent = nextFreeIndex > highWaterIndex ? nextFreeIndex : highWaterIndex;
+    if (extent > 0)
+    {
+      Slice(0, extent).Clear();
+    }
+
+    nextFreeIndex = 0;
+    highWaterIndex = 0;
   }
 
 

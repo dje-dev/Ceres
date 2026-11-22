@@ -93,6 +93,18 @@ public readonly partial struct GNode : IComparable<GNode>, IEquatable<GNode>
   /// </summary>
   public readonly double QTrendEW => NodeRef.QTrend.Trend;
 
+  /// <summary>True if an external-probe stamp is present on this node (see ProbeStamps).</summary>
+  public readonly bool HasProbeStamp => NodeRef.ProbeStampN != 0;
+
+  /// <summary>Stamped external-probe value (node mover's perspective, Ceres Q units), or NaN if none.</summary>
+  public readonly double ProbeStampValue => NodeRef.ProbeStampN == 0 ? double.NaN : NodeRef.ProbeStampQ / 127.0;
+
+  /// <summary>Node N at the time of the stamp (decoded from the log code), or 0 if none.</summary>
+  public readonly int ProbeStampN0 => Ceres.MCGS.Search.ProbeGraft.ProbeStamps.DecodeN0(NodeRef.ProbeStampN);
+
+  /// <summary>Node N when last submitted to the external probe engine (decoded), or 0 if never.</summary>
+  public readonly int ProbedN0 => Ceres.MCGS.Search.ProbeGraft.ProbeStamps.DecodeN0(NodeRef.ProbedN);
+
   /// <summary>
   /// Bias-corrected variant of <see cref="QTrendEW"/> that removes the EWMA cold-start
   /// under-reporting (see <see cref="RunningTrendByte.TrendDebiased"/>), supplying this

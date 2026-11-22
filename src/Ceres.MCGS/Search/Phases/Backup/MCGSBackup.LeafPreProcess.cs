@@ -19,6 +19,7 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 
 using Ceres.Base.DataTypes;
+using Ceres.Base.Threading;
 using Ceres.MCGS.Graphs.GEdges;
 using Ceres.MCGS.Graphs.GNodes;
 using Ceres.MCGS.Search.Paths;
@@ -38,37 +39,33 @@ public record struct BackupValue(double V, double D);
 public partial class MCGSBackup
 {
   /// <summary>
-  /// Cached options for the leaf preprocessing parallel loop (avoids per-batch allocations).
+  /// Paths being processed by the current PreparePathsForBackup call. Held in a field (rather
+  /// than captured) so the loop delegate below can be allocated once instead of per batch.
+  /// Safe as instance state because at most one iterator is in its backup phase at a time
+  /// (enforced by PhaseCoordinator), the same assumption cachedPathsBuffer already relies on.
   /// </summary>
-  private readonly ParallelOptions cachedLeafPrepParallelOptions = new();
+  private ListBounded<MCGSPath> leafPrepPaths;
 
   /// <summary>
-  /// Cached delegate for ApplyLeafNodeUpdates (avoids per-batch allocations).
+  /// Cached delegate for the leaf preparation loop (avoids a per-batch closure allocation).
   /// </summary>
-  private readonly Action<MCGSPath> applyLeafNodeUpdatesAction;
+  private readonly Action<int> applyLeafNodeUpdatesAtIndexAction;
 
 
   /// <summary>
   /// Prepares collection of MCGSPath paths to begin backup from their leaves.
+  ///
+  /// Indexed (rather than Parallel.ForEach over the list) so that no enumerable partitioner
+  /// is constructed per batch, and so that small batches - below the size at which threading
+  /// pays for itself - run serially with no TPL setup at all (see ParallelUtils.For).
   /// </summary>
   internal void PreparePathsForBackup(ListBounded<MCGSPath> paths)
   {
     const int PATHS_PER_THREAD = 32;
 
-    int numPaths = paths.Count;
-    if (numPaths <= 2 * PATHS_PER_THREAD)
-    {
-      // Below this size the Parallel.ForEach machinery costs more than it saves.
-      foreach (MCGSPath path in paths)
-      {
-        ApplyLeafNodeUpdates(path);
-      }
-      return;
-    }
-
-    cachedLeafPrepParallelOptions.MaxDegreeOfParallelism = Math.Min(1 + numPaths / PATHS_PER_THREAD,
-                                                                    Math.Min(System.Environment.ProcessorCount, MAX_BACKUP_THREADS));
-    Parallel.ForEach(paths, cachedLeafPrepParallelOptions, applyLeafNodeUpdatesAction);
+    leafPrepPaths = paths;
+    ParallelUtils.For(0, paths.Count, PATHS_PER_THREAD,
+                      applyLeafNodeUpdatesAtIndexAction, MAX_BACKUP_THREADS);
   }
 
 

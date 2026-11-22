@@ -510,4 +510,152 @@ internal sealed class PhaseCoordinator
     Exit();
     ExitBackupOrder(batchIndex);
   }
+
+
+  #region Transient solo window (directed visits under overlapped iterators; SWARM doc XI.8.1)
+
+  /// <summary>
+  /// Transient solo window. A requester iterator (in practice the probe coordinator's pump on iterator 0)
+  /// asks every other iterator to park at its next batch boundary -- the top of MCGSIterator.DoRunLoop,
+  /// where all gates and the backup-order turn have been exited and no visits are in flight on its lane --
+  /// which re-creates the single-iterator quiescent graph that MCGSIterator.RunProbeSpecs requires.
+  ///
+  /// The request is NON-BLOCKING: the requester polls SoloGranted at its next pump(s) and keeps running its
+  /// own batches meanwhile, so it never waits while holding a lock the peer might need (the coordinator's
+  /// pumpLock). The window is released explicitly (ReleaseSolo) or implicitly when the owner's run loop
+  /// exits (LoopExited; loops are relaunched repeatedly within a search), so an owner must re-check
+  /// SoloGranted before every directed batch rather than cache a "held" flag. The parked peer wakes on
+  /// timed waits and re-checks the search stop condition, so search end is never delayed. All state is
+  /// guarded by soloLock.
+  /// </summary>
+  readonly object soloLock = new();
+  readonly bool[] soloLoopActive = new bool[2];
+  readonly bool[] soloParked = new bool[2];
+  int soloOwner = -1;
+
+  /// <summary>Resets the solo-window state. Call at the start of each search's run loop.</summary>
+  public void ResetSolo()
+  {
+    lock (soloLock)
+    {
+      Array.Clear(soloLoopActive);
+      Array.Clear(soloParked);
+      soloOwner = -1;
+      Monitor.PulseAll(soloLock);
+    }
+  }
+
+  /// <summary>Marks iteratorID's run loop as active (it will honour park requests at its batch boundaries).</summary>
+  public void LoopEntered(int iteratorID)
+  {
+    lock (soloLock)
+    {
+      soloLoopActive[iteratorID] = true;
+      soloParked[iteratorID] = false;
+      Monitor.PulseAll(soloLock);
+    }
+  }
+
+  /// <summary>Marks iteratorID's run loop as exited; a window it owned is released (it can no longer release it itself).</summary>
+  public void LoopExited(int iteratorID)
+  {
+    lock (soloLock)
+    {
+      soloLoopActive[iteratorID] = false;
+      soloParked[iteratorID] = false;
+      if (soloOwner == iteratorID)
+      {
+        soloOwner = -1;
+      }
+      Monitor.PulseAll(soloLock);
+    }
+  }
+
+  /// <summary>Requests the window for iteratorID without waiting. Returns true if iteratorID now owns it.</summary>
+  public bool RequestSolo(int iteratorID)
+  {
+    lock (soloLock)
+    {
+      if (soloOwner < 0)
+      {
+        soloOwner = iteratorID;
+        Monitor.PulseAll(soloLock);
+      }
+      return soloOwner == iteratorID;
+    }
+  }
+
+  /// <summary>True when iteratorID owns the window and every other iterator is parked or has no active loop.</summary>
+  public bool SoloGranted(int iteratorID)
+  {
+    lock (soloLock)
+    {
+      if (soloOwner != iteratorID)
+      {
+        return false;
+      }
+      for (int i = 0; i < soloLoopActive.Length; i++)
+      {
+        if (i != iteratorID && soloLoopActive[i] && !soloParked[i])
+        {
+          return false;
+        }
+      }
+      return true;
+    }
+  }
+
+  /// <summary>Releases the window if iteratorID owns it (no-op otherwise).</summary>
+  public void ReleaseSolo(int iteratorID)
+  {
+    lock (soloLock)
+    {
+      if (soloOwner == iteratorID)
+      {
+        soloOwner = -1;
+        Monitor.PulseAll(soloLock);
+      }
+    }
+  }
+
+  /// <summary>
+  /// Parks the calling iterator while another iterator owns the window (returns immediately otherwise).
+  /// Returns shouldContinue() so the caller can leave its loop promptly after a long park. Timed waits plus
+  /// the stop check (the rendezvous pattern of MCGSEngine.PossiblySynchronizeIterators) guarantee liveness.
+  /// </summary>
+  public bool ParkIfSoloRequested(int iteratorID, Func<bool> shouldContinue)
+  {
+    lock (soloLock)
+    {
+      if (soloOwner < 0 || soloOwner == iteratorID)
+      {
+        return true;
+      }
+      bool parkedHere = false;
+      try
+      {
+        while (soloOwner >= 0 && soloOwner != iteratorID && shouldContinue())
+        {
+          if (!parkedHere)
+          {
+            soloParked[iteratorID] = true;
+            parkedHere = true;
+            Monitor.PulseAll(soloLock);
+          }
+          Monitor.Wait(soloLock, 1);
+        }
+      }
+      finally
+      {
+        if (parkedHere)
+        {
+          soloParked[iteratorID] = false;
+          Monitor.PulseAll(soloLock);
+        }
+      }
+      return shouldContinue();
+    }
+  }
+
+  #endregion
 }

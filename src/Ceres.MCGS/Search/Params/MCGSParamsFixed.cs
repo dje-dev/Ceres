@@ -314,4 +314,35 @@ public static class MCGSParamsFixed
   /// Significant performance benefit is typically seem for larger searches (circa 10% speedup).
   /// </summary>
   public const Prefetcher.CacheLevel PrefetchCacheLevel = Prefetcher.CacheLevel.Level1;
+
+  /// <summary>
+  /// If the select phase prefetches the GNodeStruct of every expanded child about to
+  /// receive visits as soon as the visit counts are known (before the parent Q reset and
+  /// child processing). Otherwise the first touch of each child struct (in
+  /// ProcessExpandedChild) is a dependent cache miss, serialized across children.
+  /// Subject to PrefetchCacheLevel != None.
+  /// </summary>
+  public const bool PREFETCH_SELECT_CHILD_NODES = true;
+
+  /// <summary>
+  /// If the select phase prefetches a child's edge header block when deferring the
+  /// recursive descent into it, so the block is (at least partly) in cache when the descent
+  /// begins after the parent lock is released. Subject to PrefetchCacheLevel != None.
+  /// </summary>
+  public const bool PREFETCH_SELECT_CHILD_HEADERS = true;
+
+  /// <summary>
+  /// If the select phase prefetches the node's first expanded edge block at the start of the
+  /// per-node frame (immediately after the deferred policy copy check), overlapping that miss
+  /// with the setup work which precedes the gather of child statistics.
+  /// Subject to PrefetchCacheLevel != None.
+  /// </summary>
+  public const bool PREFETCH_SELECT_FIRST_EDGE_BLOCK = true;
+
+  /// <summary>
+  /// If the gather of child statistics prefetches all (up to a bounded number of) expanded
+  /// edge blocks up front, before the gather loop, so their misses overlap, rather than only
+  /// one block ahead of the loop position. Subject to PrefetchCacheLevel != None.
+  /// </summary>
+  public const bool PREFETCH_GATHER_ALL_EDGE_BLOCKS = true;
 }

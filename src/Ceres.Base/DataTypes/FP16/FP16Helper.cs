@@ -30,23 +30,67 @@ namespace Ceres.Base.DataTypes
   /// <remarks>
   /// References:
   ///     - Fast FloatHalfPrecision Float Conversions, Jeroen van der Zijp, link: http://www.fox-toolkit.org/ftp/fasthalffloatconversion.pdf
+  ///
+  /// The half to single direction no longer uses van der Zijp's lookup tables (see HalfToSingle);
+  /// the single to half direction still does.
   /// </remarks>
   internal static class FP16Helper
   {
-    private static uint[] mantissaTable;
-    private static uint[] exponentTable;
-    private static ushort[] offsetTable;
     private static ushort[] baseTable;
     private static sbyte[] shiftTable;
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static unsafe float HalfToSingle(FP16 floatHalfPrecision)
+    /// <summary>All ones half precision exponent, shifted into single precision position.</summary>
+    private const uint SHIFTED_EXPONENT_MASK = 0x7c00u << 13;
+
+    /// <summary>Difference between the single and half precision exponent biases (127 - 15).</summary>
+    private const uint EXPONENT_REBIAS = (127u - 15u) << 23;
+
+    /// <summary>Remainder of the rebias for infinity and NaN, whose exponent saturates (128 - 16).</summary>
+    private const uint INF_NAN_REBIAS = (128u - 16u) << 23;
+
+    /// <summary>2^-14, the implied leading one introduced when renormalizing a subnormal.</summary>
+    private const float SUBNORMAL_LEADING_ONE = 1.0f / (1 << 14);
+
+
+    /// <summary>
+    /// Converts a half precision value to single precision.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not the shorter formulation which multiplies by 2^112: that one feeds a
+    /// subnormal float into the multiply and would therefore return zero for every half precision
+    /// subnormal on any thread running with the MXCSR denormals-are-zero flag set, which native
+    /// libraries such as CUDA are free to do. Every intermediate below is a normal float.
+    /// </remarks>
+    internal static float HalfToSingle(FP16 floatHalfPrecision)
     {
-      uint result = mantissaTable[offsetTable[floatHalfPrecision.Value >> 10] + (floatHalfPrecision.Value & 0x3ff)] + exponentTable[floatHalfPrecision.Value >> 10];
-      return *((float*)&result);
+      uint bits = floatHalfPrecision.Value;
+
+      // Shift exponent and mantissa into single precision position, then rebias the exponent
+      // from the half precision bias of 15 to the single precision bias of 127.
+      uint result = (bits & 0x7fffu) << 13;
+      uint exponent = SHIFTED_EXPONENT_MASK & result;
+      result += EXPONENT_REBIAS;
+
+      if (exponent == SHIFTED_EXPONENT_MASK)
+      {
+        // Infinity and NaN saturate the exponent in both formats, so finish rebiasing to all ones.
+        // Mantissa bits pass through untouched, preserving NaN payloads (and so leaving signalling
+        // NaNs signalling, exactly as the tables did).
+        result += INF_NAN_REBIAS;
+      }
+      else if (exponent == 0)
+      {
+        // Zero and subnormals. One further increment of the exponent makes this a normal float
+        // carrying an implied leading one, which the subtraction then removes, leaving
+        // mantissa * 2^-24 (and exactly zero when the mantissa is zero).
+        result = BitConverter.SingleToUInt32Bits(
+                   BitConverter.UInt32BitsToSingle(result + (1u << 23)) - SUBNORMAL_LEADING_ONE);
+      }
+
+      return BitConverter.UInt32BitsToSingle(result | ((bits & 0x8000u) << 16));
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
     internal static unsafe FP16 SingleToHalf(float single)
     {
       uint value = *((uint*)&single);
@@ -55,73 +99,6 @@ namespace Ceres.Base.DataTypes
       return FP16.ToHalf(result);
     }
 
-    // Transforms the subnormal representation to a normalized one. 
-    private static uint ConvertMantissa(int i)
-    {
-      uint m = (uint)(i << 13); // Zero pad mantissa bits
-      uint e = 0; // Zero exponent
-
-      // While not normalized
-      while ((m & 0x00800000) == 0)
-      {
-        e -= 0x00800000; // Decrement exponent (1<<23)
-        m <<= 1; // Shift mantissa                
-      }
-      m &= unchecked((uint)~0x00800000); // Clear leading 1 bit
-      e += 0x38800000; // Adjust bias ((127-14)<<23)
-      return m | e; // Return combined number
-    }
-
-    private static uint[] GenerateMantissaTable()
-    {
-      uint[] mantissaTable = new uint[2048];
-      mantissaTable[0] = 0;
-      for (int i = 1; i < 1024; i++)
-      {
-        mantissaTable[i] = ConvertMantissa(i);
-      }
-      for (int i = 1024; i < 2048; i++)
-      {
-        mantissaTable[i] = (uint)(0x38000000 + ((i - 1024) << 13));
-      }
-
-      return mantissaTable;
-    }
-    private static uint[] GenerateExponentTable()
-    {
-      uint[] exponentTable = new uint[64];
-      exponentTable[0] = 0;
-      for (int i = 1; i < 31; i++)
-      {
-        exponentTable[i] = (uint)(i << 23);
-      }
-      exponentTable[31] = 0x47800000;
-      exponentTable[32] = 0x80000000;
-      for (int i = 33; i < 63; i++)
-      {
-        exponentTable[i] = (uint)(0x80000000 + ((i - 32) << 23));
-      }
-      exponentTable[63] = 0xc7800000;
-
-      return exponentTable;
-    }
-
-    private static ushort[] GenerateOffsetTable()
-    {
-      ushort[] offsetTable = new ushort[64];
-      offsetTable[0] = 0;
-      for (int i = 1; i < 32; i++)
-      {
-        offsetTable[i] = 1024;
-      }
-      offsetTable[32] = 0;
-      for (int i = 33; i < 64; i++)
-      {
-        offsetTable[i] = 1024;
-      }
-
-      return offsetTable;
-    }
 
     private static ushort[] GenerateBaseTable()
     {
@@ -209,14 +186,49 @@ namespace Ceres.Base.DataTypes
     internal static bool IsNegativeInfinity(FP16 floatHalfPrecision) => floatHalfPrecision.Value == 0xfc00;    
 
 
+    /// <summary>
+    /// Proves HalfToSingle correct over its complete input domain, all 65,536 bit patterns,
+    /// against the runtime's own half precision conversion. With no separate test project this
+    /// is what guards the table free implementation against regression; it costs well under a
+    /// millisecond and so simply runs at startup in debug builds.
+    /// </summary>
+    /// <remarks>
+    /// One documented deviation, which is why the comparison is not unconditionally on bits:
+    /// the runtime quiets signalling NaNs whereas this (like the lookup tables it replaced)
+    /// preserves the payload, so for those 1,022 inputs only NaN-ness is asserted. Ceres itself
+    /// never produces a signalling NaN; FP16.NaN is 0xFE00, which is quiet.
+    /// </remarks>
+    internal static void VerifyDecodeExhaustive()
+    {
+      for (int i = 0; i <= ushort.MaxValue; i++)
+      {
+        ushort bits = (ushort)i;
+        float ours = HalfToSingle(FP16.ToHalf(bits));
+        float expected = (float)BitConverter.UInt16BitsToHalf(bits);
+
+        bool isSignallingNaN = (bits & 0x7c00) == 0x7c00 && (bits & 0x03ff) != 0 && (bits & 0x0200) == 0;
+        bool ok = isSignallingNaN
+                ? float.IsNaN(ours) && float.IsNaN(expected)
+                : BitConverter.SingleToUInt32Bits(ours) == BitConverter.SingleToUInt32Bits(expected);
+
+        if (!ok)
+        {
+          throw new Exception($"FP16Helper.HalfToSingle disagrees with Half at 0x{bits:X4}: "
+                            + $"0x{BitConverter.SingleToUInt32Bits(ours):X8} versus 0x{BitConverter.SingleToUInt32Bits(expected):X8}");
+        }
+      }
+    }
+
+
     [ModuleInitializer]
     internal static void ClassInitialize()
     {
-      mantissaTable = GenerateMantissaTable();
-      exponentTable = GenerateExponentTable();
-      offsetTable = GenerateOffsetTable();
       baseTable = GenerateBaseTable();
       shiftTable = GenerateShiftTable();
+
+#if DEBUG
+      VerifyDecodeExhaustive();
+#endif
     }
 
   }

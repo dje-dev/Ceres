@@ -92,6 +92,17 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
   /// </summary>
   public EncodedPositionBatchFlat Batch { private set; get; }
 
+  /// <summary>
+  /// Optionally an externally owned (search-spanning) set of input batches, indexed as the
+  /// evaluators are (0 or 1). A fresh evaluator wrapper is built for every search, so without
+  /// this the batch would be rebuilt from scratch each move, repeatedly re-growing (and
+  /// discarding) its plane / history arrays as batch sizes ramp up. When supplied, the batch
+  /// grown by one search is handed to the next and the arrays are not released on disposal.
+  /// </summary>
+  readonly EncodedPositionBatchFlat[] reusableBatches;
+
+  readonly int reusableBatchIndex;
+
   public enum LocationType { Local, Remote };
 
   public readonly bool EnableState;
@@ -144,8 +155,14 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
                                 bool enableState,
                                 PositionEvalCache cache,
                                 Func<object, int> batchEvaluatorIndexDynamicSelector,
-                                bool engineIsWhite)
+                                bool engineIsWhite,
+                                EncodedPositionBatchFlat[] reusableBatches = null,
+                                int reusableBatchIndex = 0)
   {
+    this.reusableBatches = reusableBatches;
+    this.reusableBatchIndex = reusableBatchIndex;
+    Batch = reusableBatches?[reusableBatchIndex];
+
     EvaluatorDef = evaluatorDef;
     FillInHistory = fillInHistory;
     LowPriority = lowPriority;
@@ -205,6 +222,11 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
                                      : Math.Max(batchSize, currentSize * 2);
 
       Batch = new EncodedPositionBatchFlat(EncodedPositionType.PositionOnly, newSize);
+
+      if (reusableBatches != null)
+      {
+        reusableBatches[reusableBatchIndex] = Batch;
+      }
     }
   }
 
@@ -235,7 +257,12 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
     {
       if (!disposed)
       {
-        Batch?.Shutdown();
+        // Only release the batch buffers if this wrapper owns the batch
+        // (a shared batch outlives this search, see reusableBatches).
+        if (reusableBatches == null)
+        {
+          Batch?.Shutdown();
+        }
         disposed = true;
       }
     }
@@ -322,10 +349,9 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
       }
 
       const int NUM_ITEMS_PER_THREAD = 48;
-      ParallelOptions parallelOptions = ParallelUtils.ParallelOptions(paths.Count, NUM_ITEMS_PER_THREAD);
 
       MGPositionHistoryCompact[] compactHistoriesArray = Batch.CompactHistories;
-      Parallel.For(0, paths.Count, parallelOptions, delegate (int i)
+      ParallelUtils.For(0, paths.Count, NUM_ITEMS_PER_THREAD, delegate (int i)
       {
         SetEncodedBoardPositionFromPath(paths[i], FillInHistory, compactHistoriesArray, i);
 
@@ -398,9 +424,9 @@ public sealed class MCGSEvaluatorNeuralNet : IDisposable
   {
     long startTimestamp = Stopwatch.GetTimestamp();
 
-    Parallel.For(0,
+    ParallelUtils.For(0,
       paths.Count,
-      ParallelUtils.ParallelOptions(paths.Count, 24),
+      24,
       i =>
       {
         MCGSPath path = paths[i];

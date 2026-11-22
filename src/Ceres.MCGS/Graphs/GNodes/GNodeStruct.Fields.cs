@@ -268,7 +268,13 @@ public unsafe partial struct GNodeStruct
   /// </summary>
   public RunningTrendByte QTrend;
 
-  public byte UnusedByte2;
+  /// <summary>
+  /// Node N (log-coded, see ProbeStamps.EncodeN0; 0 = never) at the time this node was last
+  /// submitted to the external probe engine. Persists across root moves under graph reuse so
+  /// that a reused graph is not re-probed every move; a node is re-probed only once N has grown
+  /// by ParamsProbeGraft.ReprobeNGrowthFactor over this value.
+  /// </summary>
+  public byte ProbedN;
 
   /// <summary>
   /// Fraction of this node's visits which terminated at a history-sensitive
@@ -305,6 +311,20 @@ public unsafe partial struct GNodeStruct
   /// A by-ref wrapper for the LockField (to prevent silent copies).
   /// </summary>
   public ref SpinLockByte LockRef => ref LockField;
+
+  /// <summary>
+  /// Probe "stamp" (experimental, see Search/ProbeGraft/ProbeStamps.cs): an external
+  /// probe engine's evaluation of this node's position, quantized to 1/127 in Ceres Q units
+  /// (node mover's perspective). Meaningful only when ProbeStampN != 0.
+  /// </summary>
+  public sbyte ProbeStampQ;
+
+  /// <summary>
+  /// Log-encoded node N at the time the probe stamp was taken: code = 1 + round(8 log2 n0)
+  /// (n0 = 2^((code-1)/8), resolution ~9%). 0 = no stamp. The stamp's weight in a parent's view of
+  /// this node fades as N grows beyond n0 (ProbeStamps.ProjectChildQ).
+  /// </summary>
+  public byte ProbeStampN;
 
   #endregion
 }

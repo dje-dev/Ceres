@@ -24,6 +24,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <algorithm>
 
 // Platform-specific includes for file stat
 #ifdef _WIN32
@@ -146,12 +147,162 @@ namespace
   // Ref-counted shared engine for multi-profile support.
   // When multiple EngineContexts share a single ICudaEngine,
   // this struct ensures the engine is only deleted when the last context is freed.
+  // Device memory shared by all execution contexts belonging to one engine pool.
+  //
+  // By default every IExecutionContext owns a private scratch block of
+  // ICudaEngine::getDeviceMemorySizeV2() bytes. A multi-profile pool creates one context per
+  // optimization profile, plus (with CUDA graphs) a second context per profile for the concurrent
+  // compute stream, so the default allocates that block 2*numProfiles times per pool. A pool
+  // however never runs more than one context per compute stream at a time: EnginePool issues at
+  // most one sub-batch per stream slot and synchronizes it before reusing that slot. One block per
+  // compute stream therefore suffices for the entire pool.
+  //
+  // blocks[0] backs every profile's primary context (compute stream A, plus the transfer stream);
+  // blocks[1] backs every profile's context2 (compute stream B). Blocks are allocated on first use
+  // so a pool without CUDA graphs never allocates the second.
+  //
+  // Contexts of DIFFERENT pools do run concurrently (an overlapped second evaluator clones the
+  // engine rather than deserializing it), so each pool needs its own group. Pools are told apart
+  // without any API change by optimization profile index: a pool binds each profile exactly once,
+  // so a context whose profile a group already serves must belong to a different pool.
+  struct ContextMemoryGroup
+  {
+    void* blocks[2] = { nullptr, nullptr };
+    int64_t size = 0;
+    int32_t deviceId = -1;
+    uint32_t profilesAssigned = 0;  // bit p set once profile p has been bound to this group
+    int32_t refCount = 0;
+  };
+
+  // Profile indices at or above this cannot be tracked in the ContextMemoryGroup bitmask;
+  // such contexts fall back to TensorRT's default (per-context) device memory.
+  constexpr int32_t MAX_GROUPED_PROFILE_INDEX = 32;
+
   struct SharedEngine
   {
     nvinfer1::ICudaEngine* engine;
     std::atomic<int> refCount;
+
+    // Device memory groups for the pools built on this engine (see ContextMemoryGroup).
+    std::vector<ContextMemoryGroup*> memGroups;
+    std::mutex memGroupsMutex;
+
     SharedEngine(nvinfer1::ICudaEngine* e, int count) : engine(e), refCount(count) {}
   };
+
+
+  // Returns the group this pool's context for profileIndex should use, creating one when every
+  // existing group already serves that profile (i.e. this context belongs to a new pool).
+  // Returns nullptr when grouping is unavailable, in which case the caller must let TensorRT
+  // allocate the context's device memory itself. Caller must already have selected deviceId.
+  static ContextMemoryGroup* AcquireContextMemoryGroup(SharedEngine* shared,
+    nvinfer1::ICudaEngine* engine, int32_t profileIndex, int32_t deviceId)
+  {
+    if (!shared || !engine || profileIndex < 0 || profileIndex >= MAX_GROUPED_PROFILE_INDEX)
+    {
+      return nullptr;
+    }
+
+    const int64_t size = engine->getDeviceMemorySizeV2();
+    if (size <= 0)
+    {
+      return nullptr;
+    }
+
+    const uint32_t bit = 1u << profileIndex;
+    std::lock_guard<std::mutex> lock(shared->memGroupsMutex);
+
+    for (ContextMemoryGroup* group : shared->memGroups)
+    {
+      if (group->deviceId == deviceId && group->size >= size && (group->profilesAssigned & bit) == 0)
+      {
+        group->profilesAssigned |= bit;
+        group->refCount++;
+        return group;
+      }
+    }
+
+    auto* group = new ContextMemoryGroup();
+    group->size = size;
+    group->deviceId = deviceId;
+    group->profilesAssigned = bit;
+    group->refCount = 1;
+    shared->memGroups.push_back(group);
+    return group;
+  }
+
+
+  // Returns the group's device memory block for the given compute stream slot, allocating it on
+  // first use. Returns nullptr if the allocation fails (caller falls back to a self-allocating
+  // context). Caller must already have selected the group's device.
+  static void* EnsureContextMemoryBlock(SharedEngine* shared, ContextMemoryGroup* group, int32_t slot)
+  {
+    if (!shared || !group || slot < 0 || slot > 1)
+    {
+      return nullptr;
+    }
+
+    std::lock_guard<std::mutex> lock(shared->memGroupsMutex);
+    if (!group->blocks[slot])
+    {
+      void* block = nullptr;
+      if (cudaMalloc(&block, static_cast<size_t>(group->size)) != cudaSuccess)
+      {
+        return nullptr;
+      }
+      group->blocks[slot] = block;
+    }
+    return group->blocks[slot];
+  }
+
+
+  // Drops one context's reference to a group, freeing its blocks once the last context is gone.
+  static void ReleaseContextMemoryGroup(SharedEngine* shared, ContextMemoryGroup* group)
+  {
+    if (!shared || !group)
+    {
+      return;
+    }
+
+    std::lock_guard<std::mutex> lock(shared->memGroupsMutex);
+    if (--group->refCount > 0)
+    {
+      return;
+    }
+
+    for (int i = 0; i < 2; ++i)
+    {
+      if (group->blocks[i])
+      {
+        cudaFree(group->blocks[i]);
+      }
+    }
+    shared->memGroups.erase(std::remove(shared->memGroups.begin(), shared->memGroups.end(), group),
+                            shared->memGroups.end());
+    delete group;
+  }
+
+
+  // Creates an execution context whose device memory comes from the group's block for the given
+  // compute stream slot, falling back to a context that allocates its own block when grouping is
+  // unavailable. Returns nullptr only if TensorRT could not create a context at all.
+  static nvinfer1::IExecutionContext* CreateContextUsingMemoryGroup(nvinfer1::ICudaEngine* engine,
+    SharedEngine* shared, ContextMemoryGroup* group, int32_t slot)
+  {
+    void* block = EnsureContextMemoryBlock(shared, group, slot);
+    if (block)
+    {
+      nvinfer1::IExecutionContext* context =
+        engine->createExecutionContext(nvinfer1::ExecutionContextAllocationStrategy::kUSER_MANAGED);
+      if (context)
+      {
+        context->setDeviceMemoryV2(block, group->size);
+        return context;
+      }
+    }
+
+    return engine->createExecutionContext();
+  }
 
   // Engine wrapper struct
   struct EngineContext
@@ -164,6 +315,13 @@ namespace
     // tensor address bindings.
     nvinfer1::IExecutionContext* context2 = nullptr;
     SharedEngine* sharedOwner = nullptr;  // Non-null when sharing engine via multi-profile
+
+    // Device memory shared with this pool's other contexts (see ContextMemoryGroup). Null when
+    // this context allocates its own device memory. memGroupOwner is held separately from
+    // sharedOwner because failure paths detach sharedOwner before destroying the context.
+    ContextMemoryGroup* memGroup = nullptr;
+    SharedEngine* memGroupOwner = nullptr;
+
     int32_t batchSize = 0;
     int32_t deviceId = 0;  // GPU device ID
     int32_t profileIndex = 0;  // Optimization profile this context is bound to (0 if single-profile)
@@ -223,6 +381,10 @@ namespace
       }
       if (context2) delete context2;
       if (context) delete context;
+
+      // Must follow context destruction: the contexts read this memory while they live.
+      if (memGroup) ReleaseContextMemoryGroup(memGroupOwner, memGroup);
+
       if (sharedOwner)
       {
         // Ref-counted: only delete engine when last context releases it
@@ -3308,9 +3470,14 @@ extern "C"
       return nullptr;
     }
 
-    nvinfer1::IExecutionContext* context = engine->createExecutionContext();
+    // Share one device memory block per compute stream across this pool's profiles rather than
+    // letting every context allocate its own (see ContextMemoryGroup).
+    ContextMemoryGroup* memGroup = AcquireContextMemoryGroup(shared, engine, profileIndex, deviceId);
+
+    nvinfer1::IExecutionContext* context = CreateContextUsingMemoryGroup(engine, shared, memGroup, 0);
     if (!context)
     {
+      ReleaseContextMemoryGroup(shared, memGroup);
       return nullptr;
     }
 
@@ -3318,6 +3485,8 @@ extern "C"
     ec->engine = engine;
     ec->context = context;
     ec->sharedOwner = shared;
+    ec->memGroup = memGroup;
+    ec->memGroupOwner = shared;
     ec->batchSize = batchSize;
     ec->deviceId = deviceId;
     ec->useCudaGraphs = useCudaGraphs;
@@ -3457,9 +3626,11 @@ extern "C"
     // Create second execution context for stream 2 (concurrent compute).
     // TensorRT execution contexts are not thread-safe, so concurrent graph replay
     // on streams 0 and 2 requires separate contexts with independent tensor bindings.
+    // Slot 1 of the memory group: stream 2 never runs concurrently with another profile's
+    // context2 in this pool, so all of them can share one block.
     if (useCudaGraphs)
     {
-      ec->context2 = engine->createExecutionContext();
+      ec->context2 = CreateContextUsingMemoryGroup(engine, shared, memGroup, 1);
       if (ec->context2)
       {
         if (profileIndex > 0)

@@ -328,10 +328,16 @@ public struct GEdgeStruct
   ///      before the first backup increments N); it is semantics-preserving elsewhere since
   ///      in Position mode N == 0 implies NDrawByRepetition == 0 (the first branch applied).
   /// </summary>
-  public readonly double Q => N == 0 ? QChild
-                            : NDrawByRepetition == 0 ? QChild
-                            : N == NDrawByRepetition? 0.0   // all visits are draws-by-repetition: clean draw value; avoids NaN*0 when QChild is an unevaluated placeholder
-                            : QChild* ((double)(N - NDrawByRepetition) / N);
+  public readonly double Q =>
+    N switch
+    {
+      0 => QChild,
+      _ when NDrawByRepetition == 0 => QChild,
+      int n when n == NDrawByRepetition => 0.0, // all visits are draws-by-repetition: clean draw value;
+                                                // avoids NaN*0 when QChild is an unevaluated placeholder
+      _ => QChild * (N - NDrawByRepetition) / (double)N
+    };
+
  
 
   /// <summary>

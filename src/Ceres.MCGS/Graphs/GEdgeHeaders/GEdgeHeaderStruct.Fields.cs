@@ -185,6 +185,17 @@ public struct GEdgeHeaderStruct : IEquatable<GEdgeHeaderStruct>
 
 
   /// <summary>
+  /// Overwrites the policy prior of this (unexpanded) edge header in place.
+  /// </summary>
+  /// <param name="p"></param>
+  internal void SetUnexpandedP(FP16 p)
+  {
+    Debug.Assert(!IsExpanded);
+    this.p = p;
+  }
+
+
+  /// <summary>
   /// Converts the struct to represent an expanded child with specified edge block.
   /// </summary>
   /// <param name="edgeBlockIndex"></param>

@@ -44,6 +44,13 @@ namespace Ceres.Base.OperatingSystem.Linux
     public const int MAP_HUGETLB = 0x40000;
     public const int MAP_FILE = 0;
 
+    /// <summary>
+    /// madvise advice requesting transparent huge pages for a range (Linux, since 2.6.38).
+    /// Unlike MAP_HUGETLB this needs no pre-reserved hugetlbfs pool and no privileges; it is a
+    /// hint the kernel honors when THP is set to "madvise" or "always" (the common defaults).
+    /// </summary>
+    public const int MADV_HUGEPAGE = 14;
+
     public const int MREMAP_MAYMOVE = 1;
     public const int MREMAP_FIXED = 2;
 

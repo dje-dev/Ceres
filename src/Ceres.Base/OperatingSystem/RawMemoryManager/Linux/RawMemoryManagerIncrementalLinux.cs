@@ -62,8 +62,38 @@ namespace Ceres.Base.OperatingSystem
     }
 
 
+    /// <summary>
+    /// If reservations should ask the kernel to back this range with transparent huge pages.
+    ///
+    /// The graph stores are multi-gigabyte and accessed in essentially random order, so with 4 KB
+    /// pages most node visits can take a TLB miss whose page walk is itself a cache miss. A 2 MB
+    /// page raises the reach of the same number of TLB entries by ~512x.
+    ///
+    /// This is only an advisory hint, distinct from MAP_HUGETLB (UseLargePages) which needs a
+    /// pre-reserved hugetlbfs pool and fails when it is absent. Costs nothing where unsupported:
+    /// the call is a no-op on kernels without THP and simply returns an error which is ignored,
+    /// and it is never reached on non-Linux platforms (MemoryBufferOS selects the Windows manager
+    /// there). Set to false to reserve with ordinary pages.
+    ///
+    /// CAVEAT: where /sys/kernel/mm/transparent_hugepage/defrag is "madvise" (the Ubuntu
+    /// default), advised regions compact SYNCHRONOUSLY in the page fault path, so on a
+    /// fragmented machine the mprotect growth below can stall mid-search. If per-move times
+    /// become erratic, try: echo defer+madvise > /sys/kernel/mm/transparent_hugepage/defrag
+    ///
+    /// Verify it is taking effect during a search with:
+    ///   grep AnonHugePages /proc/&lt;pid&gt;/smaps_rollup
+    /// </summary>
+    internal const bool USE_TRANSPARENT_HUGE_PAGES = false;
+
+
     static bool largePageAllocationEverFailed = false;
 
+    /// <summary>
+    /// Whether the successful reservation actually requested MAP_HUGETLB.
+    /// Distinct from the useLargePages argument, which is only what the caller asked for:
+    /// the request is skipped when a previous reservation already found the hugetlbfs pool
+    /// unavailable, and is abandoned when the huge page attempt fails and we fall back.
+    /// </summary>
     bool usesLargePages = false;
 
     public void Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool useLargePages)
@@ -84,20 +114,30 @@ namespace Ceres.Base.OperatingSystem
       NumBytesReserved = RoundToHugePageSize(numItems * sizeof(T) + PAGE_SIZE);
 
       int mapFlags = LinuxAPI.MAP_NORESERVE | LinuxAPI.MAP_PRIVATE | LinuxAPI.MAP_ANONYMOUS;
-      if (useLargePages && !largePageAllocationEverFailed)
+
+      // Huge pages are requested only if the caller asked AND no earlier reservation already
+      // found the hugetlbfs pool unavailable (after which every later attempt would fail too).
+      bool attemptedLargePages = useLargePages && !largePageAllocationEverFailed;
+      if (attemptedLargePages)
       {
         mapFlags |= LinuxAPI.MAP_HUGETLB;
-      };
+      }
 
       IntPtr mapPtr = (IntPtr)LinuxAPI.mmap(null, NumBytesReserved, LinuxAPI.PROT_NONE, mapFlags, -1, 0);
       if (mapPtr.ToInt64() == -1)
       {
-        if (useLargePages)
+        // Only meaningful to retry when this attempt actually asked for huge pages; otherwise
+        // the failure has some other cause and dropping a flag that was never set cannot help.
+        if (attemptedLargePages)
         {
-          // Attempt without large pages.
-          mapPtr = (IntPtr)LinuxAPI.mmap(null, NumBytesReserved, LinuxAPI.PROT_NONE, mapFlags ^= LinuxAPI.MAP_HUGETLB, -1, 0);
+          // Clear the bit rather than toggling it: XOR would ADD MAP_HUGETLB back on a retry
+          // of a mapping which had not requested it.
+          mapFlags &= ~LinuxAPI.MAP_HUGETLB;
+
+          mapPtr = (IntPtr)LinuxAPI.mmap(null, NumBytesReserved, LinuxAPI.PROT_NONE, mapFlags, -1, 0);
           if (mapPtr.ToInt64() != -1)
           {
+            attemptedLargePages = false;
             largePageAllocationEverFailed = true;
             Console.WriteLine("NOTE: Attempt to allocate large page failed, falling back to non-large pages.");
           }
@@ -108,9 +148,17 @@ namespace Ceres.Base.OperatingSystem
           throw new Exception($"Virtual memory reservation of {NumBytesReserved} bytes failed using mmap.");
         }
       }
-      else
+
+      // Reflects the mapping which actually succeeded, not merely what the caller requested.
+      usesLargePages = attemptedLargePages;
+
+      if (USE_TRANSPARENT_HUGE_PAGES)
       {
-        usesLargePages = true;
+        // Advisory only: failure (no THP support, or THP set to "never") is expected on some
+        // systems and simply leaves the range on ordinary pages, so the result is ignored.
+        // The reservation is already rounded to a 2 MB boundary, and the advice is a property
+        // of the mapping which survives the mprotect calls that commit pages as the graph grows.
+        LinuxAPI.madvise((void*)mapPtr, NumBytesReserved, LinuxAPI.MADV_HUGEPAGE);
       }
 
       rawMemoryPointer = (void*)mapPtr;

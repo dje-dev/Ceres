@@ -135,6 +135,13 @@ public unsafe readonly struct GEdge : IEquatable<GEdge>
 
 
   /// <summary>
+  /// Overwrites the policy prior stored on this (expanded) edge.
+  /// </summary>
+  /// <param name="p"></param>
+  internal readonly void SetPolicyPrior(FP16 p) => edgeStructPtr->P = p;
+
+
+  /// <summary>
   /// Move that transitions board state between parent and child of this edge.
   /// </summary>
   public readonly EncodedMove Move => edgeStructPtr->Move;

@@ -25,6 +25,7 @@ using System.Threading.Tasks;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
+using Ceres.Base.Threading;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Boards;
 using Ceres.Chess.MoveGen;
@@ -412,7 +413,11 @@ namespace Ceres.Chess.LC0.Batches
 
       EnsurePlaneArraysAllocated();
 
-      Parallel.For(0, NumPos, materializeRowAction ??= MaterializeRow);
+      // Encoding one row is cheap, so unless the batch is large enough to be worth spreading
+      // over multiple threads the setup cost (and allocations) of Parallel.For exceed the work
+      // itself; ParallelUtils.For runs those serially instead.
+      const int NUM_ROWS_PER_THREAD = 16;
+      ParallelUtils.For(0, NumPos, NUM_ROWS_PER_THREAD, materializeRowAction ??= MaterializeRow);
 
       PlanesPopulated = true;
     }

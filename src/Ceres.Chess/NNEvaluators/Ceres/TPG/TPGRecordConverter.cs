@@ -19,6 +19,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
+using Ceres.Base.Threading;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.LC0.Batches;
@@ -209,8 +210,9 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
       // Determine each position and copy converted raw board bytes into rawBoardBytesAll.
       // TODO: for efficiency, avoid doing this if the NN evaluator does not need raw bytes
-      int numThreads = Math.Min(1 + positions.NumPos / 32, 32); // This value was carefully tuned
-      Parallel.For(0, positions.NumPos, new ParallelOptions() { MaxDegreeOfParallelism = numThreads }, i =>
+      const int POSITIONS_PER_THREAD = 32;
+      const int MAX_THREADS = 32;
+      ParallelUtils.For(0, positions.NumPos, POSITIONS_PER_THREAD, i =>
       {
         Span<byte> squareBytesAllLocalRef = squareBytesAll.Span;
         int tpgSquaresStartOffset = i * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD;
@@ -276,7 +278,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
           }
         }
-      });
+      }, MAX_THREADS);
     }
 
 

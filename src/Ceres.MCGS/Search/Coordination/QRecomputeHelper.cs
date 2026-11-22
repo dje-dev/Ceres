@@ -102,7 +102,8 @@ internal static class QRecomputeHelper
         else
         {
           // Live read: the edge becomes exactly current, so it is no longer stale.
-          edge.QChild = edge.ChildNode.Q;
+          GNode childNode = edge.ChildNode;
+          edge.QChild = ProbeGraft.ProbeStamps.ProjectChildQ(childNode, childNode.Q);
           edge.IsStale = false;
         }
       }

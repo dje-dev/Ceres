@@ -18,6 +18,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using Ceres.Base.OperatingSystem;
+using Ceres.Base.Threading;
 using Ceres.Chess;
 using Ceres.Chess.Positions;
 using Ceres.MCGS.Graphs.GraphStores;
@@ -85,17 +86,18 @@ public partial class GNodeStore
   /// <summary>
   /// Returns the numbrer of nodes allocated so far.
   /// </summary>
-  public int NumUsedNodes => nextFreeIndex - FIRST_ALLOCATED_INDEX;
+  public int NumUsedNodes => nextFreeIndex.Value - FIRST_ALLOCATED_INDEX;
 
   /// <summary>
   /// Returns the number of nodes in use (all allocated nodes plus one unused root node at beginning).
   /// </summary>
-  public int NumTotalNodes => nextFreeIndex; // includes reserved null entry at 0
+  public int NumTotalNodes => nextFreeIndex.Value; // includes reserved null entry at 0
 
   /// <summary>
   /// The index indicating the next free node slot.
+  /// Padded onto its own cache line (bumped by every thread that allocates a node).
   /// </summary>
-  internal int nextFreeIndex = FIRST_ALLOCATED_INDEX; // Index 0 reserved, indicates null node
+  internal PaddedInt32 nextFreeIndex = new() { Value = FIRST_ALLOCATED_INDEX }; // Index 0 reserved, indicates null node
 
   /// <summary>
   /// Parent store to which this nodes store belongs.
@@ -104,13 +106,6 @@ public partial class GNodeStore
 
 
   public Half[][] AllStates; // TODO: make this more efficient
-
-
-  /// <summary>
-  /// Address of the first node in the store.
-  /// This is guaranteed to be a fixed address, so we can use it to calculate the offset of any node.
-  /// </summary>
-  readonly long addressNodeZero;
 
 
   /// <summary>
@@ -138,8 +133,6 @@ public partial class GNodeStore
     nodes = new MemoryBufferOS<GNodeStruct>(numNodes + BUFFER_NODES, largePages, memorySegmentName, useExistingSharedMem, useIncrementalAlloc);
 
     Reset(priorMoves, false);
-
-    addressNodeZero = (long)(IntPtr)Unsafe.AsPointer(ref nodes[0]);
   }
 
 
@@ -163,7 +156,7 @@ public partial class GNodeStore
   public NodeIndex AllocateNext()
   {
     // Take next available (lock-free)
-    int gotIndex = Interlocked.Increment(ref nextFreeIndex) - 1;
+    int gotIndex = Interlocked.Increment(ref nextFreeIndex.Value) - 1;
 
     // Check for overflow (with page buffer)
     if (nodes.NumItemsAllocated <= gotIndex + BUFFER_NODES)
@@ -211,18 +204,6 @@ public partial class GNodeStore
 
 
   /// <summary>
-  /// Returns the index of a node given its address.
-  /// </summary>
-  /// <param name="node"></param>
-  /// <returns></returns>
-  [MethodImpl(MethodImplOptions.AggressiveInlining)]
-  [DebuggerStepThrough]
-  unsafe internal nuint IndexOfNodeAtAddress(GNodeStruct* nodePtr)
-    => ((nuint)nodePtr - (nuint)addressNodeZero) / (nuint)sizeof(GNodeStruct);
-
-
-
-  /// <summary>
   /// Returns the index of a node given a reference to it.
   /// </summary>
   /// <param name="node"></param>
@@ -254,7 +235,7 @@ public partial class GNodeStore
       // Clear underlying memory in store
       // Note that MCTSNodeStructChildStorage does not need to be cleared, 
       // since we always fully fill in any newly allocated child array fields
-      nodes.Clear(0, nextFreeIndex);
+      nodes.Clear(0, nextFreeIndex.Value);
     }
 
     if (HasState)
@@ -263,7 +244,7 @@ public partial class GNodeStore
       AllStates = new Half[1_000_000][];
     }
 
-    nextFreeIndex = 1;
+    nextFreeIndex.Value = 1;
 
     // Cause the root node to be allocated.
     AllocateNext();

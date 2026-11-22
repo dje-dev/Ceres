@@ -56,7 +56,7 @@ public readonly ref struct GNodeEdgeHeaders
   public GNodeEdgeHeaders(GNode parent)
   {
     Parent = parent;
-    HeaderStructsSpan = parent.Graph.EdgeHeadersStore.SpanAtBlockIndex(Parent.BlockIndexIntoEdgeHeaderStore, Parent.NodeRef.NumPolicyMoves);
+    HeaderStructsSpan = parent.EdgeHeadersSpan;
   }
 
 

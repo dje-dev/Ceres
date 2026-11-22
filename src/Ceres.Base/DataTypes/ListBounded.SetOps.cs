@@ -15,7 +15,6 @@
 
 using Ceres.Base.Misc;
 using System;
-using System.Buffers;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -28,7 +27,7 @@ namespace Ceres.Base.DataTypes
   /// Methods at ListBounded<T> which relate to set operations.
   /// </summary>
   /// <typeparam name="T"></typeparam>
-  public partial class ListBounded<T> : IDisposable, IEnumerable<T>, IList<T> where T : IComparable<T>
+  public partial class ListBounded<T> : IEnumerable<T>, IList<T> where T : IComparable<T>
   {
     /// <summary>
     /// 

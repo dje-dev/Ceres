@@ -32,7 +32,10 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     const int MAX_SESSIONS = 32; // hardcoded in C++
     static IDPool sessionIDPool = new IDPool("SyzygyEvaluator", MAX_SESSIONS);
 
-    static Dictionary<string, ISyzygyEvaluatorEngine> pathsToEvaluatorDict = new ();
+    /// <summary>
+    /// Evaluator (and its session ID) currently loaded for each set of paths.
+    /// </summary>
+    static Dictionary<string, (ISyzygyEvaluatorEngine Evaluator, int SessionID)> pathsToEvaluatorDict = new ();
 
     public static Func<ISyzygyEvaluatorEngine> OverrideEvaluatorFactory;
 
@@ -47,21 +50,66 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
       lock (sessionIDPool)
       {
-        ISyzygyEvaluatorEngine evaluator;
-        if (pathsToEvaluatorDict.TryGetValue(paths, out evaluator))
+        if (pathsToEvaluatorDict.TryGetValue(paths, out (ISyzygyEvaluatorEngine Evaluator, int SessionID) existing))
         {
-          return evaluator;
+          return existing.Evaluator;
         }
-        else
-        {
-          int sessionID = sessionIDPool.GetFreeID();
-          evaluator = OverrideEvaluatorFactory != null ? OverrideEvaluatorFactory() : new FathomEvaluator();                                                        
 
+        // The backend holds process-wide state for a single set of paths (FathomTB keeps one
+        // static probe and throws on reinitialization), so a request for different paths must
+        // first release whatever is loaded rather than let that initialization throw.
+        //
+        // N.B. this invalidates any evaluator previously handed out for the old paths. Callers
+        // re-request per search (see EvaluatorSyzygy), so switching between searches is safe;
+        // switching while a search still using the old paths is running is not.
+        ReleaseAllInternal();
+
+        int sessionID = sessionIDPool.GetFreeID();
+        ISyzygyEvaluatorEngine evaluator = OverrideEvaluatorFactory != null ? OverrideEvaluatorFactory()
+                                                                           : new FathomEvaluator();
+        try
+        {
           evaluator.Initialize(paths);
-          pathsToEvaluatorDict[paths] = evaluator;
-          return evaluator;
         }
+        catch
+        {
+          // Leave no session ID stranded if the paths turn out to be unusable.
+          sessionIDPool.ReleaseID(sessionID);
+          throw;
+        }
+
+        pathsToEvaluatorDict[paths] = (evaluator, sessionID);
+        return evaluator;
       }
+    }
+
+
+    /// <summary>
+    /// Releases all pooled evaluators, unloading their tablebases and freeing the
+    /// underlying file mappings. Any evaluator reference previously returned by
+    /// GetSessionForPaths becomes invalid; callers must re-request one afterward.
+    /// </summary>
+    public static void ReleaseAll()
+    {
+      lock (sessionIDPool)
+      {
+        ReleaseAllInternal();
+      }
+    }
+
+
+    /// <summary>
+    /// Disposes and forgets every pooled evaluator. Caller must hold the pool lock.
+    /// </summary>
+    static void ReleaseAllInternal()
+    {
+      foreach ((ISyzygyEvaluatorEngine evaluator, int sessionID) in pathsToEvaluatorDict.Values)
+      {
+        evaluator.Dispose();
+        sessionIDPool.ReleaseID(sessionID);
+      }
+
+      pathsToEvaluatorDict.Clear();
     }
 
   }

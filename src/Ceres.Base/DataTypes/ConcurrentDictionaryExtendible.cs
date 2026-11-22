@@ -16,7 +16,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
+using System.Numerics;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 using System.Threading;
 
 #endregion
@@ -43,7 +45,6 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
 
   struct Entry
   {
-    public int HashCode;
     public TKey Key;
     public TValue Value;
   }
@@ -53,8 +54,63 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
   {
     public int LocalDepth;
     public int Count;
+
+    /// <summary>
+    /// Hash codes of the entries, parallel to Entries.
+    ///
+    /// Held apart from the key/value pairs so that probing touches 4 bytes per candidate
+    /// instead of striding across whole entries. For a full bucket that is 8 cache lines
+    /// rather than dozens, which is what dominates lookup cost once the table outgrows L2.
+    /// </summary>
+    public int[] Hashes;
+
     public Entry[] Entries;
     public readonly Lock SyncRoot = new();
+  }
+
+
+  /// <summary>
+  /// Returns the index within a bucket of the entry matching hashCode and key, or -1 if absent.
+  /// Scans the hash array (vectorized where available) and compares keys only where a hash matched.
+  /// </summary>
+  static int FindIndex(int[] hashes, Entry[] entries, int count, int hashCode, TKey key)
+  {
+    int i = 0;
+
+    if (Vector256.IsHardwareAccelerated && count >= Vector256<int>.Count)
+    {
+      ref int hashesRef = ref MemoryMarshal.GetArrayDataReference(hashes);
+      Vector256<int> target = Vector256.Create(hashCode);
+      int lastBlockStart = count - Vector256<int>.Count;
+
+      for (; i <= lastBlockStart; i += Vector256<int>.Count)
+      {
+        uint matches = Vector256.Equals(Vector256.LoadUnsafe(ref hashesRef, (nuint)i), target)
+                                .ExtractMostSignificantBits();
+
+        // Usually zero; when set, verify each candidate lane against the real key.
+        while (matches != 0)
+        {
+          int index = i + BitOperations.TrailingZeroCount(matches);
+          if (entries[index].Key.Equals(key))
+          {
+            return index;
+          }
+
+          matches &= matches - 1;   // clear the lowest set bit, keep checking the rest
+        }
+      }
+    }
+
+    for (; i < count; i++)
+    {
+      if (hashes[i] == hashCode && entries[i].Key.Equals(key))
+      {
+        return i;
+      }
+    }
+
+    return -1;
   }
 
 
@@ -62,7 +118,6 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
   /// Returns the smallest power-of-2 capacity that can hold <paramref name="count"/> entries,
   /// clamped to [INITIAL_BUCKET_CAPACITY .. BUCKET_CAPACITY].
   /// </summary>
-  [MethodImpl(MethodImplOptions.AggressiveInlining)]
   static int RightSizeCapacity(int count)
   {
     int cap = RoundUpPowerOf2(System.Math.Max(count, INITIAL_BUCKET_CAPACITY));
@@ -89,7 +144,12 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
     directory = new Bucket[numBuckets];
     for (int i = 0; i < numBuckets; i++)
     {
-      directory[i] = new Bucket { LocalDepth = globalDepth, Entries = new Entry[INITIAL_BUCKET_CAPACITY] };
+      directory[i] = new Bucket
+      {
+        LocalDepth = globalDepth,
+        Hashes = new int[INITIAL_BUCKET_CAPACITY],
+        Entries = new Entry[INITIAL_BUCKET_CAPACITY]
+      };
     }
   }
 
@@ -121,14 +181,11 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
           continue; // Retry with correct bucket.
         }
 
-        for (int i = 0; i < bucket.Count; i++)
+        int index = FindIndex(bucket.Hashes, bucket.Entries, bucket.Count, hashCode, key);
+        if (index >= 0)
         {
-          ref Entry entry = ref bucket.Entries[i];
-          if (entry.HashCode == hashCode && entry.Key.Equals(key))
-          {
-            value = entry.Value;
-            return true;
-          }
+          value = bucket.Entries[index].Value;
+          return true;
         }
 
         value = default;
@@ -158,20 +215,17 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
         }
 
         // Check for existing key.
-        for (int i = 0; i < bucket.Count; i++)
+        if (FindIndex(bucket.Hashes, bucket.Entries, bucket.Count, hashCode, key) >= 0)
         {
-          ref Entry entry = ref bucket.Entries[i];
-          if (entry.HashCode == hashCode && entry.Key.Equals(key))
-          {
-            return false; // Key already exists.
-          }
+          return false; // Key already exists.
         }
 
         // Room in bucket's current array - add directly.
         if (bucket.Count < bucket.Entries.Length)
         {
-          ref Entry newEntry = ref bucket.Entries[bucket.Count];
-          newEntry.HashCode = hashCode;
+          int at = bucket.Count;
+          bucket.Hashes[at] = hashCode;
+          ref Entry newEntry = ref bucket.Entries[at];
           newEntry.Key = key;
           newEntry.Value = value;
           bucket.Count++;
@@ -183,12 +237,15 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
         if (bucket.Entries.Length < BUCKET_CAPACITY)
         {
           int newCap = System.Math.Min(bucket.Entries.Length * 2, BUCKET_CAPACITY);
+          int[] grownHashes = new int[newCap];
           Entry[] grown = new Entry[newCap];
+          Array.Copy(bucket.Hashes, grownHashes, bucket.Count);
           Array.Copy(bucket.Entries, grown, bucket.Count);
+          grownHashes[bucket.Count] = hashCode;
           ref Entry newEntry = ref grown[bucket.Count];
-          newEntry.HashCode = hashCode;
           newEntry.Key = key;
           newEntry.Value = value;
+          bucket.Hashes = grownHashes;
           bucket.Entries = grown;
           bucket.Count++;
           Interlocked.Increment(ref totalCount);
@@ -226,21 +283,19 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
           }
 
           // Check for existing key - update in place.
-          for (int i = 0; i < bucket.Count; i++)
+          int existing = FindIndex(bucket.Hashes, bucket.Entries, bucket.Count, hashCode, key);
+          if (existing >= 0)
           {
-            ref Entry entry = ref bucket.Entries[i];
-            if (entry.HashCode == hashCode && entry.Key.Equals(key))
-            {
-              entry.Value = value;
-              return;
-            }
+            bucket.Entries[existing].Value = value;
+            return;
           }
 
           // Not found - insert if room in current array.
           if (bucket.Count < bucket.Entries.Length)
           {
-            ref Entry newEntry = ref bucket.Entries[bucket.Count];
-            newEntry.HashCode = hashCode;
+            int at = bucket.Count;
+            bucket.Hashes[at] = hashCode;
+            ref Entry newEntry = ref bucket.Entries[at];
             newEntry.Key = key;
             newEntry.Value = value;
             bucket.Count++;
@@ -252,12 +307,15 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
           if (bucket.Entries.Length < BUCKET_CAPACITY)
           {
             int newCap = System.Math.Min(bucket.Entries.Length * 2, BUCKET_CAPACITY);
+            int[] grownHashes = new int[newCap];
             Entry[] grown = new Entry[newCap];
+            Array.Copy(bucket.Hashes, grownHashes, bucket.Count);
             Array.Copy(bucket.Entries, grown, bucket.Count);
+            grownHashes[bucket.Count] = hashCode;
             ref Entry newEntry = ref grown[bucket.Count];
-            newEntry.HashCode = hashCode;
             newEntry.Key = key;
             newEntry.Value = value;
+            bucket.Hashes = grownHashes;
             bucket.Entries = grown;
             bucket.Count++;
             Interlocked.Increment(ref totalCount);
@@ -275,7 +333,6 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
   /// <summary>
   /// Gets the bucket for a given hash code by masking with current directory size.
   /// </summary>
-  [MethodImpl(MethodImplOptions.AggressiveInlining)]
   Bucket GetBucket(int hashCode)
   {
     Bucket[] dir = Volatile.Read(ref directory);
@@ -331,7 +388,7 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
 
     for (int i = 0; i < oldCount; i++)
     {
-      if ((bucket.Entries[i].HashCode & splitBit) == 0)
+      if ((bucket.Hashes[i] & splitBit) == 0)
       {
         keepCount++;
       }
@@ -340,32 +397,45 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
     int sibCount = oldCount - keepCount;
 
     // Allocate right-sized arrays for both halves.
-    Entry[] keepEntries = new Entry[RightSizeCapacity(keepCount)];
-    Entry[] sibEntries = new Entry[RightSizeCapacity(sibCount)];
+    int keepCap = RightSizeCapacity(keepCount);
+    int sibCap = RightSizeCapacity(sibCount);
+    int[] keepHashes = new int[keepCap];
+    int[] sibHashes = new int[sibCap];
+    Entry[] keepEntries = new Entry[keepCap];
+    Entry[] sibEntries = new Entry[sibCap];
 
     // Second pass: fill both arrays.
     int ki = 0, si = 0;
     for (int i = 0; i < oldCount; i++)
     {
-      ref Entry entry = ref bucket.Entries[i];
-      if ((entry.HashCode & splitBit) != 0)
+      int entryHash = bucket.Hashes[i];
+      if ((entryHash & splitBit) != 0)
       {
-        sibEntries[si++] = entry;
+        sibHashes[si] = entryHash;
+        sibEntries[si++] = bucket.Entries[i];
       }
       else
       {
-        keepEntries[ki++] = entry;
+        keepHashes[ki] = entryHash;
+        keepEntries[ki++] = bucket.Entries[i];
       }
     }
 
-    Bucket sibling = new Bucket { LocalDepth = newLocalDepth, Entries = sibEntries, Count = sibCount };
+    Bucket sibling = new Bucket
+    {
+      LocalDepth = newLocalDepth,
+      Hashes = sibHashes,
+      Entries = sibEntries,
+      Count = sibCount
+    };
 
     bucket.LocalDepth = newLocalDepth;
 
-    // Publish the new entries array before the count.
-    // Lock-free readers do Volatile.Read(Count) then read Entries;
-    // the acquire/release pair guarantees a reader that sees the new Count
-    // also sees the new Entries reference.
+    // Publish the new arrays before the count, so that any future lock-free reader which
+    // does Volatile.Read(Count) and then reads Hashes/Entries is guaranteed by the
+    // acquire/release pair to see arrays at least as new as the count it observed.
+    // (All readers currently take the bucket lock, so this ordering is not yet relied upon.)
+    bucket.Hashes = keepHashes;
     bucket.Entries = keepEntries;
     Volatile.Write(ref bucket.Count, keepCount);
 

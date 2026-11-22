@@ -201,7 +201,10 @@ namespace Ceres.Chess.NNEvaluators
 
     public static NNEvaluator BuildEvaluatorCore(NNEvaluatorDef def, NNEvaluator referenceEvaluator, Dictionary<string, string> options)
     {
-      if (def.IsShared)
+      // A caller which supplies a reference evaluator is asking for a SECOND, independent
+      // evaluator which reuses the reference's already loaded network weights
+      // (for example the overlapped evaluator of NNEvaluatorSet). 
+      if (def.IsShared && referenceEvaluator == null)
       {
         lock (persistentEvaluators)
         {

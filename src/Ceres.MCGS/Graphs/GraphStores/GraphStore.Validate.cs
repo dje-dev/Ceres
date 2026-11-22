@@ -241,7 +241,7 @@ internal class GraphStoreValidator
 
     int startNodeIndex = singleNodeIndex ?? 1;
     int endNodeIndex = singleNodeIndex.HasValue ? singleNodeIndex.Value + 1 
-                                                : store.NodesStore.nextFreeIndex;
+                                                : store.NodesStore.nextFreeIndex.Value;
     // Validate all nodes
     // Note that we proceed from last (most recently added) node toward earliest (root)
     // which may help identify nodes with problems most proximal to their origin

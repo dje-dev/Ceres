@@ -61,7 +61,7 @@ namespace Ceres.APIExamples
        {
          var name when name.ToUpper().Contains("SUPER") => new int[] { 0,1 },
          var name when name.ToUpper().Contains("DGX") => [0, 1, 2, 3],
-         var name when name.ToUpper().Contains("HOP") => [0, 1, 2, 3],
+         var name when name.ToUpper().Contains("HOP") => [0, 1, 2],
          _ => new int[] { 0 }
        });
 
@@ -224,24 +224,7 @@ namespace Ceres.APIExamples
       //NET2 = "~BT4_FP16_TRT";
       //NET2 = "~T3_512_15_FP16_TRT";
 
-#if NOT
-      //      NNEvaluatorDef t1Distill = NNEvaluatorDef.FromSpecification("~T1_512_RL_TRT", "GPU:0#TensorRT16");
-      NNEvaluatorDef t1Distill = NNEvaluatorDef.FromSpecification("~T1_DISTILL_256_10_FP16", "GPU:0#TensorRT16");
-      NNEvaluatorDef bt4 = NNEvaluatorDef.FromSpecification("~BT4_FP16_TRT", "GPU:0#TensorRT16");
-
-      NNEvaluatorDef evaluatorDefEndgameStrong = new((Position p, NNPositionEvaluationBatchMember[] batchMember) =>
-        {
-          return p.PieceCount <= 12 ? 1 : 0;
-        },
-        bt4.Devices[0].Device,
-        // new NNDevicesSpecificationString("X").Devices,
-        null, null,
-        (t1Distill.Nets[0].Net, 1, 1, 1, 1, 1, 1),
-        (bt4.Nets[0].Net, 1, 1, 1, 1, 1, 1));
-#endif
-
       //      NNEvaluatorDef twoNets = new NNEvaluatorDef(NNEvaluatorNetComboType.WtdAverage, gpu3, null, null, (netT30, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f), (netT40, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f));
-
       //      NNEvaluatorFactory.CustomDelegate factoryCombo = (string netID, int gpuID, NNEvaluator referenceEvaluator, object options) =>
       //   new NNEvaluatorDynamicByPos([evaluatorCeres, evaluatorLC0], (pos, _) => PIECES.PositionMatches(in pos) ? 0 : 1);
 
@@ -421,20 +404,6 @@ namespace Ceres.APIExamples
 
       GPUS_1 = "GPU:0#TensorRT";// overrideNET1 != null ? "GPU:0" : "GPU:0#TensorRT16";
       GPUS_2 = "GPU:0#TensorRT";
-
-#if NOT
-  To build Torchscript evaluator:
-  const string BASE_FNAME = "b6c528ec4923_SP_512_25_16H_FFN3_NLA_SMOL_SOAP_B1_6bn_fp16_1399996416";
-  string FN_BASELINE = "Ceres:" + BASE_FNAME + ".onnx";,
-  string FN_TS = "Ceres:" + BASE_FNAME.Replace("_fp16", "") + ".ts";
-  NET1 = FN_TS;
-  GPUS_1 = "GPU:0#Torchscript";
-  NET2 = FN_BASELINE;
-#endif
-
-      //      NET1 = "CUSTOM1:753723;1;0;0;1,~T1_DISTILL_512_15;0;1;1;0";
-      //NET2 = "~T1_DISTIL_512_15_NATIVE";
-
 
       SearchLimit limit1 = SearchLimit.NodesPerMove(100); //with 100 game pairs 20=78sec, 50=105sec
 //SearchLimit limit1 = SearchLimit.SecondsPerMove(3);

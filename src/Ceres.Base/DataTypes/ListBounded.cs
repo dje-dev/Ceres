@@ -15,7 +15,6 @@
 
 using Ceres.Base.Misc;
 using System;
-using System.Buffers;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -27,30 +26,26 @@ namespace Ceres.Base.DataTypes
 {
   /// <summary>
   /// Class that acts like List<T> but with fixed maximum size (not resizable). 
-  /// The actual storage is in an array (T[]) which can be any of:
+  /// The actual storage is in an array (T[]) which is either:
   ///   - allocated by this object for its exclusive use
-  ///   - rented by this object from the ArrayPool for its use
   ///   - passed into constructor if already extant
   ///   
   /// Possible performance benefits:
   ///   - no logic needed to test for resizing, since this is not supported (oversized use would result in array out of bounds Exception)
-  ///   - renting from ArrayPool option can speed up
   ///   - supports returning references to items rather than items themselves
   ///     (impossible with List<T> because possibility of resize makes this not supported)
   ///   
   /// The behavior is similar to that of List<T> but more efficient
-  /// (primarily because it never resizes, can use a pooled array, and can return references to items).
+  /// (primarily because it never resizes and can return references to items).
   /// </summary>
   /// <typeparam name="T"></typeparam>
-  public partial class ListBounded<T> : IDisposable, IEnumerable<T>, IList<T> where T : IComparable<T>
+  public partial class ListBounded<T> : IEnumerable<T>, IList<T> where T : IComparable<T>
   {
-    bool useArrayPool;
     public int MaxLength { get; private set; }
     int length;
     T[] array;
     int version;
 
-    public enum StorageMode {  AllocatedArray, RentedArrayPool };
     public enum CopyMode {  ReferencePassedMembers, CopyPassedMembers };
 
 
@@ -59,11 +54,8 @@ namespace Ceres.Base.DataTypes
     /// </summary>
     /// <param name="members"></param>
     /// <param name="createMode"></param>
-    /// <param name="storageMode"></param>
-    public ListBounded(T[] members, CopyMode createMode, StorageMode storageMode = StorageMode.AllocatedArray)
+    public ListBounded(T[] members, CopyMode createMode)
     {
-      Debug.Assert(!(createMode == CopyMode.ReferencePassedMembers && storageMode == StorageMode.RentedArrayPool)); // inconsistent
-
       MaxLength = length = members.Length;
 
       if (createMode == CopyMode.ReferencePassedMembers)
@@ -72,35 +64,37 @@ namespace Ceres.Base.DataTypes
       }
       else
       {
-        DoCreate(members.Length, storageMode);
+        DoCreate(members.Length);
         Array.Copy(members, array, members.Length);
       }
     }
 
 
-    public ListBounded(ListBounded<T> other, StorageMode storageMode = StorageMode.AllocatedArray)
+    /// <summary>
+    /// Constructor which copies the contents of another ListBounded.
+    /// </summary>
+    /// <param name="other"></param>
+    public ListBounded(ListBounded<T> other)
     {
-      DoCreate(other.Count, storageMode);
+      DoCreate(other.Count);
       length = other.Count;
       Array.Copy(other.array, array, other.Count);
     }
 
 
     /// <summary>
-    /// 
+    /// Constructor for an empty ListBounded with specified maximum capacity.
     /// </summary>
     /// <param name="maxLength"></param>
-    /// <param name="useArrayPool">if the storage should come from a shared pool (if so, must call Dispose when done)</param>
-    public ListBounded(int maxLength, StorageMode storageMode = StorageMode.AllocatedArray)
+    public ListBounded(int maxLength)
     {
-      DoCreate(maxLength, storageMode);
+      DoCreate(maxLength);
     }
 
-    void DoCreate(int maxLength, StorageMode storageMode = StorageMode.AllocatedArray)
+    void DoCreate(int maxLength)
     {
-      useArrayPool = storageMode == StorageMode.AllocatedArray;
       MaxLength = maxLength;
-      array = useArrayPool ? ArrayPool<T>.Shared.Rent(maxLength) : new T[maxLength];
+      array = new T[maxLength];
     }
 
     #region Access
@@ -158,10 +152,6 @@ namespace Ceres.Base.DataTypes
     /// <param name="t"></param>
     public void Add(T t)
     {
-      // Pool-rented backing arrays may exceed MaxLength, so an overrun
-      // would otherwise be silent rather than throwing.
-      Debug.Assert(length < MaxLength);
-
       version++;
       array[length++] = t;
     }
@@ -173,8 +163,9 @@ namespace Ceres.Base.DataTypes
     public void Add(T[] t, int maxElements = int.MaxValue)
     {
       version++;
-      Array.Copy(t, 0, array, length, System.Math.Min(t.Length, maxElements));
-      length += t.Length;
+      int numToAdd = System.Math.Min(t.Length, maxElements);
+      Array.Copy(t, 0, array, length, numToAdd);
+      length += numToAdd;
     }
 
     /// <summary>
@@ -184,8 +175,9 @@ namespace Ceres.Base.DataTypes
     public void Add(ListBounded<T> t, int maxElements = int.MaxValue)
     {
       version++;
-      Array.Copy(t.array, 0, array, length, System.Math.Min(t.Count, maxElements));
-      length += t.Count;
+      int numToAdd = System.Math.Min(t.Count, maxElements);
+      Array.Copy(t.array, 0, array, length, numToAdd);
+      length += numToAdd;
     }
 
     /// <summary>
@@ -216,12 +208,6 @@ namespace Ceres.Base.DataTypes
     public void AddConcurrent(T t)
     {
       int index = Interlocked.Increment(ref length) - 1;
-
-      // N.B. the backing array may be ArrayPool-rented and larger than MaxLength,
-      //      so an out-of-bounds write would NOT necessarily throw; this assert is
-      //      the only capacity guard.
-      Debug.Assert(index < MaxLength);
-
       array[index] = t;
     }
 
@@ -249,22 +235,6 @@ namespace Ceres.Base.DataTypes
       version++;
     }
 
-
-    #endregion
-
-    #region Dispose
-
-    public void Dispose()
-    {
-      if (array != null && useArrayPool)
-      {
-        T[] copy = array;
-        array = null;
-        ArrayPool<T>.Shared.Return(copy);
-      }
-      else
-        array = null;
-    }
 
     #endregion
 

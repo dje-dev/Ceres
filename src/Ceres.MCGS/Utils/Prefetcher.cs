@@ -20,6 +20,9 @@ using System.Runtime.Intrinsics.X86;
 
 namespace Ceres.MCGS.Utils;
 
+/// <summary>
+/// Provides methods for issuing processor prefetch instructions to improve cache performance.
+/// </summary>
 public static class Prefetcher
 {
   public enum CacheLevel
@@ -74,24 +77,21 @@ public static class Prefetcher
       return; // No-op on ARM and other platforms
     }
 
-    if (cacheLevel == CacheLevel.Level0)
+    switch (cacheLevel)
     {
-      Sse.Prefetch0(address);
-    }
-    else if (cacheLevel == CacheLevel.Level1)
-    {
-      Sse.Prefetch1(address);
-    }
-    else if (cacheLevel == CacheLevel.Level2)
-    {
-      Sse.Prefetch2(address);
-    }
-    else if (cacheLevel == CacheLevel.None)
-    {
-    }
-    else
-    {
-      throw new Exception("Internal error: unsupported cache level");
+      case CacheLevel.Level0:
+        Sse.Prefetch0(address);
+        break;
+      case CacheLevel.Level1:
+        Sse.Prefetch1(address);
+        break;
+      case CacheLevel.Level2:
+        Sse.Prefetch2(address);
+        break;
+      case CacheLevel.None:
+        break;
+      default:
+        throw new Exception("Internal error: unsupported cache level");
     }
   }
 }

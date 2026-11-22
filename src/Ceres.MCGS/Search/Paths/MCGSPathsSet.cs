@@ -185,7 +185,15 @@ public partial class MCGSPathsSet : IDisposable
     Paths.Clear(false);
     NNPaths.Clear();
     NNEvalSlotLimit = int.MaxValue;
-    PendingDroppedVisits.Clear();
+
+    // Normally already empty (drained at the start of the backup phase). Drain rather than
+    // call Clear(), which allocates a fresh internal segment on every call.
+    if (!PendingDroppedVisits.IsEmpty)
+    {
+      while (PendingDroppedVisits.TryDequeue(out _))
+      {
+      }
+    }
     Array.Clear(PathLengthDistribution, 0, PathLengthDistribution.Length);
   }
 

@@ -16,6 +16,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
+using Ceres.Base.Threading;
 
 #endregion
 
@@ -45,8 +46,10 @@ namespace Ceres.Base.OperatingSystem
 
     /// <summary>
     /// Next free block index. Block 0 is reserved.
+    /// Padded onto its own cache line: it is bumped (Interlocked) by every allocating thread and
+    /// must not invalidate the line holding the read-mostly fields (entries, itemsPerBlock).
     /// </summary>
-    protected int nextFreeBlockIndex = 1;
+    protected PaddedInt32 nextFreeBlockIndex = new() { Value = 1 };
 
     /// <summary>
     /// Object used for locking when resizing.
@@ -96,7 +99,7 @@ namespace Ceres.Base.OperatingSystem
     /// <summary>
     /// Gets the total number of items allocated (by block).
     /// </summary>
-    public long NumAllocatedItems => (long)nextFreeBlockIndex * itemsPerBlock;
+    public long NumAllocatedItems => (long)nextFreeBlockIndex.Value * itemsPerBlock;
 
     /// <summary>
     /// Copies entries from one block area to another.
@@ -115,7 +118,7 @@ namespace Ceres.Base.OperatingSystem
     /// <summary>
     /// Resizes the underlying memory to exactly the number of currently used items.
     /// </summary>
-    public void ResizeToCurrent() => ResizeToNumItems((long)nextFreeBlockIndex * itemsPerBlock);
+    public void ResizeToCurrent() => ResizeToNumItems((long)nextFreeBlockIndex.Value * itemsPerBlock);
 
 
     /// <summary>
@@ -124,7 +127,7 @@ namespace Ceres.Base.OperatingSystem
     /// <exception cref="ArgumentException"></exception>
     protected void ResizeToNumItems(long numItems)
     {
-      if (numItems < nextFreeBlockIndex)
+      if (numItems < nextFreeBlockIndex.Value)
       {
         throw new ArgumentException("Attempt to resize to size smaller than current number of used items.");
       }
@@ -152,7 +155,7 @@ namespace Ceres.Base.OperatingSystem
     public long AllocateEntriesStartBlock(int numItems)
     {
       int numBlocksRequired = NumBlocksReservedForNumItems(numItems);
-      long newNextFreeBlockIndex = Interlocked.Add(ref nextFreeBlockIndex, numBlocksRequired);
+      long newNextFreeBlockIndex = Interlocked.Add(ref nextFreeBlockIndex.Value, numBlocksRequired);
 
       // Compute the new required allocation including extra padding.
       long newNumEntriesWithPadding = newNextFreeBlockIndex * itemsPerBlock + bufferExtraItems;
@@ -209,6 +212,6 @@ namespace Ceres.Base.OperatingSystem
 
 
     public override string ToString() =>
-        $"<MemoryBufferOSBlocked NumAllocatedItems={NumAllocatedItems} UsedItems~{nextFreeBlockIndex * itemsPerBlock}>";
+        $"<MemoryBufferOSBlocked NumAllocatedItems={NumAllocatedItems} UsedItems~{nextFreeBlockIndex.Value * itemsPerBlock}>";
   }
 }

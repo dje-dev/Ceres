@@ -327,6 +327,34 @@ public record ParamsSelect
   /// </summary>
   public float TPS_ShrinkageSigma0 = 0.10f;
 
+  /// <summary>
+  /// Probe stamp weight (experimental; Search/ProbeGraft/ProbeStamps.cs). When > 0, a node
+  /// carrying an external-probe stamp (value A taken when the node had n0 visits) is seen by its
+  /// parents as q' = (N q + K A) / (N + K) with K = kappa * n0: the probe counts as kappa
+  /// pseudo-visits per visit the node had at probe time, and fades as N grows. 0 = off
+  /// (byte-identical to the stock engine). Applies to every backup mode (the stamp is
+  /// applied where a child's Q is projected onto a parent edge), but its intended use is
+  /// under TPS_Mode = BackupOnly, whose tilted aggregation propagates the change upward
+  /// without visit dilution.
+  /// </summary>
+  public float TPS_ProbeStampKappa = 0.0f;
+
+  /// <summary>
+  /// Maximum node N at which a probe stamp may be applied (the ratio principle: a
+  /// short probe is an oracle at a 32-visit node and a peer at a 10k-visit node). Enforced
+  /// by the stamping code, not by the projection.
+  /// </summary>
+  public int TPS_ProbeStampMaxN = 2048;
+
+  /// <summary>
+  /// Attention select bonus scale (experimental; ADVOCATE 2026-08). When > 0 and the graph
+  /// carries attention directives (Graph.AttentionEntries), the flagged (parent, child) edges
+  /// receive an additive selection-score bonus epsilon * W * K / (childN + K): pure exploration
+  /// steering that fades as the child accumulates visits. Never touches Q or the backup.
+  /// 0 = off (byte-identical to the stock engine).
+  /// </summary>
+  public float AttentionBonusEpsilon = 0.0f;
+
   #endregion
 
   #region Q-uncertainty select (QUnc) - Phase 2, NOT YET WIRED
@@ -628,6 +656,19 @@ public record ParamsSelect
     if (FPUMode != FPUType.ActionHead)
     {
       ActionResortUnvisitedChildren = false;
+    }
+
+    if (TPS_ProbeStampKappa < 0 || float.IsNaN(TPS_ProbeStampKappa))
+    {
+      throw new ArgumentException($"TPS_ProbeStampKappa must be >= 0 (got {TPS_ProbeStampKappa}).");
+    }
+    if (TPS_ProbeStampMaxN < 1)
+    {
+      throw new ArgumentException($"TPS_ProbeStampMaxN must be >= 1 (got {TPS_ProbeStampMaxN}).");
+    }
+    if (AttentionBonusEpsilon < 0 || float.IsNaN(AttentionBonusEpsilon))
+    {
+      throw new ArgumentException($"AttentionBonusEpsilon must be >= 0 (got {AttentionBonusEpsilon}).");
     }
 
     if (TPS_Mode == TPSModeType.SelectOnly || TPS_Mode == TPSModeType.SelectAndBackup)
