@@ -25,7 +25,12 @@ namespace Ceres.Commands
   /// <summary>
   /// Parses and executes the SERVER command to start a remote NN evaluation server.
   ///
-  /// Usage: Ceres SERVER net=LC0:42767 device=GPU:0,1 [port=50055] [maxclients=4]
+  /// Usage: Ceres SERVER [net=NONE] [device=GPU:0] [port=50055] [maxclients=16]
+  ///
+  /// All parameters are optional. Clients always send their own network and device specification
+  /// in the handshake, so NET/DEVICE are only fallbacks for clients that omit them
+  /// (NET=NONE: no default network). MAXCLIENTS defaults to 16 because each MCGS engine opens two
+  /// connections per server (dual evaluators).
   /// </summary>
   public static class FeatureServerParams
   {
@@ -37,22 +42,10 @@ namespace Ceres.Commands
           "NET", "DEVICE", "PORT", "MAXCLIENTS"
         });
 
-      string netSpec = keys.GetValue("NET");
-      string deviceSpec = keys.GetValue("DEVICE");
+      string netSpec = keys.GetValueOrDefault("NET", "NONE", false);
+      string deviceSpec = keys.GetValueOrDefault("DEVICE", "GPU:0", false);
       string portStr = keys.GetValueOrDefault("PORT", NNRemoteProtocol.DEFAULT_PORT.ToString(), false);
-      string maxClientsStr = keys.GetValueOrDefault("MAXCLIENTS", "4", false);
-
-      if (netSpec == null)
-      {
-        DispatchCommands.ShowErrorExit("SERVER command requires NET parameter, e.g. NET=LC0:42767");
-        return;
-      }
-
-      if (deviceSpec == null)
-      {
-        DispatchCommands.ShowErrorExit("SERVER command requires DEVICE parameter, e.g. DEVICE=GPU:0,1");
-        return;
-      }
+      string maxClientsStr = keys.GetValueOrDefault("MAXCLIENTS", "16", false);
 
       if (!int.TryParse(portStr, out int port))
       {

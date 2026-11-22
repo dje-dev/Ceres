@@ -87,6 +87,41 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         throw new Exception("Device specification string has too many equals parts " + deviceString);
       }
 
+      // "+"-joined device groups, e.g. "GPU:0#TensorRTNative+GPU:0,1#TensorRTNative@HOP".
+      // Each group is parsed with the existing syntax and tagged with its GroupIndex.
+      // The factory then builds one sub-evaluator per group (one connection per remote host)
+      // and combines them with a calibrated, latency-aware balanced split.
+      if (equalsParts[0].Contains('+'))
+      {
+        string[] groupStrings = equalsParts[0].Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (groupStrings.Length < 2)
+        {
+          throw new Exception($"Device group specification requires at least two groups: {deviceString}");
+        }
+
+        for (int g = 0; g < groupStrings.Length; g++)
+        {
+          NNDevicesSpecificationString groupSpec = new(groupStrings[g]);
+          if (groupSpec.ComboType == NNEvaluatorDeviceComboType.Pooled)
+          {
+            throw new Exception($"POOLED not supported within a device group: {groupStrings[g]}");
+          }
+
+          foreach ((NNEvaluatorDeviceDef devDef, float weight) in groupSpec.Devices)
+          {
+            if (devDef.Type != NNDeviceType.GPU)
+            {
+              throw new Exception($"Only GPU devices supported in device groups: {groupStrings[g]}");
+            }
+            devDef.GroupIndex = g;
+            Devices.Add((devDef, weight));
+          }
+        }
+
+        ComboType = NNEvaluatorDeviceComboType.Split;
+        return;
+      }
+
       string[] deviceStringParts = equalsParts[0].Split(":");
 
       if (deviceStringParts[0].ToUpper() == "CPU")
@@ -219,6 +254,19 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     public static string ToSpecificationString(NNEvaluatorDeviceComboType comboType,
                                                IEnumerable<(NNEvaluatorDeviceDef, float)> devices)
     {
+      // Device groups are rendered back as "+"-joined group specifications.
+      if (devices.Any(d => d.Item1.GroupIndex >= 0))
+      {
+        IEnumerable<string> groupStrs = devices.GroupBy(d => d.Item1.GroupIndex).OrderBy(g => g.Key).Select(g =>
+        {
+          NNEvaluatorDeviceDef first = g.First().Item1;
+          string engine = first.OverrideEngineType != null ? "#" + first.OverrideEngineType : "";
+          string remote = first.RemoteHost != null ? $"@{first.RemoteHost}/{first.RemotePort}" : "";
+          return $"GPU:{string.Join(",", g.Select(d => d.Item1.DeviceIndex))}{engine}{remote}";
+        });
+        return "Device=" + string.Join("+", groupStrs);
+      }
+
       int count = 0;
       // TODO: Currently support conversion back to original specification string only for simple cases
       if ((comboType == NNEvaluatorDeviceComboType.Single

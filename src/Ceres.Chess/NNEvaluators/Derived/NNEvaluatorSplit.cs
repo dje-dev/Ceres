@@ -56,6 +56,57 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public ItemsInBucketsAllocator EvaluatorAllocator;
 
+    /// <summary>
+    /// If non-null, batches are split according to the calibrated, latency-aware
+    /// precomputed plans of this balancer (instead of PreferredFractions / EvaluatorAllocator).
+    /// </summary>
+    public NNEvaluatorSplitBalancer Balancer { get; private set; }
+
+
+    /// <summary>
+    /// Creates a split evaluator whose batch allocation is balanced using
+    /// a one-time end-to-end calibration of each sub-evaluator (see NNEvaluatorSplitBalancer).
+    /// </summary>
+    /// <param name="calibrationCacheKey">if non-null, a calibration previously made under the same key is reused
+    /// (e.g. MCGS builds a second, overlapped evaluator from the same definition lazily during search;
+    /// recalibrating then would stall the search and be skewed by the concurrently running first evaluator)</param>
+    public static NNEvaluatorSplit CreateBalanced(NNEvaluator[] evaluators, string[] names, string calibrationCacheKey = null,
+                                                  float splitPenaltyMs = NNEvaluatorSplitBalancer.DEFAULT_SPLIT_PENALTY_MS)
+    {
+      NNEvaluatorSplit split = new NNEvaluatorSplit(evaluators, null, 1);
+
+      NNEvaluatorSplitBalancer balancer = null;
+      lock (balancerCache)
+      {
+        if (calibrationCacheKey != null)
+        {
+          balancerCache.TryGetValue(calibrationCacheKey, out balancer);
+        }
+        if (balancer != null && !balancer.MaxBatchSizes.SequenceEqual(evaluators.Select(e => e.MaxBatchSize)))
+        {
+          balancer = null; // incompatible (should not happen for identical definitions)
+        }
+        if (balancer == null)
+        {
+          balancer = NNEvaluatorSplitBalancer.Calibrate(evaluators, names, splitPenaltyMs);
+          Console.Error.Write(balancer.Summary());
+          if (calibrationCacheKey != null)
+          {
+            balancerCache[calibrationCacheKey] = balancer;
+          }
+        }
+        else
+        {
+          Console.Error.WriteLine($"[BalancedSplit] reusing calibration for {calibrationCacheKey}");
+        }
+      }
+
+      split.Balancer = balancer;
+      return split;
+    }
+
+    static readonly Dictionary<string, NNEvaluatorSplitBalancer> balancerCache = new();
+
 
     int indexPerferredEvalator;
 
@@ -120,6 +171,11 @@ namespace Ceres.Chess.NNEvaluators
     {
       get
       {
+        if (Balancer != null)
+        {
+          return Balancer.MaxTotalBatchSize;
+        }
+
         int maxBatchSizeMostRestrictiveEvaluator = int.MaxValue;
         for (int i = 0; i < Evaluators.Length; i++)
         {
@@ -311,7 +367,19 @@ namespace Ceres.Chess.NNEvaluators
 #endif
 
       // Compute the allocation of positions across evaluators.
-      int[] allocations = EvaluatorAllocator.Allocate(evaluatorsToUse, positions.NumPos);
+      int[] allocations;
+      if (Balancer != null)
+      {
+        if (positions.NumPos > Balancer.MaxTotalBatchSize)
+        {
+          throw new Exception($"Batch of {positions.NumPos} exceeds balanced split maximum {Balancer.MaxTotalBatchSize}");
+        }
+        allocations = Balancer.Plans[positions.NumPos]; // precomputed, read-only
+      }
+      else
+      {
+        allocations = EvaluatorAllocator.Allocate(evaluatorsToUse, positions.NumPos);
+      }
 
       IPositionEvaluationBatch[] results = resultsBuffer;
       int[] subBatchSizes = subBatchSizesBuffer;
@@ -355,7 +423,10 @@ namespace Ceres.Chess.NNEvaluators
         firstFailure ??= workItem.Exception;
       }
 
-      EvaluatorAllocator.Deallocate(allocations);
+      if (Balancer == null)
+      {
+        EvaluatorAllocator.Deallocate(allocations);
+      }
 
       if (firstFailure != null)
       {

@@ -75,6 +75,13 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// </summary>
     public int RemotePort = 50055;
 
+    /// <summary>
+    /// Index of the device group (from a "+"-joined device specification such as
+    /// "GPU:0#TensorRTNative+GPU:0,1#TensorRTNative@HOP"), or -1 if not part of a group specification.
+    /// Each group becomes one sub-evaluator of a balanced split (one connection per remote host).
+    /// </summary>
+    public int GroupIndex = -1;
+
 
     /// <summary>
     /// Constructor.
@@ -138,7 +145,9 @@ namespace Ceres.Chess.NNEvaluators.Defs
     {
       string maxStr = MaxBatchSize.HasValue ? $" Max={MaxBatchSize}" : "";
       string optimalStr = OptimalBatchSize.HasValue ? $" Optimal={OptimalBatchSize}" : "";
-      return $"<NNEvaluatorDeviceDef {Type} #{DeviceIndex} {OverrideEngineType} {(LowPriority ? "Low Priority" : "")}{maxStr}>";
+      string remoteStr = RemoteHost != null ? $" @{RemoteHost}/{RemotePort}" : "";
+      string groupStr = GroupIndex >= 0 ? $" Group={GroupIndex}" : "";
+      return $"<NNEvaluatorDeviceDef {Type} #{DeviceIndex} {OverrideEngineType} {(LowPriority ? "Low Priority" : "")}{maxStr}{remoteStr}{groupStr}>";
     }
 
   }

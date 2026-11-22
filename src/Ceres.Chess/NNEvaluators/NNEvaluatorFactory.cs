@@ -264,30 +264,7 @@ namespace Ceres.Chess.NNEvaluators
       // If a remote host is specified, create a remote evaluator instead of a local one.
       if (deviceDef.RemoteHost != null)
       {
-        // Reconstruct the network specification string from the netDef.
-        string netPrefix = netDef.Type switch
-        {
-          NNEvaluatorType.LC0 => "LC0",
-          NNEvaluatorType.Ceres => "Ceres",
-          NNEvaluatorType.ONNXViaTRT => "ONNX_TRT",
-          NNEvaluatorType.ONNXViaORT => "ONNX_ORT",
-          NNEvaluatorType.TRT => "TRT",
-          _ => netDef.Type.ToString()
-        };
-        string netSpecStr = netPrefix + ":" + netDef.NetworkID;
-
-        // Reconstruct the device specification string (without @hostname).
-        string devSpecStr = $"GPU:{deviceDef.DeviceIndex}";
-
-        string optionsStr = optionsDict != null && optionsDict.Count > 0
-          ? string.Join(";", optionsDict.Select(kv => kv.Value != null ? $"{kv.Key}={kv.Value}" : kv.Key))
-          : null;
-
-        return new NNEvaluatorRemote(
-          deviceDef.RemoteHost, deviceDef.RemotePort,
-          netSpecStr, devSpecStr, optionsStr,
-          useCompression: true,
-          maxBatchSize: deviceDef.MaxBatchSize ?? 1024);
+        return BuildRemote(netDef, [deviceDef], optionsDict);
       }
 
       NNEvaluator ret = null;
@@ -701,8 +678,140 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
+
+    #region Remote helpers and balanced device groups
+
+    /// <summary>
+    /// Builds a single NNEvaluatorRemote serving all the given devices (which must share one remote host).
+    /// The server builds its own (possibly multi-GPU) evaluator for "GPU:i,j#engine" and balances across its GPUs.
+    /// </summary>
+    static NNEvaluatorRemote BuildRemote(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef[] deviceDefs,
+                                         Dictionary<string, string> optionsDict)
+    {
+      NNEvaluatorDeviceDef first = deviceDefs[0];
+      if (deviceDefs.Any(d => d.RemoteHost != first.RemoteHost || d.RemotePort != first.RemotePort))
+      {
+        throw new Exception("All devices of a remote evaluator must use the same host/port.");
+      }
+
+      // Reconstruct the network specification string from the netDef.
+      string netPrefix = netDef.Type switch
+      {
+        NNEvaluatorType.LC0 => "LC0",
+        NNEvaluatorType.Ceres => "Ceres",
+        NNEvaluatorType.ONNXViaTRT => "ONNX_TRT",
+        NNEvaluatorType.ONNXViaORT => "ONNX_ORT",
+        NNEvaluatorType.TRT => "TRT",
+        _ => netDef.Type.ToString()
+      };
+      string netSpecStr;
+      string originalSpec = netDef.ShortID;
+      if (originalSpec != null && originalSpec.StartsWith("~"))
+      {
+        // Registered net alias (e.g. "~T3_DISTILL2_512_15_FP16_TRT"): send the alias itself so the server resolves it
+        // with its own RegisteredNets and network directories. Client-side resolution yields a bare file name
+        // (or a client-local path) plus precision, which the server cannot locate.
+        netSpecStr = originalSpec.Split('|')[0];
+      }
+      else
+      {
+        netSpecStr = netPrefix + ":" + netDef.NetworkID;
+
+        // Preserve non-default precision (FP16 is the parser default).
+        netSpecStr += netDef.Precision switch
+        {
+          NNEvaluatorPrecision.FP32 => "#32",
+          NNEvaluatorPrecision.Int8 => "#8",
+          _ => ""
+        };
+      }
+
+      // Reconstruct the device specification string (without @hostname), preserving the engine override
+      // (otherwise the server silently falls back to its default engine, e.g. ONNX Runtime).
+      string devSpecStr = "GPU:" + string.Join(",", deviceDefs.Select(d => d.DeviceIndex));
+      if (!string.IsNullOrEmpty(first.OverrideEngineType))
+      {
+        devSpecStr += "#" + first.OverrideEngineType;
+      }
+
+      string optionsStr = optionsDict != null && optionsDict.Count > 0
+        ? string.Join(";", optionsDict.Select(kv => kv.Value != null ? $"{kv.Key}={kv.Value}" : kv.Key))
+        : null;
+
+      int maxBatchSize = first.MaxBatchSize ?? (1024 * deviceDefs.Length);
+      return new NNEvaluatorRemote(first.RemoteHost, first.RemotePort,
+                                   netSpecStr, devSpecStr, optionsStr,
+                                   useCompression: true,
+                                   maxBatchSize: maxBatchSize);
+    }
+
+
+    /// <summary>
+    /// Builds one sub-evaluator per device group (see NNDevicesSpecificationString "+" syntax)
+    /// and combines them in a calibrated balanced NNEvaluatorSplit.
+    ///   - remote group: one NNEvaluatorRemote for all its devices (one TCP connection per host)
+    ///   - local group with one device: Singleton
+    ///   - local group with several devices: built as its own (non-grouped) definition,
+    ///     so e.g. multi-GPU TensorRTNative uses the native multi-GPU evaluator
+    /// </summary>
+    static NNEvaluator BuildGroupedBalanced(NNEvaluatorDef def, NNEvaluator referenceEvaluator, Dictionary<string, string> options)
+    {
+      if (def.Nets.Length != 1)
+      {
+        throw new Exception("Device groups ('+' device syntax) currently support only a single network.");
+      }
+      if (def.Devices.Any(d => d.Device.GroupIndex < 0))
+      {
+        throw new Exception("Either all or none of the devices must belong to a device group.");
+      }
+
+      NNEvaluatorNetDef netDef = def.Nets[0].Net;
+      IGrouping<int, (NNEvaluatorDeviceDef Device, float Fraction)>[] groups
+        = def.Devices.GroupBy(d => d.Device.GroupIndex).OrderBy(g => g.Key).ToArray();
+
+      NNEvaluator[] evaluators = new NNEvaluator[groups.Length];
+      string[] names = new string[groups.Length];
+
+      Parallel.For(0, groups.Length, i =>
+      {
+        NNEvaluatorDeviceDef[] devs = groups[i].Select(d => d.Device).ToArray();
+        string engine = devs[0].OverrideEngineType != null ? "#" + devs[0].OverrideEngineType : "";
+        string indices = string.Join(",", devs.Select(d => d.DeviceIndex));
+
+        if (devs[0].RemoteHost != null)
+        {
+          names[i] = $"GPU:{indices}{engine}@{devs[0].RemoteHost}";
+          evaluators[i] = BuildRemote(netDef, devs, options);
+        }
+        else if (devs.Length == 1)
+        {
+          names[i] = $"GPU:{indices}{engine}";
+          evaluators[i] = Singleton(netDef, devs[0], referenceEvaluator, i, options, def.Options);
+        }
+        else
+        {
+          names[i] = $"GPU:{indices}{engine}";
+          (NNEvaluatorDeviceDef, float)[] subDevices = groups[i].Select(d => (d.Device with { GroupIndex = -1 }, d.Fraction)).ToArray();
+          NNEvaluatorDef subDef = new NNEvaluatorDef(def.NetCombo, def.Nets, NNEvaluatorDeviceComboType.Split,
+                                                     subDevices, def.OptionsString, null);
+          subDef.Options = def.Options;
+          evaluators[i] = DoBuildEvaluator(subDef, referenceEvaluator, options);
+        }
+      });
+
+      return NNEvaluatorSplit.CreateBalanced(evaluators, names, calibrationCacheKey: def.ToString());
+    }
+
+    #endregion
+
     static NNEvaluator DoBuildEvaluator(NNEvaluatorDef def, NNEvaluator referenceEvaluator, Dictionary<string, string> options)
     {
+      // "+"-joined device groups -> calibrated balanced split across groups.
+      if (def.Devices.Any(d => d.Device.GroupIndex >= 0))
+      {
+        return BuildGroupedBalanced(def, referenceEvaluator, options);
+      }
+
       if (def.DeviceCombo == NNEvaluatorDeviceComboType.Single && def.DeviceIndices.Length > 1)
       {
         throw new Exception("DeviceComboType.Single is not expected when number of DeviceIndices is greater than 1.");
@@ -735,7 +844,10 @@ namespace Ceres.Chess.NNEvaluators
 
           bool allNetsMatch = def.Nets.Length == 1 || def.Nets.All(n => n.Net.Equals(def.Nets[0].Net));
 
-          if (allTensorRTNative && allNetsMatch)
+          // Never take the native multi-GPU path for remote devices (it would silently build locally).
+          bool anyRemote = def.Devices.Any(d => d.Device.RemoteHost != null);
+
+          if (allTensorRTNative && allNetsMatch && !anyRemote)
           {
             def.Options = new NNEvaluatorOptionsCeres().OptionsWithOptionsDictApplied(options);
             return NNEvaluatorTensorRT.FromDefinition(def, def.Options, def.DeviceIndices);

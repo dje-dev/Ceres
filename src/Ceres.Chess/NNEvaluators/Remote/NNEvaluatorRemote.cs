@@ -225,7 +225,9 @@ namespace Ceres.Chess.NNEvaluators.Remote
       cachedHasValueSecondary = resultFlags.HasFlag(NNRemoteResultFlags.HasValueSecondary);
       cachedHasState = resultFlags.HasFlag(NNRemoteResultFlags.HasState);
       cachedHasPolicySecondary = resultFlags.HasFlag(NNRemoteResultFlags.HasPolicySecondary);
-      cachedMaxBatchSize = maxBatch;
+      // Never exceed the batch size our send/receive buffers were sized for
+      // (a multi-GPU server evaluator can report a larger maximum than the client requested).
+      cachedMaxBatchSize = Math.Min(maxBatch, requestedMaxBatchSize);
       // If the server requires Moves, the client must also provide Positions
       // (needed by TrySetMoves on the server to recompute moves).
       cachedInputsRequired = inputsReq;
@@ -251,16 +253,90 @@ namespace Ceres.Chess.NNEvaluators.Remote
 
 
     /// <summary>
+    /// Maximum number of reconnection attempts (with exponential backoff starting at 0.5s, ~30s total)
+    /// before a lost connection is reported as an error.
+    /// </summary>
+    const int MAX_RECONNECT_ATTEMPTS = 6;
+
+
+    /// <summary>
     /// Core evaluation: serializes positions, sends to server, receives and deserializes results.
+    ///
+    /// If the connection was lost (e.g. the server closed it after its idle timeout, a network glitch,
+    /// or a server restart), the evaluator transparently reconnects (with backoff) and resends the batch
+    /// once. Evaluation is idempotent and the server reuses its cached evaluator, so this is safe and fast.
     /// </summary>
     protected override IPositionEvaluationBatch DoEvaluateIntoBuffers(
       IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
-      if (!isConnected)
+      for (int attempt = 0; ; attempt++)
       {
-        throw new NNRemoteConnectionException("Not connected to remote server.");
-      }
+        if (!isConnected)
+        {
+          Reconnect();
+        }
 
+        try
+        {
+          return EvaluateOnce(positions);
+        }
+        catch (NNRemoteConnectionException ex) when (attempt == 0)
+        {
+          Console.Error.WriteLine($"[NNEvaluatorRemote] connection to {hostname}:{port} lost ({ex.InnerException?.Message ?? ex.Message}); reconnecting.");
+          CloseConnection();
+        }
+      }
+    }
+
+
+    /// <summary>
+    /// Closes the current connection (if any) and reconnects with exponential backoff.
+    /// </summary>
+    void Reconnect()
+    {
+      CloseConnection();
+      int delayMS = 500;
+      for (int i = 1; ; i++)
+      {
+        try
+        {
+          Connect();
+          Console.Error.WriteLine($"[NNEvaluatorRemote] reconnected to {hostname}:{port} (attempt {i}).");
+          return;
+        }
+        catch (Exception ex) when (ex is NNRemoteConnectionException || ex is System.IO.IOException || ex is SocketException)
+        {
+          CloseConnection();
+          if (i >= MAX_RECONNECT_ATTEMPTS)
+          {
+            throw new NNRemoteConnectionException($"Unable to reconnect to remote NN server at {hostname}:{port} after {i} attempts.", ex);
+          }
+          System.Threading.Thread.Sleep(delayMS);
+          delayMS *= 2;
+        }
+      }
+    }
+
+
+    /// <summary>
+    /// Closes the TCP connection without sending a disconnect message.
+    /// </summary>
+    void CloseConnection()
+    {
+      isConnected = false;
+      try { stream?.Dispose(); } catch { }
+      try { tcpClient?.Dispose(); } catch { }
+      stream = null;
+      tcpClient = null;
+    }
+
+
+    /// <summary>
+    /// Sends one batch and receives its result over the current connection.
+    /// Throws NNRemoteConnectionException on any communication failure.
+    /// </summary>
+    IPositionEvaluationBatch EvaluateOnce(IEncodedPositionBatchFlat positions)
+    {
       try
       {
         // Serialize the input batch.
