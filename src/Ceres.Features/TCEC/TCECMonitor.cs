@@ -65,6 +65,7 @@ public static class TCECMonitor
   const int FEED_POLL_SECONDS = 2;
   const int MAX_PV_PLIES = 30;
   const int EVAL_LABEL_WIDTH = 54;
+  const int EVAL_NODES_WIDTH = 17; // "8,640,000,000,000"
 
   enum DisplayMode { Moves = 0, PrincipalVariation = 1, Info = 2 }
   enum PendingAction { None = 0, Graph = 1, Revalue = 2 }
@@ -546,7 +547,7 @@ public static class TCECMonitor
     }
 
     long nodes = SafeRootN(mgr);
-    PrintHeader(in snap, nodes, lastMoveSeenAt, searchStartedAt);
+    PrintHeader(in snap, nodes, lastMoveSeenAt, searchStartedAt, SearchRates(mgr));
     PrintReuseStatus(mgr);
     PrintEvalPerspectives(in snap, mgr, bmi);
 
@@ -634,8 +635,33 @@ public static class TCECMonitor
   }
 
 
+  /// <summary>
+  /// Average NPS / EPS over the current search (same definitions as UCI "info ... nps ... eps":
+  /// nodes visited and NN evaluations this search, divided by time since the search started;
+  /// nodes inherited via graph reuse are excluded). Returns "" if not yet meaningful.
+  /// </summary>
+  static string SearchRates(MCGSManager mgr)
+  {
+    try
+    {
+      double secs = (DateTime.Now - mgr.StartTimeThisSearch).TotalSeconds;
+      if (secs < 0.1)
+      {
+        return "";
+      }
+      long nps = (long)(mgr.NumNodesVisitedThisSearch / secs);
+      long eps = (long)(mgr.NumEvalsThisSearch / secs);
+      return ", avg " + FormatBig(nps) + " nps / " + FormatBig(eps) + " eps";
+    }
+    catch
+    {
+      return "";
+    }
+  }
+
+
   static void PrintHeader(in TCECLiveSnapshot snap, long nodes,
-                          DateTime lastMoveSeenAt, DateTime searchStartedAt)
+                          DateTime lastMoveSeenAt, DateTime searchStartedAt, string rateInfo = "")
   {
     int plies = snap.Moves?.Count ?? 0;
     bool whiteToMove = (plies % 2) == 0;
@@ -671,7 +697,7 @@ public static class TCECMonitor
       Console.ForegroundColor = ConsoleColor.Cyan;
       Console.WriteLine("  >>> Move " + moveNumber + ", " + (whiteToMove ? "WHITE" : "BLACK")
                         + " to move    SINCE LAST MOVE: " + FormatSeconds(sinceLastMove)
-                        + "    (analyzing " + FormatSeconds(searchElapsed) + ", " + FormatBig(nodes) + " nodes)");
+                        + "    (analyzing " + FormatSeconds(searchElapsed) + ", " + FormatBig(nodes) + " nodes" + rateInfo + ")");
       Console.ResetColor();
 
       Console.WriteLine("  TCEC last move: " + lastMoveDesc);
@@ -712,7 +738,7 @@ public static class TCECMonitor
         if (!double.IsNaN(last.EvalPawns))
         {
           string label = "(TCEC " + TruncName(last.IsWhite ? snap.White.Name : snap.Black.Name) + ", just moved)";
-          EvalLine(ToStmCp(last.EvalPawns, whiteToMove), label,
+          EvalLine(ToStmCp(last.EvalPawns, whiteToMove), last.Nodes, label,
                    CapPVList(last.PVMoves, MAX_PV_PLIES, plies - (plies - 1)));
         }
       }
@@ -722,7 +748,7 @@ public static class TCECMonitor
       {
         Position? rootPos = RootPosition(in snap);
         string pv = rootPos.HasValue ? CeresPVStringSAN(mgr, rootPos.Value, MAX_PV_PLIES) : "";
-        EvalLine(EncodedEvalLogistic.WinLossToCentipawn(bmi.QOfBest), "(Ceres local)", pv);
+        EvalLine(EncodedEvalLogistic.WinLossToCentipawn(bmi.QOfBest), SafeRootN(mgr), "(Ceres local)", pv);
       }
 
       // 3. On-move engine's OWN most-recent eval (stale, from its previous move) - shown gray.
@@ -731,7 +757,7 @@ public static class TCECMonitor
       {
         TCECMoveInfo stale = snap.Moves[staleIdx];
         Console.ForegroundColor = ConsoleColor.DarkGray;
-        EvalLine(ToStmCp(stale.EvalPawns, whiteToMove),
+        EvalLine(ToStmCp(stale.EvalPawns, whiteToMove), stale.Nodes,
                  "(" + stmName + ", stale from move " + stale.MoveNumber + ")",
                  CapPVList(stale.PVMoves, MAX_PV_PLIES, plies - staleIdx));
         Console.ResetColor();
@@ -744,9 +770,18 @@ public static class TCECMonitor
   }
 
 
-  static void EvalLine(float cp, string label, string pv)
+  /// <summary>
+  /// One eval line: eval (side-to-move POV), nodes searched behind that eval, label, PV.
+  /// Nodes: for TCEC engines the node count reported with that move; for Ceres the search-root N
+  /// (tree size behind the current eval, including nodes inherited via graph reuse).
+  /// </summary>
+  static void EvalLine(float cp, long nodes, string label, string pv)
   {
-    Console.WriteLine("    " + PadLeft(FormatCp(cp), 6) + " cp  " + PadRight(label, EVAL_LABEL_WIDTH) + pv);
+    // Spelled out with thousands separators (no K/M/G suffix) and right-aligned so magnitudes compare by width.
+    // Width 17 fits up to 8,640,000,000,000 (100M nps for 24 hours).
+    string nodesStr = nodes > 0 ? nodes.ToString("N0", CultureInfo.InvariantCulture) : "-";
+    Console.WriteLine("    " + PadLeft(FormatCp(cp), 6) + " cp  " + PadLeft(nodesStr, EVAL_NODES_WIDTH) + " nodes  "
+                      + PadRight(label, EVAL_LABEL_WIDTH) + pv);
   }
 
 
