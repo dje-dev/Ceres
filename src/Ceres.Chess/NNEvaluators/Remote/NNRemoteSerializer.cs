@@ -746,7 +746,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
     public static int SerializeHandshake(Span<byte> buffer,
                                           string networkSpec, string deviceSpec,
                                           string optionsString, int maxBatchSize,
-                                          bool useCompression, bool acceptCompactPolicies = true)
+                                          bool useCompression, bool acceptCompactPolicies = true, int streamIndex = 0)
     {
       int offset = 0;
       offset += NNRemoteProtocol.WriteString(buffer.Slice(offset), networkSpec);
@@ -762,6 +762,12 @@ namespace Ceres.Chess.NNEvaluators.Remote
       buffer[offset++] = capabilities;
       BinaryPrimitives.WriteInt32LittleEndian(buffer.Slice(offset), NNRemoteProtocol.PROTOCOL_VERSION);
       offset += 4;
+
+      // Optional trailing field (ignored by older servers, which then share one evaluator among all streams):
+      // index of the concurrent stream on whose behalf the client evaluates (see NNDeviceSlots). The server
+      // makes it part of its evaluator cache key so that streams placed on the same device(s) do not share an evaluator.
+      BinaryPrimitives.WriteInt32LittleEndian(buffer.Slice(offset), streamIndex);
+      offset += 4;
       return offset;
     }
 
@@ -770,7 +776,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
     /// Deserializes the client handshake message.
     /// </summary>
     public static (string networkSpec, string deviceSpec, string optionsString,
-                    int maxBatchSize, bool useCompression, int protocolVersion, bool acceptsCompactPolicies)
+                    int maxBatchSize, bool useCompression, int protocolVersion, bool acceptsCompactPolicies, int streamIndex)
       DeserializeHandshake(ReadOnlySpan<byte> buffer)
     {
       int offset = 0;
@@ -789,7 +795,15 @@ namespace Ceres.Chess.NNEvaluators.Remote
       int protocolVersion = BinaryPrimitives.ReadInt32LittleEndian(buffer.Slice(offset));
       offset += 4;
 
-      return (networkSpec, deviceSpec, optionsString, maxBatchSize, useCompression, protocolVersion, acceptsCompactPolicies);
+      // Optional trailing field (absent in handshakes from older clients, in which case stream 0 is assumed).
+      int streamIndex = 0;
+      if (buffer.Length >= offset + 4)
+      {
+        streamIndex = BinaryPrimitives.ReadInt32LittleEndian(buffer.Slice(offset));
+        offset += 4;
+      }
+
+      return (networkSpec, deviceSpec, optionsString, maxBatchSize, useCompression, protocolVersion, acceptsCompactPolicies, streamIndex);
     }
 
 

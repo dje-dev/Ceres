@@ -32,18 +32,26 @@ namespace Ceres.Commands
   {
     public string EPD { init; get; }
 
+    /// <summary>
+    /// Optional device slots specification over which concurrent suite workers are spread
+    /// (see NNDeviceSlots), for example "GPU:0+GPU:(0,1)*2@HOP+GPU:3*3@station".
+    /// </summary>
+    public string Slots { init; get; }
+
     public static FeatureSuiteParams ParseSuiteCommand(string fen, string args)
     {
       if (fen != null) throw new Exception("SUITE command expected to be followed by sequence of key=value pairs");
 
       List<string> validArgs = new List<string>(FEATURE_PLAY_COMMON_ARGS);
       validArgs.Add("EPD");
+      validArgs.Add("SLOTS");
 
       KeyValueSetParsed keys = new KeyValueSetParsed(args, validArgs);
 
       FeatureSuiteParams parms =  new FeatureSuiteParams()
       {
         EPD = keys.GetValue("EPD"),
+        Slots = keys.GetValueOrDefault("Slots", null, false),
       };
 
       if (parms.EPD == null) DispatchCommands.ShowErrorExit("EPD file must be specified, for example: EPD=NoomenBigTestsuite");
@@ -71,6 +79,10 @@ namespace Ceres.Commands
       EnginePlayerDef engineCeres2 = opponentIsCeres ? playerOther : null;
       SuiteTestDef suiteDef = new SuiteTestDef($"SUITE TEST {CeresUserSettingsManager.Settings.DirEPD}", 
                                                epdFilename, player, engineCeres2, engineExternal);
+
+      // If device slots were specified they determine the number of concurrent workers
+      // (and where each runs); otherwise positions are evaluated one at a time.
+      suiteDef.DeviceSlots = suiteParams.Slots;
 
       SuiteTestRunner suiteTest = new SuiteTestRunner(suiteDef);
       suiteTest.Run(1, true, false);

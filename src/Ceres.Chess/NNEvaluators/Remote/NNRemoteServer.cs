@@ -35,8 +35,11 @@ namespace Ceres.Chess.NNEvaluators.Remote
   /// TCP server that accepts connections from NNEvaluatorRemote clients
   /// and performs neural network evaluation on their behalf using local GPUs.
   ///
-  /// Evaluators are cached and shared across client sessions (up to 16).
-  /// Inference on each evaluator is serialized via a per-evaluator lock, held only for the evaluation
+  /// Evaluators are cached and shared across client sessions (up to MaxCachedEvaluators),
+  /// keyed by network, device, options and the client's stream index. Clients which belong to
+  /// different concurrent streams (see NNDeviceSlots) therefore get separate evaluators,
+  /// even on the same device(s). Each evaluator may in turn have several instances (see InstancesPerEvaluator).
+  /// Inference on each evaluator instance is serialized via a per-instance lock, held only for the evaluation
   /// itself (input preparation, compression and sending are done outside it).
   /// A background task disposes evaluators unused for 1 hour.
   ///
@@ -45,9 +48,17 @@ namespace Ceres.Chess.NNEvaluators.Remote
   public class NNRemoteServer
   {
     /// <summary>
-    /// Maximum number of cached evaluators.
+    /// Default maximum number of concurrent client connections.
+    /// A tournament stream typically opens 4 connections (2 players, each with 2 evaluators),
+    /// so the default accommodates on the order of 16 concurrent streams per server.
     /// </summary>
-    const int MAX_CACHED_EVALUATORS = 16;
+    public const int DEFAULT_MAX_CLIENTS = 64;
+
+    /// <summary>
+    /// Default maximum number of cached evaluators
+    /// (one is needed per distinct network on each device set, for each concurrent stream).
+    /// </summary>
+    public const int DEFAULT_MAX_CACHED_EVALUATORS = 64;
 
     /// <summary>
     /// Time after which an unused evaluator is disposed.
@@ -75,6 +86,11 @@ namespace Ceres.Chess.NNEvaluators.Remote
     /// Maximum concurrent client connections.
     /// </summary>
     public readonly int MaxClients;
+
+    /// <summary>
+    /// Maximum number of cached evaluators.
+    /// </summary>
+    public readonly int MaxCachedEvaluators;
 
     /// <summary>
     /// Optional default network specification (used if client doesn't provide one).
@@ -194,7 +210,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
     }
 
     /// <summary>
-    /// Cache of evaluators keyed by "netSpec|deviceSpec|optionsStr".
+    /// Cache of evaluators keyed by "netSpec|deviceSpec|optionsStr|stream".
     /// </summary>
     readonly Dictionary<string, CachedEvaluator> evaluatorCache = new();
     readonly object cacheLock = new();
@@ -206,13 +222,15 @@ namespace Ceres.Chess.NNEvaluators.Remote
     /// Constructor.
     /// </summary>
     public NNRemoteServer(int port = NNRemoteProtocol.DEFAULT_PORT,
-                           int maxClients = 4,
+                           int maxClients = DEFAULT_MAX_CLIENTS,
                            string defaultNetworkSpec = null,
                            string defaultDeviceSpec = null,
-                           int instancesPerEvaluator = 1)
+                           int instancesPerEvaluator = 1,
+                           int maxCachedEvaluators = DEFAULT_MAX_CACHED_EVALUATORS)
     {
       Port = port;
       MaxClients = maxClients;
+      MaxCachedEvaluators = maxCachedEvaluators;
       DefaultNetworkSpec = defaultNetworkSpec;
       DefaultDeviceSpec = defaultDeviceSpec;
       InstancesPerEvaluator = Math.Max(1, instancesPerEvaluator);
@@ -254,7 +272,8 @@ namespace Ceres.Chess.NNEvaluators.Remote
           if (Interlocked.Increment(ref activeClients) > MaxClients)
           {
             Interlocked.Decrement(ref activeClients);
-            Console.WriteLine($"[SERVER] Rejected connection from {client.Client.RemoteEndPoint} (max clients reached)");
+            Console.WriteLine($"[SERVER] Rejected connection from {client.Client.RemoteEndPoint} "
+                            + $"(maximum of {MaxClients} clients reached; restart the server with a larger MAXCLIENTS value to allow more)");
             client.Close();
             continue;
           }
@@ -308,9 +327,11 @@ namespace Ceres.Chess.NNEvaluators.Remote
     /// <summary>
     /// Builds the cache key for an evaluator configuration.
     /// </summary>
-    static string MakeCacheKey(string netSpec, string deviceSpec, string optionsStr)
+    static string MakeCacheKey(string netSpec, string deviceSpec, string optionsStr, int streamIndex)
     {
-      return $"{netSpec}|{deviceSpec}|{optionsStr ?? ""}";
+      // The stream index is part of the key so that concurrent streams deliberately placed on the
+      // same device(s) each get their own evaluator (rather than queueing for a single shared one).
+      return $"{netSpec}|{deviceSpec}|{optionsStr ?? ""}|s{streamIndex}";
     }
 
 
@@ -319,9 +340,9 @@ namespace Ceres.Chess.NNEvaluators.Remote
     /// Increments ActiveUsers on success.
     /// </summary>
     CachedEvaluator AcquireEvaluator(string netSpec, string deviceSpec, string optionsStr,
-                                      string clientEndpoint)
+                                      int streamIndex, string clientEndpoint)
     {
-      string key = MakeCacheKey(netSpec, deviceSpec, optionsStr);
+      string key = MakeCacheKey(netSpec, deviceSpec, optionsStr, streamIndex);
 
       lock (cacheLock)
       {
@@ -348,7 +369,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
         }
 
         // Check if we've hit the cache limit.
-        if (evaluatorCache.Count >= MAX_CACHED_EVALUATORS)
+        if (evaluatorCache.Count >= MaxCachedEvaluators)
         {
           // Evict the least recently used evaluator that has no active users.
           var evictCandidate = evaluatorCache.Values
@@ -365,7 +386,8 @@ namespace Ceres.Chess.NNEvaluators.Remote
           else
           {
             throw new InvalidOperationException(
-              $"Evaluator cache is full ({MAX_CACHED_EVALUATORS}) and all evaluators are in use.");
+              $"Evaluator cache is full ({MaxCachedEvaluators}) and all evaluators are in use; "
+            + "restart the server with a larger MAXEVALUATORS value to allow more.");
           }
         }
 
@@ -566,6 +588,12 @@ namespace Ceres.Chess.NNEvaluators.Remote
 
         // -- Handshake --
         var (msgType, payloadLen) = NNRemoteProtocol.ReadMessage(stream, ref readBuffer, ref decompressBuffer);
+        if (msgType == NNRemoteMessageType.Disconnect)
+        {
+          // A client only checking that the server is reachable (see NNEvaluatorRemote.TryProbeServer).
+          return;
+        }
+
         if (msgType != NNRemoteMessageType.Handshake)
         {
           Console.WriteLine($"[SERVER] Client {clientEndpoint}: expected Handshake, got {msgType}. Disconnecting.");
@@ -573,7 +601,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
         }
 
         (string networkSpec, string deviceSpec, string optionsStr, int maxBatchSize, bool clientUseCompression,
-         int protocolVersion, bool clientAcceptsCompactPolicies) =
+         int protocolVersion, bool clientAcceptsCompactPolicies, int streamIndex) =
           NNRemoteSerializer.DeserializeHandshake(readBuffer.AsSpan(0, payloadLen));
 
         // Validate protocol version.
@@ -608,12 +636,12 @@ namespace Ceres.Chess.NNEvaluators.Remote
           decompressBuffer = new byte[readBuffer.Length];
         }
 
-        Console.WriteLine($"[SERVER] Client {clientEndpoint} connected: net={netSpec}, device={devSpec}, maxBatch={maxBatchSize}, compression={useCompression}, compactPolicies={compactPolicies}");
+        Console.WriteLine($"[SERVER] Client {clientEndpoint} connected: net={netSpec}, device={devSpec}, stream={streamIndex}, maxBatch={maxBatchSize}, compression={useCompression}, compactPolicies={compactPolicies}");
 
         // Acquire (or reuse) a cached evaluator.
         try
         {
-          cachedEval = AcquireEvaluator(netSpec, devSpec, optionsStr, clientEndpoint);
+          cachedEval = AcquireEvaluator(netSpec, devSpec, optionsStr, streamIndex, clientEndpoint);
           instance = AcquireInstance(cachedEval, netSpec, devSpec, optionsStr, clientEndpoint);
         }
         catch (Exception ex)
@@ -761,7 +789,9 @@ namespace Ceres.Chess.NNEvaluators.Remote
               }
               catch (Exception ex)
               {
-                Console.WriteLine($"[SERVER] Client {clientEndpoint}: eval error: {ex.Message}");
+                // Show the full exception (with stack trace) here on the server,
+                // since the client is sent only the exception type and message.
+                Console.WriteLine($"[SERVER] Client {clientEndpoint}: eval error: {ex}");
                 SendError(stream, writeBuffer, compressBuffer, useCompression,
                   ex.GetType().Name, ex.Message);
               }
@@ -856,7 +886,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
       Console.WriteLine($"Port:        {Port}");
       Console.WriteLine($"Max clients: {MaxClients}");
       Console.WriteLine($"Host:        {Environment.MachineName}");
-      Console.WriteLine($"Max cached:  {MAX_CACHED_EVALUATORS}");
+      Console.WriteLine($"Max cached:  {MaxCachedEvaluators}");
       Console.WriteLine($"Instances:   {InstancesPerEvaluator} per evaluator");
       Console.WriteLine("------------------------------------------------------------");
     }

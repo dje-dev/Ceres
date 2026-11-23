@@ -192,6 +192,21 @@ namespace Ceres.Features.Suites
     public int MaxNumPositions = int.MaxValue;
 
     /// <summary>
+    /// Optional device slots specification which spreads the concurrent suite workers
+    /// over local and/or remote GPUs (see NNDeviceSlots for the syntax). Each listed GPU is one slot,
+    /// parentheses bundle GPUs into one slot, and "*N" places N concurrent workers on a slot, e.g.:
+    ///   "GPU:0+GPU:(0,1)*2@HOP+GPU:3*3@station"
+    /// evaluates 6 positions concurrently: one on local GPU 0, two on the bundled GPUs 0 and 1
+    /// of host HOP and three on GPU 3 of host station (remote hosts must be running "Ceres SERVER").
+    ///
+    /// The slot determines only where a worker's Ceres engines evaluate; the network, execution engine
+    /// and options remain those of each engine's own evaluator definition. All engines being compared
+    /// evaluate a given position on the same slot. The level of concurrency defaults to the number of
+    /// streams declared (it can be overridden in the SuiteTestRunner constructor).
+    /// </summary>
+    public string DeviceSlots;
+
+    /// <summary>
     /// Number of positions at beginning of file to be skipped.
     /// </summary>
     public int SkipNumPositions = 0;

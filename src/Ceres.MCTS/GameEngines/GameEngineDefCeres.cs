@@ -18,6 +18,7 @@ using System.IO;
 using Ceres.Base.Misc;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.Iteration;
@@ -110,6 +111,13 @@ public class GameEngineDefCeres : GameEngineDef
   {
     EvaluatorDef.TrySetDeviceIndices(deviceIDs);
     EvaluatorDefSecondary?.TrySetDeviceIndices(deviceIDs);
+  }
+
+  /// <inheritdoc/>
+  public override void TrySetDevicesIfNotPooled(NNDeviceSlot slot, int streamIndex)
+  {
+    EvaluatorDef.TrySetDevices(slot, streamIndex);
+    EvaluatorDefSecondary?.TrySetDevices(slot, streamIndex);
   }
 
   public override NNEvaluatorDef GetEvaluatorDef() => EvaluatorDef;

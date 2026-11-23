@@ -127,6 +127,12 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public override NNEvaluatorDef GetEvaluatorDef() => EvaluatorDef;
 
+    /// <summary>
+    /// The Ceres subprocess is passed the full device specification
+    /// (including any remote host), so it can evaluate remotely.
+    /// </summary>
+    public override bool SupportsRemoteDevices => true;
+
   }
 
 }

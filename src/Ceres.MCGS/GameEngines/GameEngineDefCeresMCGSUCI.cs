@@ -139,4 +139,10 @@ public class GameEngineDefCeresMCGSUCI : GameEngineDef
   /// This is a UCI wrapper that runs Ceres as an external process, so IsCeresEngine is false.
   /// </summary>
   public override NNEvaluatorDef GetEvaluatorDef() => EvaluatorDef;
+
+  /// <summary>
+  /// The Ceres subprocess is passed the full device specification
+  /// (including any remote host), so it can evaluate remotely.
+  /// </summary>
+  public override bool SupportsRemoteDevices => true;
 }

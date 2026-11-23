@@ -44,8 +44,10 @@ namespace Ceres.Chess.NNEvaluators.Defs
 
     /// <summary>
     /// Array of devices used for the evaluation.
+    /// (Not readonly because TrySetDevices may replace the array when the definition
+    /// is re-targeted to a device slot having a different number of devices.)
     /// </summary>
-    public readonly (NNEvaluatorDeviceDef Device, float Fraction)[] Devices;
+    public (NNEvaluatorDeviceDef Device, float Fraction)[] Devices;
 
     /// <summary>
     /// Method used to combine (possibly) multiple devices.
@@ -478,6 +480,53 @@ namespace Ceres.Chess.NNEvaluators.Defs
       {
         Devices[i].Device.DeviceIndex = deviceIDs[i];
       }
+    }
+
+
+    /// <summary>
+    /// Modifies the evaluator definition so that it runs on the device(s) of a specified device slot
+    /// (see NNDeviceSlots), as one of possibly several concurrent streams placed on that slot.
+    ///
+    /// The slot supplies WHERE the evaluator runs: the device indices, the (optional) remote
+    /// host/port and the number of devices (which may differ from the number currently specified).
+    /// The definition keeps WHAT is evaluated and how: the network(s), options and, unless the slot
+    /// explicitly states one, the execution engine (e.g. TensorRTNative) and batch size hints
+    /// of its first device.
+    ///
+    /// If the combo is Pooled nothing is done (the underlying evaluator is shared).
+    /// </summary>
+    /// <param name="slot">the device slot on which to run</param>
+    /// <param name="streamIndex">index of the stream within the slot (distinguishes concurrent users of a remote slot)</param>
+    public void TrySetDevices(NNDeviceSlot slot, int streamIndex = 0)
+    {
+      ArgumentNullException.ThrowIfNull(slot);
+
+      if (DeviceCombo == NNEvaluatorDeviceComboType.Pooled)
+      {
+        // Nothing to do, we will be sharing the same evaluator
+        return;
+      }
+
+      NNEvaluatorDeviceDef template = Devices[0].Device;
+      int numDevices = slot.Devices.Length;
+
+      (NNEvaluatorDeviceDef Device, float Fraction)[] newDevices = new (NNEvaluatorDeviceDef, float)[numDevices];
+      for (int i = 0; i < numDevices; i++)
+      {
+        NNEvaluatorDeviceDef slotDevice = slot.Devices[i];
+        newDevices[i] = (template with
+        {
+          DeviceIndex = slotDevice.DeviceIndex,
+          RemoteHost = slotDevice.RemoteHost,
+          RemotePort = slotDevice.RemotePort,
+          GroupIndex = -1,
+          StreamIndex = streamIndex,
+          OverrideEngineType = slotDevice.OverrideEngineType ?? template.OverrideEngineType
+        }, 1.0f / numDevices);
+      }
+
+      Devices = newDevices;
+      DeviceCombo = numDevices == 1 ? NNEvaluatorDeviceComboType.Single : NNEvaluatorDeviceComboType.Split;
     }
 
 

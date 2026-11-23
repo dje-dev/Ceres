@@ -95,14 +95,22 @@ namespace Ceres.Commands
     const string CERES_HELP_SUITE =
     @"  SUITE -  Run search on all positions in a suite of test positions from an EPD file and quantify agreement with specified correct moves.
     Required key/values   :  epd
-    Optional key/values   :  { network, device, limit, opponent, network-opponent, device-opponent, limit-opponent, pruning }
+    Optional key/values   :  { network, device, limit, opponent, network-opponent, device-opponent, limit-opponent, pruning, slots }
     Examples              :  Ceres SUITE epd=sts.epd limit=1000nm network=LC0:73810 device=GPU:0
+                             Ceres SUITE epd=sts.epd limit=1000nm ""slots=GPU:0+GPU:(0,1)*2@HOP+GPU:3*3@station""
+    Device slots          :  slots spreads concurrent workers over local and remote GPUs (remote hosts run Ceres SERVER):
+                             each listed GPU is one slot, (i,j) bundles GPUs into one slot, *N places N workers on a slot.
+                             (Quote the slots argument in shells which treat parentheses or * specially.)
 ";
 
     const string CERES_HELP_TOURN =
     @"  TOURN - Run a tournament of games between Ceres and (possibly) another external UCI chess engine.
-    Optional key/values   :  { openings, show-moves, network, device, limit, opponent, network-opponent, device-opponent, pruning}
+    Optional key/values   :  { openings, show-moves, network, device, limit, opponent, network-opponent, device-opponent, pruning, slots, game-pairs}
     Example               :  Ceres TOURN opponent=stockfish11.exe limit=1000nm limit_opponent=875_000nm openings=drawkiller.pgn showmoves=false
+                             Ceres TOURN limit=1000nm openings=book.pgn game-pairs=100 ""slots=GPU:0+GPU:(0,1)*2@HOP+GPU:3*3@station""
+    Device slots          :  slots spreads concurrent games over local and remote GPUs (remote hosts run Ceres SERVER):
+                             each listed GPU is one slot, (i,j) bundles GPUs into one slot, *N places N games on a slot.
+                             (Quote the slots argument in shells which treat parentheses or * specially.)
 ";
 
     const string CERES_HELP_SETOPT =

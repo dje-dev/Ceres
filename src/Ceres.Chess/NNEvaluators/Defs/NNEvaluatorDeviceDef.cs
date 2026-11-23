@@ -82,6 +82,16 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// </summary>
     public int GroupIndex = -1;
 
+    /// <summary>
+    /// Index of the concurrent stream (e.g. a tournament game thread or suite worker) using this device
+    /// when several streams are deliberately placed on the same device(s) (see NNDeviceSlots, "*N" syntax).
+    ///
+    /// Only meaningful for remote devices: the index is sent in the handshake and made part of the
+    /// server's evaluator cache key so that each stream gets its own evaluator instance on the server
+    /// (matching local behavior, where each stream builds its own evaluator).
+    /// </summary>
+    public int StreamIndex = 0;
+
 
     /// <summary>
     /// Constructor.
@@ -145,7 +155,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     {
       string maxStr = MaxBatchSize.HasValue ? $" Max={MaxBatchSize}" : "";
       string optimalStr = OptimalBatchSize.HasValue ? $" Optimal={OptimalBatchSize}" : "";
-      string remoteStr = RemoteHost != null ? $" @{RemoteHost}/{RemotePort}" : "";
+      string remoteStr = RemoteHost != null ? $" @{RemoteHost}/{RemotePort}{(StreamIndex != 0 ? "/" + StreamIndex : "")}" : "";
       string groupStr = GroupIndex >= 0 ? $" Group={GroupIndex}" : "";
       return $"<NNEvaluatorDeviceDef {Type} #{DeviceIndex} {OverrideEngineType} {(LowPriority ? "Low Priority" : "")}{maxStr}{remoteStr}{groupStr}>";
     }

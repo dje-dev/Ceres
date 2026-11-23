@@ -15,6 +15,8 @@
 
 using System;
 
+using Ceres.Base.Misc;
+
 #endregion
 
 namespace Ceres.Features.Tournaments
@@ -36,7 +38,47 @@ namespace Ceres.Features.Tournaments
       catch (Exception exc)
       {
         Console.WriteLine("Exception in TournamentManager thread: " + exc.ToString());
+        RetireFailedGameThread(threadIndex, gameTest);
       }
+    }
+
+
+    /// <summary>
+    /// Called when a game thread terminated with an exception (for example because the remote
+    /// evaluation server of its device slot remained unreachable). The thread is retired and
+    /// the remaining threads continue the tournament.
+    ///
+    /// If the thread had not yet recorded any game from the opening it was working on then
+    /// that opening is returned to be played by another thread, so no opening is lost.
+    /// </summary>
+    /// <param name="threadIndex"></param>
+    /// <param name="gameTest"></param>
+    private void RetireFailedGameThread(int threadIndex, TournamentGameThread gameTest)
+    {
+      gameTest.WasRetired = true;
+
+      string where = gameTest.Def.DeviceStream is { } stream ? $" (device slot {stream})" : "";
+      string openingStr = "";
+
+      int openingIndex = gameTest.OpeningIndexInProgress;
+      if (openingIndex >= 0)
+      {
+        if (gameTest.NumGamesRecordedForOpeningInProgress == 0)
+        {
+          lock (lockObj)
+          {
+            openingsToRetry.Enqueue(openingIndex);
+          }
+          openingStr = $" Opening {openingIndex} was returned unplayed and will be played by another thread (if any is still running).";
+        }
+        else
+        {
+          openingStr = $" Opening {openingIndex} is left incomplete ({gameTest.NumGamesRecordedForOpeningInProgress} game(s) of it were already recorded).";
+        }
+      }
+
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+        $"WARNING: tournament game thread {threadIndex}{where} failed and was retired; remaining threads continue.{openingStr}");
     }
 
     /// <summary>

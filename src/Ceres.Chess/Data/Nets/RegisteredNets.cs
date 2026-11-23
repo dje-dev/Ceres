@@ -74,6 +74,10 @@ namespace Ceres.Chess.Data.Nets
         {"BT4_FP16", ONNXNet16LC0("BT4-1024x15x32h-swa-6147500.pb.gz_fp16#16")},
         {"BT4_FP16_TRT", ONNXNet16LC0("BT4-1024x15x32h-swa-6147500.pb.gz_fp16", true)},
 
+      {"BT6_FP16_TRT", ONNXNet16LC0(@"bt6_fp16", true) },
+      {"BT4_332_FP16_TRT", ONNXNet16LC0("BT4-1024x15x32h-swa-6147500-policytune-332.pb.gz_fp16", true) },
+
+      //
         // for BT5, TRT version fails in engine building!
         {"BT5_BIG_FP16", ONNXNet16LC0("BT5-1024x15x32h-rpe-3700000-fixed-fp16.onnx", true)},
         {"BT5_SMALL_FP16", ONNXNet16LC0("BT5-1024x15x32h-rpe-swa-3700000.onnx", true)},

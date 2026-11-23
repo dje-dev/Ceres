@@ -689,9 +689,10 @@ namespace Ceres.Chess.NNEvaluators
                                          Dictionary<string, string> optionsDict)
     {
       NNEvaluatorDeviceDef first = deviceDefs[0];
-      if (deviceDefs.Any(d => d.RemoteHost != first.RemoteHost || d.RemotePort != first.RemotePort))
+      if (deviceDefs.Any(d => d.RemoteHost != first.RemoteHost || d.RemotePort != first.RemotePort
+                           || d.StreamIndex != first.StreamIndex))
       {
-        throw new Exception("All devices of a remote evaluator must use the same host/port.");
+        throw new Exception("All devices of a remote evaluator must use the same host/port (and stream).");
       }
 
       // Reconstruct the network specification string from the netDef.
@@ -742,7 +743,8 @@ namespace Ceres.Chess.NNEvaluators
       return new NNEvaluatorRemote(first.RemoteHost, first.RemotePort,
                                    netSpecStr, devSpecStr, optionsStr,
                                    useCompression: true,
-                                   maxBatchSize: maxBatchSize);
+                                   maxBatchSize: maxBatchSize,
+                                   streamIndex: first.StreamIndex);
     }
 
 
@@ -827,6 +829,7 @@ namespace Ceres.Chess.NNEvaluators
        && def.Devices.All(d => d.Device.RemoteHost != null
                             && d.Device.RemoteHost == def.Devices[0].Device.RemoteHost
                             && d.Device.RemotePort == def.Devices[0].Device.RemotePort
+                            && d.Device.StreamIndex == def.Devices[0].Device.StreamIndex
                             && d.Device.OverrideEngineType == def.Devices[0].Device.OverrideEngineType
                             && d.Fraction == def.Devices[0].Fraction))
       {

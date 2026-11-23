@@ -21,6 +21,7 @@ using System.Linq;
 using Ceres.Base.Misc;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
+using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.Features.GameEngines;
 using Ceres.Features.Tournaments.Streaming;
 using Ceres.MCTS.GameEngines;
@@ -291,6 +292,42 @@ namespace Ceres.Features.Tournaments
     public int NumConcurrentGameThreads = 1;
 
     /// <summary>
+    /// Optional device slots specification which spreads the concurrent games of the tournament
+    /// over local and/or remote GPUs (see NNDeviceSlots for the syntax). Each listed GPU is one slot,
+    /// parentheses bundle GPUs into one slot, and "*N" places N concurrent games on a slot, e.g.:
+    ///   "GPU:0+GPU:(0,1)*2@HOP+GPU:3*3@station"
+    /// runs 6 concurrent games: one on local GPU 0, two on the bundled GPUs 0 and 1 of host HOP
+    /// and three on GPU 3 of host station (remote hosts must be running "Ceres SERVER").
+    ///
+    /// The slot determines only where each game's engines evaluate; the network, execution engine
+    /// and options remain those of each engine's own evaluator definition. The level of concurrency
+    /// defaults to the number of streams declared (it can be overridden in the TournamentManager constructor).
+    /// </summary>
+    public string DeviceSlots;
+
+    /// <summary>
+    /// The device stream (slot plus index of the stream on that slot) on which this per-thread clone
+    /// of the tournament definition runs, if DeviceSlots are in use. Assigned by TournamentManager.
+    /// </summary>
+    [NonSerialized]
+    internal NNDeviceStream? DeviceStream;
+
+    /// <summary>
+    /// When games run on remote device slots: how long (in seconds) a game thread keeps trying to
+    /// reconnect to a remote evaluation server which has become unreachable (its search stalls meanwhile)
+    /// before the thread gives up and is retired, leaving the remaining threads to finish the tournament.
+    /// </summary>
+    public int RemoteReconnectPatienceSeconds = 10 * 60;
+
+    /// <summary>
+    /// When games run on remote device slots with time-based search limits: a game during which more
+    /// than this much time (in milliseconds) was lost to a broken connection to its remote evaluation
+    /// server is discarded and replayed (since the stall consumed thinking time and so distorted the game).
+    /// Games with node-based limits are never discarded for this reason.
+    /// </summary>
+    public int RemoteLostTimeToleranceMilliseconds = 500;
+
+    /// <summary>
     /// Creation time of tournament (use as a unique ID for generating PGN)
     /// </summary>
     public readonly DateTime StartTime;
@@ -407,6 +444,10 @@ namespace Ceres.Features.Tournaments
       logger.WriteLine($"  Date/Time           : {DateTime.Now} ");
       logger.WriteLine($"  Game Pairs          : {NumGamePairs} ");
       logger.WriteLine($"  Openings            : {OpeningsDescription()}");
+      if (DeviceSlots != null)
+      {
+        logger.WriteLine($"  Device slots        : {DeviceSlots}");
+      }
       if (ReferenceEngineId != null)
       {
         logger.WriteLine($"  Ref engine          : {ReferenceEngineId}");

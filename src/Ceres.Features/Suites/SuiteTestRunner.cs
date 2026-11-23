@@ -40,6 +40,9 @@ using Ceres.MCGS.GameEngines;
 using Ceres.MCGS.Search.Params;
 using Ceres.Chess.SearchResultVerboseMoveInfo;
 using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.Chess.NNEvaluators.Remote;
+using Ceres.Chess.NNEvaluators.Specifications;
+using System.Threading;
 
 #endregion
 
@@ -65,6 +68,89 @@ namespace Ceres.Features.Suites
     /// (no per-worker device assignment).
     /// </summary>
     public int[] DeviceIDs;
+
+    /// <summary>
+    /// The device slots (parsed from SuiteTestDef.DeviceSlots when a run starts) over which the
+    /// concurrent workers are spread, or null if none were specified. This is the more general
+    /// alternative to DeviceIDs: slots may be on remote hosts, may bundle several GPUs and may
+    /// each host several concurrent workers (see NNDeviceSlots).
+    /// </summary>
+    public NNDeviceSlots DeviceSlots { get; private set; }
+
+    /// <summary>
+    /// Level of concurrency requested in the constructor (null if not specified).
+    /// </summary>
+    readonly int? requestedNumConcurrent;
+
+    /// <summary>
+    /// The device stream (slot plus index of the stream on that slot) of each worker, if DeviceSlots are in use.
+    /// </summary>
+    NNDeviceStream[] deviceStreams;
+
+    /// <summary>
+    /// Maps the first engine of each worker's engine set to the index of the worker.
+    /// (Populated before the run starts and only read thereafter.)
+    /// </summary>
+    readonly Dictionary<GameEngine, int> workerIndexOfEngine = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// Per-worker totals (accessed under lockObj) used for the device slot summary.
+    /// </summary>
+    long[] workerNodes;
+    double[] workerSeconds;
+    int[] workerPositions;
+    bool[] workerRetired;
+
+    /// <summary>
+    /// After (or during) a run: the number of positions evaluated by each concurrent worker.
+    /// </summary>
+    public int[] NumPositionsPerWorker
+    {
+      get
+      {
+        lock (lockObj)
+        {
+          return workerPositions == null ? [] : (int[])workerPositions.Clone();
+        }
+      }
+    }
+
+    /// <summary>
+    /// After (or during) a run: the number of evaluations of a position which were repeated because the
+    /// connection to a remote evaluation server was disrupted (time-based search limits only).
+    /// </summary>
+    public int NumPositionsReplayedAfterDisruption => numPositionsReplayedAfterDisruption;
+    int numPositionsReplayedAfterDisruption;
+
+    /// <summary>
+    /// Counts the engine sets currently available in EngineSets or EngineArrays,
+    /// so a position waits for a free worker rather than failing if none is free.
+    /// </summary>
+    readonly SemaphoreSlim engineSetsAvailable = new(0);
+
+    /// <summary>
+    /// Number of workers which have not been retired.
+    /// </summary>
+    int numLiveWorkers;
+
+    /// <summary>
+    /// When running on remote device slots: how long (in seconds) a worker keeps trying to reconnect
+    /// to a remote evaluation server which has become unreachable (its search stalls meanwhile)
+    /// before the worker is retired and its position is evaluated by another worker.
+    /// </summary>
+    public int RemoteReconnectPatienceSeconds = 10 * 60;
+
+    /// <summary>
+    /// When running on remote device slots with time-based search limits: a position during whose
+    /// evaluation more than this much time (in milliseconds) was lost to a broken connection
+    /// to the remote evaluation server is evaluated again (the stall consumed search time).
+    /// </summary>
+    public int RemoteLostTimeToleranceMilliseconds = 500;
+
+    /// <summary>
+    /// Maximum number of times the evaluation of a position is repeated because of such disruptions.
+    /// </summary>
+    const int MAX_REPLAYS_OF_DISRUPTED_POSITION = 5;
 
     /// <summary>
     /// Pool of (paired) Ceres engine instances available to the concurrent suite workers.
@@ -105,7 +191,8 @@ namespace Ceres.Features.Suites
     /// runs on a specific set of GPUs. The engine is warmed up using the supplied search
     /// limit (which may be null, in which case a default warmup is performed).
     /// </summary>
-    static GameEngine CreateWorkerEngine(GameEngineDef engineDef, SearchLimit warmupLimit, int[] deviceIDsForWorker)
+    static GameEngine CreateWorkerEngine(GameEngineDef engineDef, SearchLimit warmupLimit, int[] deviceIDsForWorker,
+                                         NNDeviceStream? deviceStream = null)
     {
       if (engineDef == null)
       {
@@ -113,12 +200,20 @@ namespace Ceres.Features.Suites
       }
 
       GameEngineDef defForWorker = engineDef;
-      if (deviceIDsForWorker != null)
+      if (deviceIDsForWorker != null || deviceStream != null)
       {
         // Clone so the device rewrite is isolated to this worker
         // (binary deep clone, the same mechanism used by TournamentDef.Clone).
         defForWorker = ObjUtils.DeepClone(engineDef);
-        defForWorker.TrySetDeviceIndicesIfNotPooled(deviceIDsForWorker);
+        if (deviceStream is { } stream)
+        {
+          // Place the engine on the worker's device slot (local or remote).
+          defForWorker.TrySetDevicesIfNotPooled(stream.Slot, stream.StreamIndex);
+        }
+        else
+        {
+          defForWorker.TrySetDeviceIndicesIfNotPooled(deviceIDsForWorker);
+        }
       }
 
       GameEngine engine = defForWorker.CreateEngine();
@@ -161,14 +256,38 @@ namespace Ceres.Features.Suites
     /// <param name="deviceIDs"></param>
     public SuiteTestRunner(SuiteTestDef def, int numConcurrent, int[] deviceIDs = null)
     {
-      if (numConcurrent > 1 && deviceIDs == null)
+      if (numConcurrent > 1 && deviceIDs == null && def.DeviceSlots == null)
       {
-        throw new Exception("Must specify deviceIDs if numConcurrent > 1.");
+        throw new Exception("Must specify deviceIDs (or SuiteTestDef.DeviceSlots) if numConcurrent > 1.");
+      }
+
+      if (deviceIDs != null && def.DeviceSlots != null)
+      {
+        throw new Exception("Specify either SuiteTestDef.DeviceSlots or deviceIDs, not both.");
       }
 
       Def = def;
       NumConcurrent = numConcurrent;
+      requestedNumConcurrent = numConcurrent;
       DeviceIDs = deviceIDs;
+    }
+
+
+    /// <summary>
+    /// Constructor which spreads the concurrent suite workers over the specified device slots
+    /// (equivalent to assigning def.DeviceSlots), for example:
+    ///   new SuiteTestRunner(def, 6, "GPU:0+GPU:(0,1)*2@HOP+GPU:3*3@station")
+    /// </summary>
+    /// <param name="def"></param>
+    /// <param name="numConcurrent">number of positions to evaluate concurrently, or null for the number of streams declared by the slots</param>
+    /// <param name="deviceSlots">device slots specification (see NNDeviceSlots)</param>
+    public SuiteTestRunner(SuiteTestDef def, int? numConcurrent, string deviceSlots)
+    {
+      ArgumentNullException.ThrowIfNull(def);
+      def.DeviceSlots = deviceSlots ?? throw new ArgumentNullException(nameof(deviceSlots));
+
+      Def = def;
+      requestedNumConcurrent = numConcurrent;
     }
 
 
@@ -177,23 +296,325 @@ namespace Ceres.Features.Suites
     /// or null if no explicit device assignment is in effect.
     /// </summary>
     int[] DeviceSliceForWorker(int workerIndex, int numDevicesPerWorker)
+      => NNDeviceSlots.DeviceSliceForWorker(DeviceIDs, workerIndex, numDevicesPerWorker);
+
+
+    /// <summary>
+    /// Determines how the concurrent workers are placed on devices (to be called at the start of a run,
+    /// before any engine is created), either using device slots (SuiteTestDef.DeviceSlots) or a flat pool
+    /// of device IDs. In either case the placement governs the number of concurrent workers.
+    /// </summary>
+    /// <param name="placedEngineDefs">definitions of the engines which are placed on the devices (the Ceres engines)</param>
+    /// <param name="numConcurrentSuiteThreads">the number of concurrent workers (possibly modified)</param>
+    /// <returns>number of devices per worker if a flat pool of device IDs is in use, otherwise 0</returns>
+    int PrepareDevicePlacement(IEnumerable<GameEngineDef> placedEngineDefs, ref int numConcurrentSuiteThreads)
     {
-      if (DeviceIDs == null)
+      static void Warn(string message) => ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, message);
+
+      int numDevicesPerWorker = 0;
+      deviceStreams = null;
+      DeviceSlots = null;
+
+      if (Def.DeviceSlots != null)
+      {
+        if (DeviceIDs != null)
+        {
+          throw new Exception("Specify either SuiteTestDef.DeviceSlots or deviceIDs, not both.");
+        }
+
+        DeviceSlots = new NNDeviceSlots(Def.DeviceSlots);
+
+        // By default run as many concurrent workers as streams were declared by the device slots.
+        NumConcurrent = requestedNumConcurrent ?? DeviceSlots.TotalStreams;
+        numConcurrentSuiteThreads = NumConcurrent;
+
+        deviceStreams = DeviceSlots.StreamOrder(NumConcurrent);
+        DeviceSlots.Validate(placedEngineDefs, NumConcurrent, Warn);
+
+        if (deviceStreams.Any(s => s.Slot.IsRemote))
+        {
+          DeviceSlots.VerifyRemoteHostsReachable(NumConcurrent);
+
+          // Let a worker ride out a restart of its server or a network outage
+          // (its searches stall meanwhile) rather than fail after the short default period.
+          int priorPatienceSeconds = NNEvaluatorRemote.ReconnectPatienceSeconds;
+          priorReconnectPatienceSeconds = priorPatienceSeconds;
+          NNEvaluatorRemote.ReconnectPatienceSeconds = Math.Max(priorPatienceSeconds, RemoteReconnectPatienceSeconds);
+        }
+      }
+      else if (DeviceIDs != null)
+      {
+        // A device pool governs the number of concurrent workers,
+        // and each worker is assigned a distinct set of GPUs.
+        numConcurrentSuiteThreads = NumConcurrent;
+        numDevicesPerWorker = NNDeviceSlots.DevicesPerWorkerForPool(placedEngineDefs, DeviceIDs, NumConcurrent, Warn);
+      }
+
+      int numWorkers = Math.Max(1, numConcurrentSuiteThreads);
+      workerNodes = new long[numWorkers];
+      workerSeconds = new double[numWorkers];
+      workerPositions = new int[numWorkers];
+      workerRetired = new bool[numWorkers];
+      workerIndexOfEngine.Clear();
+      numLiveWorkers = 0;
+
+      return numDevicesPerWorker;
+    }
+
+    int? priorReconnectPatienceSeconds;
+
+
+    /// <summary>
+    /// Undoes any process-wide changes made by PrepareDevicePlacement (to be called at the end of a run).
+    /// </summary>
+    void EndDevicePlacement()
+    {
+      if (priorReconnectPatienceSeconds is { } prior)
+      {
+        NNEvaluatorRemote.ReconnectPatienceSeconds = prior;
+        priorReconnectPatienceSeconds = null;
+      }
+    }
+
+
+    #region Worker engine sets (taking, returning, retiring)
+
+    /// <summary>
+    /// Registers the engine set of a worker (identified by its first engine) as available.
+    /// </summary>
+    void RegisterWorker(int workerIndex, GameEngine firstEngine)
+    {
+      workerIndexOfEngine[firstEngine] = workerIndex;
+      numLiveWorkers++;
+      engineSetsAvailable.Release();
+    }
+
+
+    /// <summary>
+    /// Waits until the engine set of some worker is available.
+    /// Throws if all workers have meanwhile been retired.
+    /// </summary>
+    void WaitForAvailableWorker()
+    {
+      while (!engineSetsAvailable.Wait(250))
+      {
+        if (Volatile.Read(ref numLiveWorkers) == 0)
+        {
+          throw new Exception("All suite workers have failed (their remote evaluation servers remained unreachable).");
+        }
+      }
+    }
+
+    (GameEngine Engine1, GameEngine Engine2) TakeEngineSet()
+    {
+      WaitForAvailableWorker();
+      if (!EngineSets.TryTake(out (GameEngine Engine1, GameEngine Engine2) engineSet))
+      {
+        throw new Exception("No engine available");
+      }
+      return engineSet;
+    }
+
+    void ReturnEngineSet((GameEngine Engine1, GameEngine Engine2) engineSet)
+    {
+      EngineSets.Add(engineSet);
+      engineSetsAvailable.Release();
+    }
+
+    GameEngine[] TakeEngineArray()
+    {
+      WaitForAvailableWorker();
+      if (!EngineArrays.TryTake(out GameEngine[] engines))
+      {
+        throw new Exception("No engine array available");
+      }
+      return engines;
+    }
+
+    void ReturnEngineArray(GameEngine[] engines)
+    {
+      EngineArrays.Add(engines);
+      engineSetsAvailable.Release();
+    }
+
+
+    /// <summary>
+    /// Returns the total time (in milliseconds) so far lost by a worker's evaluators to broken connections
+    /// to the remote evaluation server of its device slot (0 if the worker does not run on a remote slot).
+    /// </summary>
+    long RemoteLostMilliseconds(int workerIndex)
+      => deviceStreams != null ? deviceStreams[workerIndex].RemoteLostMilliseconds : 0;
+
+
+    /// <summary>
+    /// Returns if the evaluation of a position must be repeated because (with a time-based search limit)
+    /// a material amount of time was lost to a broken connection to the worker's remote evaluation server.
+    /// </summary>
+    bool PositionWasDisrupted(int workerIndex, long remoteLostMSAtStart, bool timeBasedLimit, int epdNum, int attempt)
+    {
+      long remoteLostMS = RemoteLostMilliseconds(workerIndex) - remoteLostMSAtStart;
+      if (!timeBasedLimit || remoteLostMS <= RemoteLostTimeToleranceMilliseconds)
+      {
+        return false;
+      }
+
+      if (attempt > MAX_REPLAYS_OF_DISRUPTED_POSITION)
+      {
+        throw new Exception($"Evaluation of position {epdNum} on device slot {deviceStreams[workerIndex]} was disrupted "
+                          + $"by a lost connection to its remote evaluation server on each of {attempt} attempts.");
+      }
+
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+          $"NOTE: position {epdNum} on device slot {deviceStreams[workerIndex]} will be evaluated again: "
+        + $"{remoteLostMS:N0} ms were lost to a broken connection to its remote evaluation server.");
+      Interlocked.Increment(ref numPositionsReplayedAfterDisruption);
+      return true;
+    }
+
+
+    /// <summary>
+    /// Returns if an exception indicates that the remote evaluation server could not be reached.
+    /// </summary>
+    static bool IsRemoteConnectionFailure(Exception exc)
+    {
+      for (Exception e = exc; e != null; e = e.InnerException)
+      {
+        if (e is NNRemoteConnectionException)
+        {
+          return true;
+        }
+
+        if (e is AggregateException aggregate)
+        {
+          foreach (Exception inner in aggregate.Flatten().InnerExceptions)
+          {
+            if (IsRemoteConnectionFailure(inner))
+            {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+
+    /// <summary>
+    /// Returns if an exception thrown while a worker evaluated a position means that the worker
+    /// (which runs on a remote device slot) can no longer reach its remote evaluation server.
+    /// </summary>
+    bool WorkerFailedOnRemoteSlot(int workerIndex, Exception exc)
+      => deviceStreams != null && deviceStreams[workerIndex].Slot.IsRemote && IsRemoteConnectionFailure(exc);
+
+
+    /// <summary>
+    /// Retires a worker whose remote evaluation server remained unreachable
+    /// (its engine set is not returned to the pool, the remaining workers continue).
+    /// </summary>
+    void RetireWorker(int workerIndex, Exception exc)
+    {
+      lock (lockObj)
+      {
+        workerRetired[workerIndex] = true;
+      }
+      Interlocked.Decrement(ref numLiveWorkers);
+
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+          $"WARNING: suite worker {workerIndex} (device slot {deviceStreams[workerIndex]}) failed and was retired; "
+        + $"its position will be evaluated by another worker. ({exc.GetBaseException().Message})");
+    }
+
+
+    /// <summary>
+    /// Adds the nodes and search time of completed searches to the totals of a worker.
+    /// Must be called while holding lockObj.
+    /// </summary>
+    void RecordWorkerSearches(int workerIndex, params GameEngineSearchResult[] searches)
+    {
+      foreach (GameEngineSearchResult search in searches)
+      {
+        if (search != null)
+        {
+          workerNodes[workerIndex] += search.FinalN;
+          workerSeconds[workerIndex] += search.TimingStats.ElapsedTimeSecs;
+        }
+      }
+      workerPositions[workerIndex]++;
+    }
+
+
+    /// <summary>
+    /// Returns lines describing the device slots in use (for the run header), or null if none.
+    /// </summary>
+    string DeviceSlotsHeaderText()
+    {
+      if (deviceStreams == null)
       {
         return null;
       }
 
-      // Each worker gets its own consecutive chunk of the device pool. If the pool is smaller
-      // than NumConcurrent * devices-per-worker the IDs wrap around cyclically, so workers
-      // share GPUs (deliberate oversubscription; warned in ComputeAndValidateDevicePartitioning).
-      int start = workerIndex * numDevicesPerWorker;
-      int[] ret = new int[numDevicesPerWorker];
-      for (int j = 0; j < numDevicesPerWorker; j++)
-      {
-        ret[j] = DeviceIDs[(start + j) % DeviceIDs.Length];
-      }
-      return ret;
+      return $"  Device slots : {DeviceSlots.SpecificationString}" + Environment.NewLine
+           + NNDeviceSlots.DescribeStreams(deviceStreams, "    worker");
     }
+
+
+    /// <summary>
+    /// Outputs a table showing, for each device slot, the number of workers (streams) it hosted,
+    /// the positions they evaluated and the search speed achieved (if device slots are in use).
+    /// </summary>
+    void WriteDeviceSlotSummary()
+    {
+      if (deviceStreams == null)
+      {
+        return;
+      }
+
+      Def.Output.WriteLine();
+      Def.Output.WriteLine("Device slot summary (NPS is nodes per second of search time, over all Ceres engines):");
+      Def.Output.WriteLine($"  {"Slot",-34} {"Streams",7} {"Positions",9} {"NPS total",12} {"NPS/stream",12}");
+
+      lock (lockObj)
+      {
+        foreach (IGrouping<int, int> slotGroup in Enumerable.Range(0, deviceStreams.Length).GroupBy(i => deviceStreams[i].SlotIndex))
+        {
+          int numStreams = 0;
+          int numPositions = 0;
+          double npsTotal = 0;
+          bool anyRetired = false;
+
+          foreach (int i in slotGroup)
+          {
+            if (i >= workerNodes.Length)
+            {
+              continue;
+            }
+
+            numStreams++;
+            numPositions += workerPositions[i];
+            anyRetired |= workerRetired[i];
+
+            // The engines of a worker search one after another, so total nodes over total
+            // search time is the average search speed of the stream; concurrent streams add up.
+            if (workerSeconds[i] > 0)
+            {
+              npsTotal += workerNodes[i] / workerSeconds[i];
+            }
+          }
+
+          if (numStreams == 0)
+          {
+            continue;
+          }
+
+          Def.Output.WriteLine($"  {deviceStreams[slotGroup.First()].Slot.ToString(),-34} {numStreams,7} {numPositions,9} "
+                             + $"{npsTotal,12:N0} {npsTotal / numStreams,12:N0}"
+                             + (anyRetired ? "  (worker retired after failure)" : ""));
+        }
+      }
+      Def.Output.WriteLine();
+    }
+
+    #endregion
 
 
     void Init(int numDevicesPerWorker)
@@ -202,59 +623,14 @@ namespace Ceres.Features.Suites
       for (int i = 0; i < numConcurrentSuiteThreads; i++)
       {
         int[] deviceIDsForWorker = DeviceSliceForWorker(i, numDevicesPerWorker);
-        GameEngine engine1 = CreateWorkerEngine(Def.Engine1Def, Def.CeresEngine1Def?.SearchLimit, deviceIDsForWorker);
-        GameEngine engine2 = CreateWorkerEngine(Def.Engine2Def, Def.CeresEngine2Def?.SearchLimit, deviceIDsForWorker);
+        NNDeviceStream? stream = deviceStreams?[i];
+        GameEngine engine1 = CreateWorkerEngine(Def.Engine1Def, Def.CeresEngine1Def?.SearchLimit, deviceIDsForWorker, stream);
+        GameEngine engine2 = CreateWorkerEngine(Def.Engine2Def, Def.CeresEngine2Def?.SearchLimit, deviceIDsForWorker, stream);
         EngineSets.Add((engine1, engine2));
+        RegisterWorker(i, engine1);
       }
 
       Def.ExternalEngineDef?.EngineDef.CreateEngine(); EngineExternal?.Warmup(Def.ExternalEngineDef.SearchLimit.KnownMaxNumNodes);
-    }
-
-
-    /// <summary>
-    /// Validates that the supplied DeviceIDs pool can be evenly partitioned into one chunk
-    /// per concurrent worker, and returns the number of devices per worker (the number of
-    /// devices in the engine specification).
-    /// </summary>
-    int ComputeAndValidateDevicePartitioning()
-    {
-      Chess.NNEvaluators.Defs.NNEvaluatorDef evalDef1 = Def.Engine1Def.GetEvaluatorDef();
-      if (evalDef1 == null)
-      {
-        throw new Exception("DeviceIDs were specified but the first engine is not a Ceres engine with an evaluator.");
-      }
-
-      int numDevicesPerWorker = evalDef1.NumDevices;
-      if (numDevicesPerWorker < 1)
-      {
-        throw new Exception("Engine specification must reference at least one device.");
-      }
-
-      Chess.NNEvaluators.Defs.NNEvaluatorDef evalDef2 = Def.Engine2Def?.GetEvaluatorDef();
-      if (evalDef2 != null && evalDef2.NumDevices != numDevicesPerWorker)
-      {
-        throw new Exception($"Both Ceres engines must reference the same number of devices when using DeviceIDs "
-                          + $"(engine1 has {numDevicesPerWorker}, engine2 has {evalDef2.NumDevices}).");
-      }
-
-      // Ideally the pool is large enough that every concurrent worker is assigned its OWN
-      // disjoint set of GPUs (no sharing across workers). This matters for fairness: for any
-      // position the two engines run sequentially on the worker's GPU(s), so if a worker had
-      // exclusive use of its GPU(s) the measured per-engine execution times are directly
-      // comparable. A smaller pool is permitted (IDs are reused cyclically, i.e. deliberate
-      // GPU oversubscription across workers) but a warning is emitted since sharing GPUs
-      // between concurrent workers may distort those timings.
-      int numWorkers = NumConcurrent;
-      if (DeviceIDs.Length < numWorkers * numDevicesPerWorker)
-      {
-        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
-            $"WARNING: DeviceIDs ({DeviceIDs.Length}) fewer than NumConcurrent ({numWorkers}) "
-          + $"* devices-per-engine ({numDevicesPerWorker}) = {numWorkers * numDevicesPerWorker}; "
-          + $"device IDs will be reused cyclically so concurrent workers share GPU(s) "
-          + $"(deliberate oversubscription; per-engine timing comparability may be reduced).");
-      }
-
-      return numDevicesPerWorker;
     }
 
 
@@ -430,14 +806,9 @@ namespace Ceres.Features.Suites
       // will be chosen for the actual search.
       //DumpParams(Def.Output, true);
 
-      // If a device pool was supplied (via the concurrency constructor) then it governs
-      // the number of concurrent workers, and each worker is assigned a distinct set of GPUs.
-      int numDevicesPerWorker = 0;
-      if (DeviceIDs != null)
-      {
-        numConcurrentSuiteThreads = NumConcurrent;
-        numDevicesPerWorker = ComputeAndValidateDevicePartitioning();
-      }
+      // If device slots or a device pool were supplied then they govern the number
+      // of concurrent workers, and each worker is assigned its own device placement.
+      int numDevicesPerWorker = PrepareDevicePlacement([Def.Engine1Def, Def.Engine2Def], ref numConcurrentSuiteThreads);
 
       this.numConcurrentSuiteThreads = numConcurrentSuiteThreads;
 
@@ -630,6 +1001,8 @@ namespace Ceres.Features.Suites
       }
 
       WriteSummaries();
+      WriteDeviceSlotSummary();
+      EndDevicePlacement();
 
       Shutdown(externalEnginePool);
 
@@ -780,14 +1153,11 @@ namespace Ceres.Features.Suites
         e.PlayerDef.EngineDef.DisableTreeReuse();
       }
 
-      // If a device pool was supplied (via the concurrency constructor) it governs the number
-      // of concurrent workers, and each worker is assigned a distinct set of GPUs.
-      int numDevicesPerWorker = 0;
-      if (DeviceIDs != null)
-      {
-        numConcurrentSuiteThreads = NumConcurrent;
-        numDevicesPerWorker = ComputeAndValidateDevicePartitioningMulti();
-      }
+      // If device slots or a device pool were supplied they govern the number of concurrent
+      // workers, and each worker is assigned its own device placement. Only the Ceres engines
+      // are placed (an external engine keeps its own device specification).
+      int numDevicesPerWorker = PrepareDevicePlacement(entries.Where(e => e.IsCeresEngine).Select(e => e.PlayerDef.EngineDef),
+                                                       ref numConcurrentSuiteThreads);
       this.numConcurrentSuiteThreads = numConcurrentSuiteThreads;
 
       InitMultiEngine(numDevicesPerWorker);
@@ -854,6 +1224,9 @@ namespace Ceres.Features.Suites
         WriteMultiEngineDetailDump(snapshot);
       }
 
+      WriteDeviceSlotSummary();
+      EndDevicePlacement();
+
       ShutdownMultiEngine();
 
       return new MultiEngineSuiteResult(Def)
@@ -908,58 +1281,6 @@ namespace Ceres.Features.Suites
 
 
     /// <summary>
-    /// Validates that the supplied DeviceIDs pool can be partitioned into one chunk per
-    /// concurrent worker (one chunk per worker, chunk size = number of devices referenced by
-    /// the Ceres engines, which must all match), and returns the number of devices per worker.
-    /// </summary>
-    int ComputeAndValidateDevicePartitioningMulti()
-    {
-      int? numDevicesPerWorker = null;
-      foreach (MultiEngineEntry e in Def.MultiEngineDefs)
-      {
-        if (!e.IsCeresEngine)
-        {
-          continue; // external engine: not assigned a GPU slice (keeps its own device spec)
-        }
-
-        Chess.NNEvaluators.Defs.NNEvaluatorDef evalDef = e.PlayerDef.EngineDef.GetEvaluatorDef();
-        int n = evalDef.NumDevices;
-        if (n < 1)
-        {
-          throw new Exception($"Engine {e.ID} specification must reference at least one device.");
-        }
-
-        if (numDevicesPerWorker == null)
-        {
-          numDevicesPerWorker = n;
-        }
-        else if (n != numDevicesPerWorker.Value)
-        {
-          throw new Exception($"All Ceres engines must reference the same number of devices when using DeviceIDs "
-                            + $"(engine {e.ID} has {n}, expected {numDevicesPerWorker.Value}).");
-        }
-      }
-
-      if (numDevicesPerWorker == null)
-      {
-        throw new Exception("DeviceIDs were specified but none of the engines is a Ceres engine with an evaluator.");
-      }
-
-      int numWorkers = NumConcurrent;
-      if (DeviceIDs.Length < numWorkers * numDevicesPerWorker.Value)
-      {
-        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
-            $"WARNING: DeviceIDs ({DeviceIDs.Length}) fewer than NumConcurrent ({numWorkers}) "
-          + $"* devices-per-engine ({numDevicesPerWorker.Value}) = {numWorkers * numDevicesPerWorker.Value}; "
-          + $"device IDs will be reused cyclically so concurrent workers share GPU(s) "
-          + $"(deliberate oversubscription; per-engine timing comparability may be reduced).");
-      }
-
-      return numDevicesPerWorker.Value;
-    }
-
-
-    /// <summary>
     /// Creates and warms up one array of engine instances per concurrent worker (one instance
     /// per engine in the multiengine definition). Ceres engines are cloned onto the worker's
     /// assigned device slice; external engines are created as-is (each worker gets its own).
@@ -970,14 +1291,16 @@ namespace Ceres.Features.Suites
       for (int i = 0; i < numConcurrentSuiteThreads; i++)
       {
         int[] deviceIDsForWorker = DeviceSliceForWorker(i, numDevicesPerWorker);
+        NNDeviceStream? stream = deviceStreams?[i];
         GameEngine[] arr = new GameEngine[entries.Count];
         for (int k = 0; k < entries.Count; k++)
         {
           MultiEngineEntry e = entries[k];
           int[] slice = e.IsCeresEngine ? deviceIDsForWorker : null;
-          arr[k] = CreateWorkerEngine(e.PlayerDef.EngineDef, e.Limit, slice);
+          arr[k] = CreateWorkerEngine(e.PlayerDef.EngineDef, e.Limit, slice, e.IsCeresEngine ? stream : null);
         }
         EngineArrays.Add(arr);
+        RegisterWorker(i, arr[0]);
       }
     }
 
@@ -988,37 +1311,67 @@ namespace Ceres.Features.Suites
     /// </summary>
     void ProcessEPDMultiEngine(int epdNum, EPDEntry epd, MultiEngineAccumulator acc, MultiEngineLiveDisplay display)
     {
-      if (!EngineArrays.TryTake(out GameEngine[] engines))
-      {
-        throw new Exception("No engine array available");
-      }
-
-      int n = engines.Length;
-      GameEngineSearchResult[] results = new GameEngineSearchResult[n];
       PositionWithHistory pos = epd.PosWithHistory;
+      GameEngineSearchResult[] results;
+      int workerIndex;
 
-      try
+      // Normally the position is evaluated once. It is evaluated again (possibly by a different worker) if:
+      //   - the worker runs on a remote device slot whose server can no longer be reached
+      //     (the worker is then retired), or
+      //   - with a time-based search limit, a material amount of time was lost during the
+      //     evaluation to a broken connection to the worker's remote evaluation server.
+      for (int attempt = 1; ; attempt++)
       {
-        // Rotate the starting engine each position to avoid any systematic ordering effect.
-        int start = epdNum % n;
-        for (int j = 0; j < n; j++)
+        GameEngine[] engines = TakeEngineArray();
+        workerIndex = workerIndexOfEngine[engines[0]];
+
+        int n = engines.Length;
+        results = new GameEngineSearchResult[n];
+        bool returnToPool = true;
+
+        try
         {
-          int k = (start + j) % n;
-          GameEngine eng = engines[k];
-          eng.ResetGame();
-          SearchLimit limit = Def.MultiEngineDefs[k].Limit.ConvertedGameToMoveLimit;
-          results[k] = eng.Search(pos, limit);
+          long remoteLostMSAtStart = RemoteLostMilliseconds(workerIndex);
+          bool timeBasedLimit = false;
+
+          // Rotate the starting engine each position to avoid any systematic ordering effect.
+          int start = epdNum % n;
+          for (int j = 0; j < n; j++)
+          {
+            int k = (start + j) % n;
+            GameEngine eng = engines[k];
+            eng.ResetGame();
+            SearchLimit limit = Def.MultiEngineDefs[k].Limit.ConvertedGameToMoveLimit;
+            timeBasedLimit |= limit.IsTimeLimit;
+            results[k] = eng.Search(pos, limit);
+          }
+
+          if (PositionWasDisrupted(workerIndex, remoteLostMSAtStart, timeBasedLimit, epdNum, attempt))
+          {
+            continue;
+          }
+
+          break;
         }
-      }
-      finally
-      {
-        // Restore the array to the pool (so this worker keeps its assigned device(s)).
-        EngineArrays.Add(engines);
+        catch (Exception exc) when (WorkerFailedOnRemoteSlot(workerIndex, exc))
+        {
+          returnToPool = false;
+          RetireWorker(workerIndex, exc);
+        }
+        finally
+        {
+          if (returnToPool)
+          {
+            // Restore the array to the pool (so this worker keeps its assigned device(s)).
+            ReturnEngineArray(engines);
+          }
+        }
       }
 
       lock (lockObj)
       {
         acc.AddPosition(results, epd);
+        RecordWorkerSearches(workerIndex, results.Where((r, k) => Def.MultiEngineDefs[k].IsCeresEngine).ToArray());
         MultiEngineEngineResult[] snapshot = acc.Snapshot();
         display.Refresh(snapshot, acc.PositionsDone);
       }
@@ -1039,6 +1392,10 @@ namespace Ceres.Features.Suites
       Def.Output.WriteLine("  Positions    : " + numPositionsInRun);
       Def.Output.WriteLine("  Concurrency  : " + numConcurrentSuiteThreads
                          + (DeviceIDs != null ? "   Devices [" + string.Join(",", DeviceIDs) + "]" : ""));
+      if (DeviceSlotsHeaderText() is { } slotsText)
+      {
+        Def.Output.Write(slotsText);
+      }
       Def.Output.WriteLine();
 
       foreach (MultiEngineEntry e in Def.MultiEngineDefs)
@@ -1661,6 +2018,11 @@ namespace Ceres.Features.Suites
       Line("Date/Time", DateTime.Now);
       Line("Test Positions", numPositionsInRun);
       Line("EPD file name", Def.EPDFileName);
+      if (deviceStreams != null)
+      {
+        Line("Device slots", DeviceSlots.SpecificationString);
+        Def.Output.Write(NNDeviceSlots.DescribeStreams(deviceStreams, "    worker"));
+      }
       Def.Output.WriteLine($"  Player 1 : {Def.CeresEngine1Def}");
       if (Def.RunCeres2Engine)
       {
@@ -1748,18 +2110,6 @@ namespace Ceres.Features.Suites
 
     void ProcessEPD(int epdNum, EPDEntry epd, bool outputDetail, ObjectPool<object> otherEngines)
     {
-      if (!EngineSets.TryTake(out var engineSet))
-      {
-        throw new Exception("No engine available");
-      }
-
-      GameEngine EngineCeres1 = engineSet.Engine1;
-      GameEngine EngineCeres2 = engineSet.Engine2;
-
-      EngineCeres1.ResetGame();
-      EngineCeres2?.ResetGame();
-      EngineExternal?.ResetGame();
-
       UCISearchInfo otherEngineAnalysis2 = default;
 
 
@@ -1776,31 +2126,70 @@ namespace Ceres.Features.Suites
       int countFailuresCeres1 = 0;
       int countFailuresCeres2 = 0;
       int countFailuresOtherEngine = 0;
-      for (int i = 0; i < count; i++)
+
+      // Normally the position is processed once, by whichever worker (engine set) is free.
+      // If that worker runs on a remote device slot whose server can no longer be reached
+      // the worker is retired and the position is processed again by another worker
+      // (only possible if no search of the position had yet been completed and recorded).
+      while (true)
       {
-        EPDEntry epdInSequence = epd.IsLichessPuzzle ? lichessPuzzle.EPDForPuzzleMoveAtIndex(i) : epd;
+        (GameEngine Engine1, GameEngine Engine2) engineSet = TakeEngineSet();
+        int workerIndex = workerIndexOfEngine[engineSet.Engine1];
 
-        bool isLastEntry = i == count - 1;
-        otherEngineAnalysis2 = RunSearch(epdNum, epdInSequence,
-                                         otherEngines, EngineCeres1, EngineCeres2,
-                                         otherEngineAnalysis2,
-                                         isLastEntry,
-                                         out search1, out search2,
-                                         out scoreCeres1, out scoreCeres2,
-                                         out scoreOtherEngine,
-                                         out otherEngineTime);
+        GameEngine EngineCeres1 = engineSet.Engine1;
+        GameEngine EngineCeres2 = engineSet.Engine2;
 
-        if (scoreCeres1 < 10)
+        bool returnToPool = true;
+        int numSearchesCompleted = 0;
+        try
         {
-          countFailuresCeres1++;
+          EngineCeres1.ResetGame();
+          EngineCeres2?.ResetGame();
+          EngineExternal?.ResetGame();
+
+          for (int i = 0; i < count; i++)
+          {
+            EPDEntry epdInSequence = epd.IsLichessPuzzle ? lichessPuzzle.EPDForPuzzleMoveAtIndex(i) : epd;
+
+            bool isLastEntry = i == count - 1;
+            otherEngineAnalysis2 = RunSearch(epdNum, epdInSequence, workerIndex,
+                                             otherEngines, EngineCeres1, EngineCeres2,
+                                             otherEngineAnalysis2,
+                                             isLastEntry,
+                                             out search1, out search2,
+                                             out scoreCeres1, out scoreCeres2,
+                                             out scoreOtherEngine,
+                                             out otherEngineTime);
+            numSearchesCompleted++;
+
+            if (scoreCeres1 < 10)
+            {
+              countFailuresCeres1++;
+            }
+            if (scoreCeres2 < 10)
+            {
+              countFailuresCeres2++;
+            }
+            if (scoreOtherEngine < 10)
+            {
+              countFailuresOtherEngine++;
+            }
+          }
+
+          break;
         }
-        if (scoreCeres2 < 10)
+        catch (Exception exc) when (numSearchesCompleted == 0 && WorkerFailedOnRemoteSlot(workerIndex, exc))
         {
-          countFailuresCeres2++;
+          returnToPool = false;
+          RetireWorker(workerIndex, exc);
         }
-        if (scoreOtherEngine < 10)
+        finally
         {
-          countFailuresOtherEngine++;
+          if (returnToPool)
+          {
+            // Restore engines to pool (as a pair, so a worker keeps its assigned device(s)).
+            ReturnEngineSet(engineSet);
+          }
         }
       }
 
@@ -2079,7 +2468,7 @@ namespace Ceres.Features.Suites
     }
 
 
-    private UCISearchInfo RunSearch(int epdNum, EPDEntry epd,
+    private UCISearchInfo RunSearch(int epdNum, EPDEntry epd, int workerIndex,
                                     ObjectPool<object> otherEngines,
                                     GameEngine engineCeres1,
                                     GameEngine engineCeres2,
@@ -2166,36 +2555,48 @@ namespace Ceres.Features.Suites
       // Note that if we are running both Ceres1 and Ceres2 we alternate which search goes first.
       // This prevents any systematic difference/benefit that might come from order
       // (for example if we reuse position evaluations from the other tree, which can benefit only one of the two searches).
-      search1 = null;
-      search2 = null;
-      if (epdNum % 2 == 0 || Def.CeresEngine2Def == null)
+      //
+      // With a time-based search limit the searches are repeated if a material amount of time was lost
+      // during them to a broken connection to the worker's remote evaluation server (if any).
+      bool timeBasedLimit = ceresSearchLimit1.IsTimeLimit || (ceresSearchLimit2 != null && ceresSearchLimit2.IsTimeLimit);
+      for (int attempt = 1; ; attempt++)
       {
-        engineCeres1.ResetGame();
-        search1 = engineCeres1.Search(pos, ceresSearchLimit1);
+        long remoteLostMSAtStart = RemoteLostMilliseconds(workerIndex);
 
-        if (Def.RunCeres2Engine)
+        search1 = null;
+        search2 = null;
+        if (epdNum % 2 == 0 || Def.CeresEngine2Def == null)
         {
+          engineCeres1.ResetGame();
+          search1 = engineCeres1.Search(pos, ceresSearchLimit1);
+
+          if (Def.RunCeres2Engine)
+          {
+            search2 = engineCeres2.Search(pos, ceresSearchLimit2);
+          }
+
+        }
+        else
+        {
+          engineCeres2.ResetGame();
           search2 = engineCeres2.Search(pos, ceresSearchLimit2);
+
+          search1 = engineCeres1.Search(pos, ceresSearchLimit1);
+
         }
 
-      }
-      else
-      {
-        engineCeres2.ResetGame();
-        search2 = engineCeres2.Search(pos, ceresSearchLimit2);
-
-        search1 = engineCeres1.Search(pos, ceresSearchLimit1);
-
+        if (!PositionWasDisrupted(workerIndex, remoteLostMSAtStart, timeBasedLimit, epdNum, attempt))
+        {
+          break;
+        }
       }
 
-      if (restoreEnginesToPoolWhenDone)
-      {
-        // Restore engines to pool (as a pair, so a worker keeps its assigned device(s)).
-        EngineSets.Add((engineCeres1, engineCeres2));
-      }
+      // (The engines are returned to the pool by the caller, when all searches of the position are done.)
 
       lock (lockObj)
       {
+        RecordWorkerSearches(workerIndex, search1, search2);
+
         while (finalQ1.Count <= epdNum)
         {
           finalQ1.Add(float.NaN);

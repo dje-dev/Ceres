@@ -273,6 +273,11 @@ namespace Ceres.Commands
         FeatureTestRemoteClient.ParseAndExecute(keyValueArgs);
       }
 
+      else if (featureName == "TEST_SLOTS")
+      {
+        FeatureTestSlots.ParseAndExecute(keyValueArgs);
+      }
+
       else if (featureName == "GRAPH")
       {
         KeyValueSetParsed keys = new KeyValueSetParsed(args, null);

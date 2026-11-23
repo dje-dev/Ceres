@@ -101,6 +101,13 @@ namespace Ceres.Chess.NNEvaluators.Remote
     ///            content-driven (HasCompactHistories from batch content, HasPlanes only when
     ///            planes present and no compact records). MCGS clients ship compact records even
     ///            to LC0 servers (which materialize planes server-side), a wire size reduction.
+    ///
+    /// Later additions did not change the version, because old and new builds interoperate:
+    ///   - the handshake carries an optional trailing stream index (see NNDeviceSlots), which the server
+    ///     makes part of its evaluator cache key so that several concurrent streams placed on the same
+    ///     remote device(s) each get their own evaluator. An older server ignores it (the streams then
+    ///     share one evaluator), and a handshake without it is taken as stream 0.
+    ///   - a Disconnect received in place of a Handshake is a reachability probe (closed silently).
     /// </summary>
     public const int PROTOCOL_VERSION = 4;
 

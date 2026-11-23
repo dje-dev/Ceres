@@ -15,6 +15,7 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Threading;
@@ -22,6 +23,8 @@ using System.Threading;
 using Ceres.Base.Misc;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
+using Ceres.Chess.NNEvaluators.Remote;
+using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.Chess.UserSettings;
 using Ceres.Features.Tournaments.Streaming;
 using Ceres.MCGS.GameEngines;
@@ -49,9 +52,32 @@ namespace Ceres.Features.Tournaments
     public int[] DeviceIDs = null;
 
     /// <summary>
+    /// Optionally the device slots (parsed from TournamentDef.DeviceSlots) over which the concurrent
+    /// games are spread. This is the more general alternative to DeviceIDs: slots may be on remote
+    /// hosts, may bundle several GPUs and may each host several concurrent games (see NNDeviceSlots).
+    /// </summary>
+    public readonly NNDeviceSlots DeviceSlots;
+
+    /// <summary>
     /// Definition of parameters of the tournament.
     /// </summary>
     public TournamentDef Def;
+
+    /// <summary>
+    /// After a tournament has run: the number of games completed by each concurrent game thread.
+    /// </summary>
+    public int[] NumGamesPerThread { get; private set; }
+
+    /// <summary>
+    /// After a tournament has run: the number of game threads which failed and were retired before the end.
+    /// </summary>
+    public int NumThreadsRetired { get; private set; }
+
+    /// <summary>
+    /// After a tournament has run: the number of games discarded and replayed because the connection
+    /// to a remote evaluation server was disrupted during the game (time-based search limits only).
+    /// </summary>
+    public int NumGamesReplayedAfterDisruption { get; private set; }
 
 
     /// <summary>
@@ -65,9 +91,11 @@ namespace Ceres.Features.Tournaments
     /// Constructor.
     /// </summary>
     /// <param name="def"></param>
-    /// <param name="numConcurrent"></param>
-    /// <param name="deviceIDs"></param>
-    public TournamentManager(TournamentDef def, int numConcurrent = 1, int [] deviceIDs = null)
+    /// <param name="numConcurrent">number of games to play concurrently; if null then the number of streams
+    /// declared by def.DeviceSlots (if specified), otherwise 1</param>
+    /// <param name="deviceIDs">optional flat pool of local GPU device IDs over which to spread concurrent games
+    /// (the alternative to def.DeviceSlots)</param>
+    public TournamentManager(TournamentDef def, int? numConcurrent = null, int [] deviceIDs = null)
     {
       if  (  (def.Engines == null || def.Engines.Length == 0)
           && (def.Player1Def == null || def.Player2Def == null))
@@ -75,18 +103,34 @@ namespace Ceres.Features.Tournaments
         throw new Exception("Missing engine(s). Assign to def.Player1Def and def.Player2Def or call def.AddEngine multiple times."); 
       }
 
-      if (numConcurrent > 1 && deviceIDs == null)
+      if (def.DeviceSlots != null)
       {
-        throw new Exception("Must specify deviceIDs if numConcurrent > 1.");
+        if (deviceIDs != null)
+        {
+          throw new Exception("Specify either TournamentDef.DeviceSlots or deviceIDs, not both.");
+        }
+        DeviceSlots = new NNDeviceSlots(def.DeviceSlots);
+      }
+
+      // By default play as many concurrent games as streams were declared by the device slots (if any).
+      int concurrency = numConcurrent ?? DeviceSlots?.TotalStreams ?? 1;
+      if (concurrency < 1)
+      {
+        throw new ArgumentOutOfRangeException(nameof(numConcurrent), "numConcurrent must be at least 1.");
+      }
+
+      if (concurrency > 1 && deviceIDs == null && DeviceSlots == null)
+      {
+        throw new Exception("Must specify deviceIDs (or TournamentDef.DeviceSlots) if numConcurrent > 1.");
       }
       
       Def = def;
-      NumConcurrent = Math.Min(numConcurrent, def.NumGamePairs ?? int.MaxValue);
+      NumConcurrent = Math.Min(concurrency, def.NumGamePairs ?? int.MaxValue);
       DeviceIDs = deviceIDs;
 
       // Turn off showing game moves if running parallel,
       // since the moves of various games would be intermixed.
-      if (numConcurrent > 1)
+      if (concurrency > 1)
       {
         def.ShowGameMoves = false;
       }
@@ -100,8 +144,36 @@ namespace Ceres.Features.Tournaments
 #endif
     }
 
+    /// <summary>
+    /// Constructor which spreads the concurrent games over the specified device slots
+    /// (equivalent to assigning def.DeviceSlots), for example:
+    ///   new TournamentManager(def, 6, "GPU:0+GPU:(0,1)*2@HOP+GPU:3*3@station")
+    /// </summary>
+    /// <param name="def"></param>
+    /// <param name="numConcurrent">number of games to play concurrently, or null for the number of streams declared by the slots</param>
+    /// <param name="deviceSlots">device slots specification (see NNDeviceSlots)</param>
+    public TournamentManager(TournamentDef def, int? numConcurrent, string deviceSlots)
+      : this(WithDeviceSlots(def, deviceSlots), numConcurrent, (int[])null)
+    {
+    }
+
+    static TournamentDef WithDeviceSlots(TournamentDef def, string deviceSlots)
+    {
+      ArgumentNullException.ThrowIfNull(def);
+      def.DeviceSlots = deviceSlots ?? throw new ArgumentNullException(nameof(deviceSlots));
+      return def;
+    }
+
+
     int numGamePairsLaunched = 0;
     readonly object lockObj = new();
+
+    /// <summary>
+    /// Openings which were handed to a game thread that subsequently failed before recording
+    /// any game from them. They are handed out again (ahead of new openings) to the next thread asking.
+    /// Accessed only under lockObj.
+    /// </summary>
+    readonly Queue<int> openingsToRetry = new();
 
     int[] shuffledOpeningIndices = null;
     int[] randomizedOpeningIndices = null;
@@ -127,6 +199,12 @@ namespace Ceres.Features.Tournaments
 
       lock (lockObj)
       {
+        // First hand out again any opening which a failed thread returned unplayed.
+        if (openingsToRetry.Count > 0)
+        {
+          return openingsToRetry.Dequeue();
+        }
+
         if (numGamePairsLaunched >= maxOpenings)
         {
           return -1;
@@ -187,97 +265,6 @@ namespace Ceres.Features.Tournaments
 
 
     /// <summary>
-    /// If running multiple match threads then the neural network evaluators must be suitable
-    /// for parallel execution, either by:
-    ///   - being of type Pooled, so that all evaluator definitions reference the same underlying
-    ///     evaluator which pools positions from many threads into one batch, or
-    ///   - each concurrent worker being assigned its own (disjoint) set of GPUs.
-    ///
-    /// This method handles the latter case: the DeviceIDs sequence is treated as a flat pool of
-    /// GPU IDs partitioned into disjoint consecutive chunks, one per worker, of length equal to
-    /// the number of devices each engine's evaluator spans (e.g. pool [0,1,2,3] with two workers
-    /// each spanning two GPUs => worker 0 on [0,1], worker 1 on [2,3]). Every engine assigned a
-    /// slice (in-process Ceres engines and external NN engines such as LC0 alike) must reference
-    /// the same number of devices; Pooled evaluators and engines without an evaluator are left
-    /// unchanged. If the pool is smaller than NumConcurrent * devices-per-worker the IDs wrap
-    /// around cyclically, so workers share GPUs (deliberate oversubscription; warned, not fatal).
-    /// </summary>
-    /// <param name="def"></param>
-    /// <param name="workerIndex"></param>
-    /// <param name="devicesPerWorker"></param>
-    void AssignWorkerDevicesIfNotPooled(TournamentDef def, int workerIndex, int devicesPerWorker)
-    {
-      if (DeviceIDs == null || devicesPerWorker < 1)
-      {
-        return;
-      }
-
-      int[] deviceSlice = new int[devicesPerWorker];
-      for (int j = 0; j < devicesPerWorker; j++)
-      {
-        deviceSlice[j] = DeviceIDs[(workerIndex * devicesPerWorker + j) % DeviceIDs.Length];
-      }
-
-      foreach (GameEngineDef engineDef in EnginesOf(def))
-      {
-        // No-op for Pooled evaluators and engines without an evaluator.
-        engineDef.TrySetDeviceIndicesIfNotPooled(deviceSlice);
-      }
-    }
-
-
-    /// <summary>
-    /// Determines the number of devices per worker (the device count of the engines that will be
-    /// assigned a slice, which must all match). Returns 0 if no engine is assigned a slice (all
-    /// engines are Pooled or have no evaluator), in which case no pool-based partitioning is done.
-    ///
-    /// Throws if the assigned engines reference differing device counts. If the DeviceIDs pool is
-    /// smaller than NumConcurrent * devices-per-worker only a warning is emitted (device IDs are
-    /// then reused cyclically, i.e. deliberate GPU oversubscription across workers).
-    /// </summary>
-    int ComputeAndValidateDevicePartitioning()
-    {
-      int devicesPerWorker = 0;
-
-      foreach (GameEngineDef engineDef in EnginesOf(Def))
-      {
-        Chess.NNEvaluators.Defs.NNEvaluatorDef evalDef = engineDef.GetEvaluatorDef();
-        if (evalDef == null || evalDef.DeviceCombo == Chess.NNEvaluators.Defs.NNEvaluatorDeviceComboType.Pooled)
-        {
-          continue; // no evaluator (e.g. an external non-NN engine), or Pooled (shared) -> not sliced
-        }
-
-        int n = evalDef.NumDevices;
-        if (n < 1)
-        {
-          throw new Exception($"Engine {engineDef.ID} specification must reference at least one device.");
-        }
-
-        if (devicesPerWorker == 0)
-        {
-          devicesPerWorker = n;
-        }
-        else if (n != devicesPerWorker)
-        {
-          throw new Exception($"All engines assigned GPUs from DeviceIDs must reference the same number "
-                            + $"of devices (found both {devicesPerWorker} and {n}).");
-        }
-      }
-
-      if (devicesPerWorker > 0 && DeviceIDs.Length < NumConcurrent * devicesPerWorker)
-      {
-        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
-            $"WARNING: DeviceIDs ({DeviceIDs.Length}) fewer than NumConcurrent ({NumConcurrent}) "
-          + $"* devices-per-engine ({devicesPerWorker}) = {NumConcurrent * devicesPerWorker}; "
-          + $"device IDs will be reused cyclically so concurrent workers share GPU(s) "
-          + $"(deliberate oversubscription; per-engine timing comparability may be reduced).");
-      }
-
-      return devicesPerWorker;
-    }
-
-
-    /// <summary>
     /// Enumerates the engine definitions of a tournament (the Engines list, or the
     /// Player1Def/Player2Def pair when no Engines list is populated).
     /// </summary>
@@ -296,6 +283,61 @@ namespace Ceres.Features.Tournaments
         yield return def.Player2Def.EngineDef;
       }
     }
+
+    /// <summary>
+    /// Outputs a table showing, for each device slot, the number of game streams it hosted,
+    /// the games they completed and the search speed achieved. This makes visible how much
+    /// each slot contributed (for example whether placing several streams on a GPU paid off,
+    /// or whether a remote slot ran materially slower than a local one).
+    /// </summary>
+    /// <param name="writer"></param>
+    /// <param name="gameThreads">the game threads (element i ran on deviceStreams[i])</param>
+    /// <param name="deviceStreams"></param>
+    void DumpDeviceSlotSummary(TextWriter writer, List<TournamentGameThread> gameThreads, NNDeviceStream[] deviceStreams)
+    {
+      // The score column (from the perspective of the first engine) is meaningful only with two engines.
+      bool showScore = Def.Engines != null && Def.Engines.Length == 2;
+
+      writer.WriteLine();
+      writer.WriteLine("Device slot summary (NPS is nodes per second of search time, over all engines):");
+      writer.WriteLine($"  {"Slot",-34} {"Streams",7} {"Games",7} "
+                     + (showScore ? $"{"Score (+ = -)",-16} " : "")
+                     + $"{"NPS total",12} {"NPS/stream",12}");
+
+      foreach (IGrouping<int, int> slotGroup in Enumerable.Range(0, deviceStreams.Length).GroupBy(i => deviceStreams[i].SlotIndex))
+      {
+        int numStreams = 0;
+        float numGames = 0;
+        int wins = 0, draws = 0, losses = 0;
+        double npsTotal = 0;
+
+        foreach (int i in slotGroup)
+        {
+          TournamentGameThread thread = gameThreads[i];
+          numStreams++;
+          numGames += thread.NumGames;
+          wins += thread.NumWinsEngine1;
+          draws += thread.NumDrawsEngine1;
+          losses += thread.NumLossesEngine1;
+
+          // The engines of a stream search alternately, so total nodes over total search time
+          // is the average search speed of the stream; concurrent streams add up.
+          double seconds = thread.TotalTimeEngine1 + thread.TotalTimeEngine2;
+          if (seconds > 0)
+          {
+            npsTotal += (thread.TotalNodesEngine1 + thread.TotalNodesEngine2) / seconds;
+          }
+        }
+
+        string scoreStr = showScore ? $"{$"+{wins} ={draws} -{losses}",-16} " : "";
+        string retiredStr = slotGroup.Any(i => gameThreads[i].WasRetired) ? "  (stream retired after failure)" : "";
+        writer.WriteLine($"  {deviceStreams[slotGroup.First()].Slot.ToString(),-34} {numStreams,7} {numGames,7:F0} "
+                       + scoreStr
+                       + $"{npsTotal,12:N0} {npsTotal / numStreams,12:N0}{retiredStr}");
+      }
+      writer.WriteLine();
+    }
+
 
     void VerifyEnginesCompatible()
     {
@@ -418,10 +460,36 @@ namespace Ceres.Features.Tournaments
       }
       Def.parentDef.Observer?.OnTournamentStart(DtoMappers.ToTournamentMeta(Def, numConcurrent));
 
-      // Validate up front that the device pool can give every concurrent worker its own
-      // disjoint set of GPUs, and determine the per-worker device-slice size.
-      int devicesPerWorker = (NumConcurrent > 1 && DeviceIDs != null)
-                             ? ComputeAndValidateDevicePartitioning()
+      static void Warn(string message) => ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, message);
+
+      // If device slots were specified, determine the stream (slot) on which each concurrent game
+      // thread runs and validate up front (before any engine is built) that the engines can run there
+      // and that the remote evaluation servers are reachable.
+      NNDeviceStream[] deviceStreams = null;
+      int priorReconnectPatienceSeconds = NNEvaluatorRemote.ReconnectPatienceSeconds;
+      if (DeviceSlots != null)
+      {
+        deviceStreams = DeviceSlots.StreamOrder(numConcurrent);
+        DeviceSlots.Validate(EnginesOf(Def), numConcurrent, Warn);
+
+        if (deviceStreams.Any(s => s.Slot.IsRemote))
+        {
+          DeviceSlots.VerifyRemoteHostsReachable(numConcurrent);
+
+          // Let a game thread ride out a restart of its server or a network outage
+          // (its searches stall meanwhile) rather than fail after the short default period.
+          NNEvaluatorRemote.ReconnectPatienceSeconds = Math.Max(priorReconnectPatienceSeconds, Def.RemoteReconnectPatienceSeconds);
+        }
+
+        Def.Logger.WriteLine($"  Device streams      : {numConcurrent} concurrent game thread(s) on device slots {DeviceSlots.SpecificationString}");
+        Def.Logger.Write(NNDeviceSlots.DescribeStreams(deviceStreams, "    ST#"));
+        Def.Logger.WriteLine();
+      }
+
+      // Otherwise, if a flat pool of device IDs was specified, validate up front that it can give
+      // every concurrent worker its own set of GPUs and determine the per-worker device-slice size.
+      int devicesPerWorker = (deviceStreams == null && NumConcurrent > 1 && DeviceIDs != null)
+                             ? NNDeviceSlots.DevicesPerWorkerForPool(EnginesOf(Def), DeviceIDs, NumConcurrent, Warn)
                              : 0;
 
       // First loop instantiats/warms up all the engines
@@ -435,11 +503,34 @@ namespace Ceres.Features.Tournaments
         // their minilog files with the engines of other threads.
         tournamentDefClone.NumConcurrentGameThreads = numConcurrent;
 
-        // Make sure the threads will use either different or pooled evaluators
+        if (deviceStreams != null)
+        {
+          // Place the engines of this game thread on its device slot (local or remote).
+          NNDeviceStream stream = deviceStreams[i];
+          foreach (GameEngineDef engineDef in EnginesOf(tournamentDefClone))
+          {
+            // No-op for Pooled evaluators and engines without an evaluator.
+            engineDef.TrySetDevicesIfNotPooled(stream.Slot, stream.StreamIndex);
+          }
+          tournamentDefClone.DeviceStream = stream;
+        }
+        else if (NumConcurrent > 1)
+        {
+          // Make sure the threads will use either different or pooled evaluators:
+          // each worker is assigned a slice of the flat pool of device IDs (if any).
+          int[] deviceSlice = NNDeviceSlots.DeviceSliceForWorker(DeviceIDs, i, devicesPerWorker);
+          if (deviceSlice != null)
+          {
+            foreach (GameEngineDef engineDef in EnginesOf(tournamentDefClone))
+            {
+              // No-op for Pooled evaluators and engines without an evaluator.
+              engineDef.TrySetDeviceIndicesIfNotPooled(deviceSlice);
+            }
+          }
+        }
+
         if (NumConcurrent > 1)
         {
-          AssignWorkerDevicesIfNotPooled(tournamentDefClone, i, devicesPerWorker);
-
           // Spread instances across different devices and
           // and processor groups to distribute computation.
           tournamentDefClone.ProcessGroupIndex = i;
@@ -492,7 +583,18 @@ namespace Ceres.Features.Tournaments
 
       Def.parentDef.Observer?.OnTournamentEnd();
 
+      NNEvaluatorRemote.ReconnectPatienceSeconds = priorReconnectPatienceSeconds;
+
+      NumGamesPerThread = gameThreads.Select(t => (int)t.NumGames).ToArray();
+      NumThreadsRetired = gameThreads.Count(t => t.WasRetired);
+      NumGamesReplayedAfterDisruption = gameThreads.Sum(t => t.NumGamesReplayedAfterDisruption);
+
       parentTest.DumpTournamentSummary(Def);
+
+      if (deviceStreams != null)
+      {
+        DumpDeviceSlotSummary(Def.Logger, gameThreads, deviceStreams);
+      }
 
       shutdownComplete.Set();
 

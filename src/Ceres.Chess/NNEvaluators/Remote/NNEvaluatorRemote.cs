@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
@@ -77,6 +78,112 @@ namespace Ceres.Chess.NNEvaluators.Remote
     /// Maximum batch size supported.
     /// </summary>
     readonly int requestedMaxBatchSize;
+
+    /// <summary>
+    /// Index of the concurrent stream on whose behalf this evaluator runs (see NNDeviceSlots).
+    /// Evaluators having different stream indices get separate evaluator instances on the server.
+    /// </summary>
+    readonly int streamIndex;
+
+    #endregion
+
+
+    #region Reconnection policy and statistics (process wide)
+
+    /// <summary>
+    /// How long (in seconds) an evaluator keeps trying to reconnect to its server
+    /// before a lost connection is reported as an error.
+    ///
+    /// While reconnecting the evaluation call simply blocks, so a search stalls rather than fails.
+    /// Tournaments and suites which run on remote device slots raise this value so that
+    /// a restarted server or a network outage does not terminate the affected workers.
+    /// </summary>
+    public static int ReconnectPatienceSeconds = DEFAULT_RECONNECT_PATIENCE_SECONDS;
+
+    /// <summary>
+    /// Default value of ReconnectPatienceSeconds.
+    /// </summary>
+    public const int DEFAULT_RECONNECT_PATIENCE_SECONDS = 30;
+
+    /// <summary>
+    /// Total time (in milliseconds) lost so far to broken connections, per stream
+    /// (keyed by server, device indices on that server and stream index, see StreamKey).
+    /// </summary>
+    static readonly ConcurrentDictionary<string, long> lostMillisecondsByStream = new();
+
+    /// <summary>
+    /// Returns the key identifying a stream: the evaluators of one concurrent worker
+    /// on given device(s) of a given server.
+    /// </summary>
+    static string StreamKey(string hostname, int port, string deviceIndices, int streamIndex)
+      => $"{hostname.ToLowerInvariant()}:{port}|{deviceIndices}|{streamIndex}";
+
+    /// <summary>
+    /// Extracts the device indices (e.g. "0,1") from a device specification string such as "GPU:0,1#TensorRTNative".
+    /// </summary>
+    static string DeviceIndicesOf(string deviceSpec)
+    {
+      string indices = deviceSpec ?? "";
+      int colonIndex = indices.IndexOf(':');
+      if (colonIndex >= 0)
+      {
+        indices = indices.Substring(colonIndex + 1);
+      }
+
+      int engineIndex = indices.IndexOf('#');
+      if (engineIndex >= 0)
+      {
+        indices = indices.Substring(0, engineIndex);
+      }
+
+      return indices.Replace(" ", "");
+    }
+
+    /// <summary>
+    /// Returns the total time (in milliseconds) that the evaluators of one stream of this process
+    /// (those evaluating on the specified devices of the specified server with the specified stream index)
+    /// have so far spent stalled because their connection was lost: the time from the start of each
+    /// evaluation call which hit a broken connection until that call completed after reconnecting.
+    ///
+    /// A caller can sample this before and after a time-controlled search or game to decide
+    /// if its timing was distorted by a connection problem.
+    /// </summary>
+    public static long LostMilliseconds(string hostname, int port, int[] deviceIndices, int streamIndex)
+      => lostMillisecondsByStream.TryGetValue(StreamKey(hostname, port, string.Join(",", deviceIndices), streamIndex), out long ms) ? ms : 0;
+
+
+    /// <summary>
+    /// Checks if a server is listening at a specified host and port (without creating an evaluator there).
+    /// </summary>
+    /// <param name="hostname"></param>
+    /// <param name="port"></param>
+    /// <param name="timeoutMS">maximum time to wait for the connection</param>
+    /// <param name="error">description of the failure, if any</param>
+    /// <returns>true if a connection could be established</returns>
+    public static bool TryProbeServer(string hostname, int port, int timeoutMS, out string error)
+    {
+      error = null;
+      try
+      {
+        using TcpClient probe = new TcpClient();
+        if (!probe.ConnectAsync(hostname, port).Wait(timeoutMS))
+        {
+          error = $"no response within {timeoutMS} ms";
+          return false;
+        }
+
+        // Tell the server this was only a probe so that it closes the connection quietly.
+        NNRemoteProtocol.WriteMessage(probe.GetStream(), NNRemoteMessageType.Disconnect,
+                                      ReadOnlySpan<byte>.Empty, false, null);
+        return true;
+      }
+      catch (Exception ex)
+      {
+        Exception inner = ex is AggregateException agg ? agg.GetBaseException() : ex;
+        error = inner.Message;
+        return false;
+      }
+    }
 
     #endregion
 
@@ -163,8 +270,10 @@ namespace Ceres.Chess.NNEvaluators.Remote
                               string networkSpec, string deviceSpec,
                               string optionsString = null,
                               bool useCompression = true,
-                              int maxBatchSize = 1024)
+                              int maxBatchSize = 1024,
+                              int streamIndex = 0)
     {
+      this.streamIndex = streamIndex;
       this.hostname = hostname;
       this.port = port;
       this.networkSpec = networkSpec;
@@ -199,6 +308,22 @@ namespace Ceres.Chess.NNEvaluators.Remote
         tcpClient.SendBufferSize = 1024 * 1024;
         tcpClient.ReceiveBufferSize = 1024 * 1024;
         tcpClient.Connect(hostname, port);
+
+        // Enable keepalive probes so that a server which vanishes without closing the connection
+        // (power loss, network partition) is noticed within about half a minute, rather than
+        // only when the (deliberately long) read timeout expires.
+        try
+        {
+          tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+          tcpClient.Client.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 15);
+          tcpClient.Client.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 5);
+          tcpClient.Client.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3);
+        }
+        catch (Exception)
+        {
+          // Keepalive tuning is an optimization only (not supported on all platforms).
+        }
+
         stream = tcpClient.GetStream();
         stream.ReadTimeout = NNRemoteProtocol.DEFAULT_READ_TIMEOUT_MS;
 
@@ -244,7 +369,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
       byte[] hsBuffer = new byte[4096];
       int hsLen = NNRemoteSerializer.SerializeHandshake(
         hsBuffer, networkSpec, deviceSpec, optionsString,
-        requestedMaxBatchSize, useCompression, NNRemoteProtocol.CompactPoliciesEnabled);
+        requestedMaxBatchSize, useCompression, NNRemoteProtocol.CompactPoliciesEnabled, streamIndex);
 
       NNRemoteProtocol.WriteMessage(stream, NNRemoteMessageType.Handshake,
         hsBuffer.AsSpan(0, hsLen), false, null);
@@ -335,48 +460,70 @@ namespace Ceres.Chess.NNEvaluators.Remote
 
 
     /// <summary>
-    /// Maximum number of reconnection attempts (with exponential backoff starting at 0.5s, ~30s total)
-    /// before a lost connection is reported as an error.
+    /// Maximum number of times a batch is resent after its connection broke.
+    /// (Each resend is preceded by a reconnection, which itself retries for up to ReconnectPatienceSeconds.)
     /// </summary>
-    const int MAX_RECONNECT_ATTEMPTS = 6;
+    const int MAX_RESENDS_PER_BATCH = 3;
 
 
     /// <summary>
     /// Core evaluation: serializes positions, sends to server, receives and deserializes results.
     ///
     /// If the connection was lost (e.g. the server closed it after its idle timeout, a network glitch,
-    /// or a server restart), the evaluator transparently reconnects (with backoff) and resends the batch
-    /// once. Evaluation is idempotent and the server reuses its cached evaluator, so this is safe and fast.
+    /// or a server restart), the evaluator transparently reconnects (with backoff, for up to
+    /// ReconnectPatienceSeconds) and resends the batch. Evaluation is idempotent and the server reuses
+    /// its cached evaluator, so this is safe and fast. The time lost is recorded (see LostMilliseconds).
     /// </summary>
     protected override IPositionEvaluationBatch DoEvaluateIntoBuffers(
       IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
-      for (int attempt = 0; ; attempt++)
-      {
-        if (!isConnected)
-        {
-          Reconnect();
-        }
+      long startTimestamp = Stopwatch.GetTimestamp();
+      bool connectionWasLost = false;
 
-        try
+      try
+      {
+        for (int attempt = 0; ; attempt++)
         {
-          return EvaluateOnce(positions);
+          if (!isConnected)
+          {
+            connectionWasLost = true;
+            Reconnect();
+          }
+
+          try
+          {
+            return EvaluateOnce(positions);
+          }
+          catch (NNRemoteConnectionException ex) when (attempt < MAX_RESENDS_PER_BATCH)
+          {
+            Console.Error.WriteLine($"[NNEvaluatorRemote] connection to {hostname}:{port} lost ({ex.InnerException?.Message ?? ex.Message}); reconnecting.");
+            CloseConnection();
+          }
         }
-        catch (NNRemoteConnectionException ex) when (attempt == 0)
+      }
+      finally
+      {
+        if (connectionWasLost)
         {
-          Console.Error.WriteLine($"[NNEvaluatorRemote] connection to {hostname}:{port} lost ({ex.InnerException?.Message ?? ex.Message}); reconnecting.");
-          CloseConnection();
+          // Record how long this call was stalled by the broken connection
+          // (the whole call, since a batch on a healthy connection takes negligible time by comparison).
+          long lostMS = (long)Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;
+          lostMillisecondsByStream.AddOrUpdate(StreamKey(hostname, port, DeviceIndicesOf(deviceSpec), streamIndex),
+                                               lostMS, (_, prior) => prior + lostMS);
         }
       }
     }
 
 
     /// <summary>
-    /// Closes the current connection (if any) and reconnects with exponential backoff.
+    /// Closes the current connection (if any) and reconnects, retrying with exponential backoff
+    /// (starting at 0.5 seconds, at most 5 seconds between attempts) for up to ReconnectPatienceSeconds.
     /// </summary>
     void Reconnect()
     {
       CloseConnection();
+
+      long startTimestamp = Stopwatch.GetTimestamp();
       int delayMS = 500;
       for (int i = 1; ; i++)
       {
@@ -389,12 +536,22 @@ namespace Ceres.Chess.NNEvaluators.Remote
         catch (Exception ex) when (ex is NNRemoteConnectionException || ex is System.IO.IOException || ex is SocketException)
         {
           CloseConnection();
-          if (i >= MAX_RECONNECT_ATTEMPTS)
+
+          double elapsedSeconds = Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds;
+          if (elapsedSeconds + delayMS / 1000.0 > ReconnectPatienceSeconds)
           {
-            throw new NNRemoteConnectionException($"Unable to reconnect to remote NN server at {hostname}:{port} after {i} attempts.", ex);
+            throw new NNRemoteConnectionException($"Unable to reconnect to remote NN server at {hostname}:{port} "
+                                                + $"after {i} attempts over {elapsedSeconds:F0} seconds.", ex);
           }
+
+          if (i == 4)
+          {
+            Console.Error.WriteLine($"[NNEvaluatorRemote] still unable to reach {hostname}:{port}; "
+                                  + $"will keep trying for up to {ReconnectPatienceSeconds} seconds in total.");
+          }
+
           System.Threading.Thread.Sleep(delayMS);
-          delayMS *= 2;
+          delayMS = Math.Min(delayMS * 2, 5000);
         }
       }
     }
@@ -534,7 +691,8 @@ namespace Ceres.Chess.NNEvaluators.Remote
 
     public override string ToString()
     {
-      return $"NNEvaluatorRemote({hostname}:{port}, net={networkSpec}, dev={deviceSpec})";
+      string streamStr = streamIndex != 0 ? $", stream={streamIndex}" : "";
+      return $"NNEvaluatorRemote({hostname}:{port}, net={networkSpec}, dev={deviceSpec}{streamStr})";
     }
   }
 }

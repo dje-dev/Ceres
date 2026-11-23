@@ -106,6 +106,39 @@ namespace Ceres.Features.Tournaments
     public float TotalTimeEngine2 = 0;
     public float NumGames;
 
+    /// <summary>
+    /// Number of games won/drawn/lost by the first engine of each pairing in games completed by this thread.
+    /// </summary>
+    public int NumWinsEngine1;
+    public int NumDrawsEngine1;
+    public int NumLossesEngine1;
+
+    /// <summary>
+    /// If this thread terminated abnormally (for example because the remote evaluation server
+    /// of its device slot remained unreachable) and so stopped playing games before the tournament ended.
+    /// </summary>
+    public bool WasRetired;
+
+    /// <summary>
+    /// Index of the opening this thread is currently playing games from (or -1 if none), and the number
+    /// of games of that opening which it has so far completed and recorded. Used if the thread fails,
+    /// to decide if the opening can simply be handed to another thread.
+    /// </summary>
+    public int OpeningIndexInProgress = -1;
+    public int NumGamesRecordedForOpeningInProgress;
+
+    /// <summary>
+    /// Number of games which this thread discarded and replayed because the connection
+    /// to the remote evaluation server of its device slot was disrupted during the game.
+    /// </summary>
+    public int NumGamesReplayedAfterDisruption;
+
+    /// <summary>
+    /// Maximum number of times a single game is replayed because its
+    /// connection to a remote evaluation server was disrupted during the game.
+    /// </summary>
+    const int MAX_REPLAYS_OF_DISRUPTED_GAME = 5;
+
 
     public TournamentGameRunner Run;
 
@@ -218,6 +251,9 @@ namespace Ceres.Features.Tournaments
           {
             break;
           }
+
+          OpeningIndexInProgress = openingIndex;
+          NumGamesRecordedForOpeningInProgress = 0;
 #if NOT
         // Some engines such as LZ0 doesn't seem to support "setoption name Clear Hash"
         // Therefore we don't clear cache every time, instead let it stick around unless first game in a set
@@ -281,6 +317,9 @@ namespace Ceres.Features.Tournaments
             }
             numPairsProcessed++;
           }
+
+          // All games of this opening have been completed and recorded.
+          OpeningIndexInProgress = -1;
         }
       }
       finally
@@ -439,18 +478,16 @@ namespace Ceres.Features.Tournaments
     }
 
 
+    /// <summary>
+    /// Returns the total time (in milliseconds) so far lost by this thread's evaluators to broken connections
+    /// to the remote evaluation server of its device slot (0 if the thread does not run on a remote slot).
+    /// </summary>
+    long RemoteLostMilliseconds() => Def.DeviceStream is { } stream ? stream.RemoteLostMilliseconds : 0;
+
+
     private TournamentGameInfo RunGame(string pgnFileName, bool engine2White, int openingIndex, int gameSequenceNum, int roundNumber)
     {
       TournamentGameInfo thisResult;
-
-      // Add some supplemental tags with round number and also
-      // information about Ceres engine configuration.
-      List<(string name, string value)> extraTags = GetSupplementalTags(engine2White);
-      extraTags.Add(("Round", roundNumber.ToString()));
-
-      PGNWriter pgnWriter = new PGNWriter(null, engine2White ? Run.Engine2.ID : Run.Engine1.ID,
-                                  engine2White ? Run.Engine1.ID : Run.Engine2.ID,
-                                  extraTags.ToArray());
 
       // Auto-detect Chess960 from current opening's initial position.
       // Uses RookPlacementInfo populated by FENParser (RawValue == 0 for standard rook placement)
@@ -458,36 +495,72 @@ namespace Ceres.Features.Tournaments
       PositionWithHistory opening = openings.GetAtIndex(openingIndex);
       bool gameIsChess960 = PositionIsChess960(opening.InitialPosMG.ToPosition);
       SetEnginesChess960Mode(gameIsChess960);
-      pgnWriter.IsChess960 = gameIsChess960;
 
-      TimingStats gameTimingStats = new TimingStats();
-      using (new TimingBlock(gameTimingStats, TimingBlock.LoggingType.None))
+      // Normally the game is played once. However a game played on a remote device slot with a
+      // time-based search limit is discarded and replayed if its connection to the remote evaluation
+      // server was lost for a material amount of time during the game: the evaluator transparently
+      // reconnects, but the search was stalled meanwhile with the clock running.
+      for (int attempt = 1; ; attempt++)
       {
-        // Start new game
-        string gameID = $"{Def.ID}_GAME_SEQ{gameSequenceNum}_OPENING_{openingIndex}";
-        Run.Engine1.ResetGame(gameID);
-        Run.Engine2.ResetGame(gameID);
-        Run.Engine2CheckEngine?.ResetGame(gameID);
+        // Add some supplemental tags with round number and also
+        // information about Ceres engine configuration.
+        List<(string name, string value)> extraTags = GetSupplementalTags(engine2White);
+        extraTags.Add(("Round", roundNumber.ToString()));
 
-        bool checkTablebases = Def.UseTablebasesForAdjudication && CeresUserSettingsManager.Settings.TablebaseDirectory != null;
-        thisResult = DoGameTest(Def.Logger, pgnWriter, gameSequenceNum, openingIndex,
-                                Run.Engine1, Run.Engine2,
-                                Run.Engine2CheckEngine, engine2White,
-                                Def.Player1Def.SearchLimit, Def.Player2Def.SearchLimit,
-                                checkTablebases, Def.ShowGameMoves);
+        PGNWriter pgnWriter = new PGNWriter(null, engine2White ? Run.Engine2.ID : Run.Engine1.ID,
+                                    engine2White ? Run.Engine1.ID : Run.Engine2.ID,
+                                    extraTags.ToArray());
+        pgnWriter.IsChess960 = gameIsChess960;
 
-        if (MCTSDiagnostics.TournamentDumpEngine2EndOfGameSummary)
+        long remoteLostMSAtStart = RemoteLostMilliseconds();
+
+        TimingStats gameTimingStats = new TimingStats();
+        using (new TimingBlock(gameTimingStats, TimingBlock.LoggingType.None))
         {
-          Run.Engine2.DumpFullMoveHistory(thisResult.GameMoveHistory, engine2White);
+          // Start new game
+          string gameID = $"{Def.ID}_GAME_SEQ{gameSequenceNum}_OPENING_{openingIndex}";
+          Run.Engine1.ResetGame(gameID);
+          Run.Engine2.ResetGame(gameID);
+          Run.Engine2CheckEngine?.ResetGame(gameID);
+
+          bool checkTablebases = Def.UseTablebasesForAdjudication && CeresUserSettingsManager.Settings.TablebaseDirectory != null;
+          thisResult = DoGameTest(Def.Logger, pgnWriter, gameSequenceNum, openingIndex,
+                                  Run.Engine1, Run.Engine2,
+                                  Run.Engine2CheckEngine, engine2White,
+                                  Def.Player1Def.SearchLimit, Def.Player2Def.SearchLimit,
+                                  checkTablebases, Def.ShowGameMoves);
+
+          long remoteLostMS = RemoteLostMilliseconds() - remoteLostMSAtStart;
+          bool timeBasedLimits = Def.Player1Def.SearchLimit.IsTimeLimit || Def.Player2Def.SearchLimit.IsTimeLimit;
+          if (timeBasedLimits && remoteLostMS > Def.RemoteLostTimeToleranceMilliseconds)
+          {
+            if (attempt > MAX_REPLAYS_OF_DISRUPTED_GAME)
+            {
+              throw new Exception($"Game {gameSequenceNum} (opening {openingIndex}) on device slot {Def.DeviceStream} was disrupted "
+                                + $"by a lost connection to its remote evaluation server on each of {attempt} attempts.");
+            }
+
+            ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+                $"NOTE: game {gameSequenceNum} (opening {openingIndex}) on device slot {Def.DeviceStream} is discarded and will be replayed: "
+              + $"{remoteLostMS:N0} ms were lost to a broken connection to its remote evaluation server.");
+            NumGamesReplayedAfterDisruption++;
+            continue;
+          }
+
+          if (MCTSDiagnostics.TournamentDumpEngine2EndOfGameSummary)
+          {
+            Run.Engine2.DumpFullMoveHistory(thisResult.GameMoveHistory, engine2White);
+          }
+
+          WritePGNResult(engine2White, thisResult, pgnWriter);
+
+          if (pgnFileName != null)
+          {
+            lock (writePGNLock) File.AppendAllText(pgnFileName, pgnWriter.GetText());
+          }
         }
 
-        WritePGNResult(engine2White, thisResult, pgnWriter);
-
-        if (pgnFileName != null)
-        {
-          lock (writePGNLock) File.AppendAllText(pgnFileName, pgnWriter.GetText());
-        }
-
+        break;
       }
 
       thisResult.PlayerWhite = engine2White ? Run.Engine2.ID : Run.Engine1.ID;
@@ -496,6 +569,7 @@ namespace Ceres.Features.Tournaments
       thisResult.SearchLimitBlack = engine2White ? Def.Player1Def.SearchLimit : Def.Player2Def.SearchLimit;
 
       UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, engine2White, openingIndex, gameSequenceNum, thisResult);
+      NumGamesRecordedForOpeningInProgress++;
 
       if (Def.MiniLogFiles != MiniLogFilesMode.Never)
       {
@@ -1089,6 +1163,11 @@ namespace Ceres.Features.Tournaments
         }
         Def.Logger.Write($"{eloAvg,4:0} {allThreadsPairBoundaryStr,1} {pentaErrStr,4} {pentaLOSStr,5}  ");
         Def.Logger.Write($"{gNumber,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,7:F0}  {openingIndex,7:F0} {openingPlayedBothWaysStr} ");
+        if (Def.DeviceStream != null)
+        {
+          // Index of the device stream (game thread) which played the game, see the stream list in the tournament header.
+          Def.Logger.Write($"{ThreadIndex,3} ");
+        }
 
         // TODO: these averages are inexact, one player may have 1 ply more than thisResult.PlyCount/2
         int avgNodesPerMovePlayer1 = (int)MathF.Round(thisResult.TotalNodesEngine1 / (thisResult.PlyCount / 2), 0);
@@ -1145,6 +1224,14 @@ namespace Ceres.Features.Tournaments
       TotalMovesEngine2 += thisResult.PlyCount;
       TotalTimeEngine1 += thisResult.TotalTimeEngine1;
       TotalTimeEngine2 += thisResult.TotalTimeEngine2;
+
+      // The result is recorded from the perspective of the first engine of the pairing.
+      switch (thisResult.Result)
+      {
+        case TournamentGameResult.Win: NumWinsEngine1++; break;
+        case TournamentGameResult.Loss: NumLossesEngine1++; break;
+        default: NumDrawsEngine1++; break;
+      }
     }
 
     private static void WritePGNResult(bool engine2White, TournamentGameInfo thisResult, PGNWriter pgnWriter)
@@ -1234,6 +1321,10 @@ namespace Ceres.Features.Tournaments
       Def.Logger.WriteLine("Note: the +/- and LOS columns use pentanomial (paired-game) analysis (shown once each game pair completes).");
       Def.Logger.WriteLine("Pair marker (after OP#): = pair completed with identical moves, ! pair completed with differing moves.");
       Def.Logger.WriteLine("The * column (immediately right of ELO) marks games output at the instant every thread is simultaneously at a completed-pair boundary (a fair Elo evaluation point).");
+      if (Def.DeviceStream != null)
+      {
+        Def.Logger.WriteLine("The ST# column shows which device stream (see the list of device streams above) played the game.");
+      }
       Def.Logger.WriteLine();
 
       // Build the header (and dashed underline) so each label sits over its data column
@@ -1242,10 +1333,14 @@ namespace Ceres.Features.Tournaments
       // portion of the tail differs (the check variant adds the DIF column).
       static string Dsh(int n) => new string('-', n);
 
+      // When device slots are in use an extra column shows which device stream played each game.
+      bool showDeviceStream = Def.DeviceStream != null;
+
       string headerPrefix =
           $" {"Player1",-10} {"Player2",-10}" +
           $"{"ELO",4} {"*",1} {"+/-",4} {"LOS",5}  " +
           $"{"GAME#",5} {"TIME",10}  {"TH#",7}  {"OP#",7} {"",1} " +
+          (showDeviceStream ? $"{"ST#",3} " : "") +
           $"{"TIME1",8} {"REM1",7} " +
           $"{"TIME2",8} {"REM2",7}  " +
           $"{"AVG NODE1",12} {"AVG NODE2",12}  {"EPS1",7} {"EPS2",7}   ";
@@ -1257,6 +1352,7 @@ namespace Ceres.Features.Tournaments
           $" {Dsh(10),-10} {Dsh(10),-10}" +
           $"{Dsh(4),4} {Dsh(1),1} {Dsh(4),4} {Dsh(5),5}  " +
           $"{Dsh(5),5} {Dsh(10),10}  {Dsh(7),7}  {Dsh(7),7} {Dsh(1),1} " +
+          (showDeviceStream ? $"{Dsh(3),3} " : "") +
           $"{Dsh(8),8} {Dsh(7),7} " +
           $"{Dsh(8),8} {Dsh(7),7}  " +
           $"{Dsh(12),12} {Dsh(12),12}  {Dsh(7),7} {Dsh(7),7}   ";

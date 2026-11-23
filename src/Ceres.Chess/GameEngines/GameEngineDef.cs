@@ -15,6 +15,7 @@
 
 using System;
 using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.Chess.NNEvaluators.Specifications;
 
 #endregion
 
@@ -73,6 +74,31 @@ namespace Ceres.Chess.GameEngines
     /// <param name="deviceIDs"></param>
     public virtual void TrySetDeviceIndicesIfNotPooled(int[] deviceIDs)
       => GetEvaluatorDef()?.TrySetDeviceIndices(deviceIDs);
+
+
+    /// <summary>
+    /// If applicable, re-targets the underlying evaluator to the device(s) of a specified
+    /// device slot (local or remote), as one of possibly several concurrent streams on that slot
+    /// (see NNDeviceSlots and NNEvaluatorDef.TrySetDevices).
+    ///
+    /// Unlike TrySetDeviceIndicesIfNotPooled the slot also determines the number of devices
+    /// and the (optional) remote host. Pooled evaluators (and engines without an evaluator)
+    /// are left unchanged.
+    /// </summary>
+    /// <param name="slot"></param>
+    /// <param name="streamIndex"></param>
+    public virtual void TrySetDevicesIfNotPooled(NNDeviceSlot slot, int streamIndex)
+      => GetEvaluatorDef()?.TrySetDevices(slot, streamIndex);
+
+
+    /// <summary>
+    /// If the engine can evaluate on devices located on a remote host (running "Ceres SERVER").
+    /// True for the in-process Ceres engines (and Ceres engines launched as UCI subprocesses,
+    /// which are passed the full device specification including the remote host).
+    /// False for other external engines such as LC0, which would ignore the remote host
+    /// and silently evaluate on a local device.
+    /// </summary>
+    public virtual bool SupportsRemoteDevices => IsCeresEngine;
 
     /// <summary>
     /// Whether this engine definition is for an in-process Ceres engine (MCTS or MCGS).

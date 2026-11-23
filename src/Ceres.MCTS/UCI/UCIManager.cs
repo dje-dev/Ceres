@@ -789,8 +789,14 @@ public partial class UCIManager
   {
     if (EvaluatorDef.Nets[i].Net.Type == NNEvaluatorType.LC0)
     {
-      INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(EvaluatorDef.Nets[i].Net.NetworkID);
-      string infoStr = net == null ? "(unknown)" : net.ShortStr;
+      // If evaluation happens on a remote server then the weights file lives there
+      // (and need not exist on this machine), so its absence here is not an error.
+      bool evaluatesRemotely = Array.TrueForAll(EvaluatorDef.Devices, d => d.Device.RemoteHost != null);
+      INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(EvaluatorDef.Nets[i].Net.NetworkID,
+                                                                   throwExceptionIfMissing: !evaluatesRemotely);
+      string infoStr = net != null ? net.ShortStr
+                     : evaluatesRemotely ? EvaluatorDef.Nets[i].Net.NetworkID + " (on remote server)"
+                     : "(unknown)";
       UCIWriteLine($"Loaded network weights: {i} {infoStr}");
     }
     else

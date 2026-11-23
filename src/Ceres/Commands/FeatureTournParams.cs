@@ -34,19 +34,36 @@ namespace Ceres.Commands
     public string Openings { init; get; }
     public bool ShowMoves { init; get; } = true;
 
+    /// <summary>
+    /// Optional device slots specification over which concurrent games are spread
+    /// (see NNDeviceSlots), for example "GPU:0+GPU:(0,1)*2@HOP+GPU:3*3@station".
+    /// </summary>
+    public string Slots { init; get; }
+
+    /// <summary>
+    /// Optional number of game pairs to play (by default all openings are played).
+    /// </summary>
+    public int? GamePairs { init; get; }
+
 
     public static FeatureTournParams ParseTournCommand(string fen, string args)
     {
       List<string> validArgs = new List<string>(FEATURE_PLAY_COMMON_ARGS);
       validArgs.Add("OPENINGS");
       validArgs.Add("SHOW-MOVES");
+      validArgs.Add("SLOTS");
+      validArgs.Add("GAME-PAIRS");
 
       KeyValueSetParsed keys = new KeyValueSetParsed(args, validArgs);
+
+      string gamePairsStr = keys.GetValueOrDefault("Game-Pairs", null, false);
 
       FeatureTournParams parms = new FeatureTournParams()
       {
         Openings = keys.GetValueOrDefault("Openings", null, false),
-        ShowMoves = keys.GetValueOrDefaultMapped<bool>("Show-Moves", "true", false, str => bool.Parse(str))
+        ShowMoves = keys.GetValueOrDefaultMapped<bool>("Show-Moves", "true", false, str => bool.Parse(str)),
+        Slots = keys.GetValueOrDefault("Slots", null, false),
+        GamePairs = gamePairsStr == null ? null : int.Parse(gamePairsStr)
       };
 
       // Add in all the fields from the base class
@@ -80,7 +97,16 @@ namespace Ceres.Commands
         def.StartingFEN = Position.StartPosition.FEN;
       }
 
-      TournamentManager runner = new TournamentManager(def, 1);
+      if (tournParams.GamePairs.HasValue)
+      {
+        def.NumGamePairs = tournParams.GamePairs;
+      }
+
+      // If device slots were specified they determine the number of concurrent games
+      // (and where each is played); otherwise games are played one at a time.
+      def.DeviceSlots = tournParams.Slots;
+      TournamentManager runner = tournParams.Slots != null ? new TournamentManager(def)
+                                                           : new TournamentManager(def, 1);
       runner.RunTournament(null);
     }
 

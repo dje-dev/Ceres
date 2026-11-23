@@ -149,6 +149,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       // Example: "0@0.75,1@0.25@myhost" -> hostname="myhost", devicesStr="0@0.75,1@0.25"
       string remoteHost = null;
       int remotePort = NNRemoteProtocol.DEFAULT_PORT;
+      int remoteStreamIndex = 0;
       string devicesStr = deviceStringParts[1];
 
       int lastAt = devicesStr.LastIndexOf('@');
@@ -157,15 +158,24 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         string afterAt = devicesStr.Substring(lastAt + 1);
         if (!float.TryParse(afterAt, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
         {
-          // Not a weight -- it's a hostname (possibly with /port suffix).
-          remoteHost = afterAt;
+          // Not a weight -- it's a hostname, possibly with a "/port" suffix and (rarely written by hand,
+          // but emitted by ToSpecificationString) a further "/stream" suffix, e.g. "station/50055/2".
           devicesStr = devicesStr.Substring(0, lastAt);
 
-          int slashIndex = remoteHost.IndexOf('/');
-          if (slashIndex >= 0)
+          string[] hostParts = afterAt.Split('/');
+          if (hostParts.Length > 3 || hostParts[0].Length == 0)
           {
-            remotePort = int.Parse(remoteHost.Substring(slashIndex + 1));
-            remoteHost = remoteHost.Substring(0, slashIndex);
+            throw new Exception($"Invalid remote host specification '@{afterAt}' in {deviceString}, expected @host[/port[/stream]]");
+          }
+
+          remoteHost = hostParts[0];
+          if (hostParts.Length >= 2)
+          {
+            remotePort = int.Parse(hostParts[1], CultureInfo.InvariantCulture);
+          }
+          if (hostParts.Length == 3)
+          {
+            remoteStreamIndex = int.Parse(hostParts[2], CultureInfo.InvariantCulture);
           }
         }
       }
@@ -192,6 +202,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         {
           devDef.RemoteHost = remoteHost;
           devDef.RemotePort = remotePort;
+          devDef.StreamIndex = remoteStreamIndex;
         }
         Devices.Add((devDef, device.weight));
       }
@@ -255,13 +266,22 @@ namespace Ceres.Chess.NNEvaluators.Specifications
                                                IEnumerable<(NNEvaluatorDeviceDef, float)> devices)
     {
       // Device groups are rendered back as "+"-joined group specifications.
-      if (devices.Any(d => d.Item1.GroupIndex >= 0))
+      // The same rendering is used for a (non-grouped) specification whose devices all live on one
+      // remote host, e.g. "GPU:0,1#TensorRTNative@HOP/50055" (the general rendering below omits the host,
+      // which would make an engine launched from this string silently evaluate locally).
+      NNEvaluatorDeviceDef firstDevice = devices.First().Item1;
+      bool allOnOneRemoteHost = firstDevice.RemoteHost != null
+                             && devices.All(d => d.Item1.RemoteHost == firstDevice.RemoteHost
+                                              && d.Item1.RemotePort == firstDevice.RemotePort
+                                              && d.Item1.StreamIndex == firstDevice.StreamIndex);
+      if (devices.Any(d => d.Item1.GroupIndex >= 0) || (allOnOneRemoteHost && comboType != NNEvaluatorDeviceComboType.Pooled))
       {
         IEnumerable<string> groupStrs = devices.GroupBy(d => d.Item1.GroupIndex).OrderBy(g => g.Key).Select(g =>
         {
           NNEvaluatorDeviceDef first = g.First().Item1;
           string engine = first.OverrideEngineType != null ? "#" + first.OverrideEngineType : "";
-          string remote = first.RemoteHost != null ? $"@{first.RemoteHost}/{first.RemotePort}" : "";
+          string stream = first.StreamIndex != 0 ? "/" + first.StreamIndex : "";
+          string remote = first.RemoteHost != null ? $"@{first.RemoteHost}/{first.RemotePort}{stream}" : "";
           return $"GPU:{string.Join(",", g.Select(d => d.Item1.DeviceIndex))}{engine}{remote}";
         });
         return "Device=" + string.Join("+", groupStrs);
