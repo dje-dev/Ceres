@@ -36,7 +36,8 @@ namespace Ceres.Chess.NNEvaluators.Remote
   /// and performs neural network evaluation on their behalf using local GPUs.
   ///
   /// Evaluators are cached and shared across client sessions (up to 16).
-  /// Inference on each evaluator is serialized via a per-evaluator lock.
+  /// Inference on each evaluator is serialized via a per-evaluator lock, held only for the evaluation
+  /// itself (input preparation, compression and sending are done outside it).
   /// A background task disposes evaluators unused for 1 hour.
   ///
   /// Usage: Ceres SERVER net=LC0:42767 device=GPU:0,1 [port=50055]
@@ -52,6 +53,12 @@ namespace Ceres.Chess.NNEvaluators.Remote
     /// Time after which an unused evaluator is disposed.
     /// </summary>
     static readonly TimeSpan EVALUATOR_EXPIRY = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// A result with compact policies is Zstd compressed (for clients which asked for compression)
+    /// only if it is larger than this many bytes per position.
+    /// </summary>
+    const int COMPACT_RESULT_COMPRESSION_MIN_BYTES_PER_POSITION = 512;
 
     /// <summary>
     /// Interval for the cleanup sweep of expired evaluators.
@@ -80,6 +87,21 @@ namespace Ceres.Chess.NNEvaluators.Remote
     public readonly string DefaultDeviceSpec;
 
 
+    /// <summary>
+    /// Maximum number of instances built of each evaluator.
+    ///
+    /// With one instance (the default) all clients of an evaluator take turns on it, so the device(s) execute
+    /// one batch at a time. With two, the two connections of a client which keeps two batches in flight (as
+    /// the MCGS search does) each evaluate on an instance of their own, and their batches execute concurrently.
+    ///
+    /// Whether that is faster depends on the device and on what else the client uses. Measured with a
+    /// 512x15 network: on a GB300 in a split with another server it raised the total by about 6%, but with
+    /// two instances on every server of the split the batches synchronize (both evaluate, then both wait for
+    /// the search) and the total fell by about 3%. Further instances share the first one's loaded network
+    /// but need their own execution contexts in device memory.
+    /// </summary>
+    public readonly int InstancesPerEvaluator;
+
     TcpListener listener;
     volatile bool isRunning;
     int activeClients;
@@ -104,7 +126,11 @@ namespace Ceres.Chess.NNEvaluators.Remote
       public readonly NNEvaluator Evaluator;
       public readonly NNRemoteResultFlags ResultFlags;
       public readonly string Key;
-      public readonly object InferenceLock = new();
+
+      /// <summary>
+      /// The instances of this evaluator (the first is Evaluator itself; see NNRemoteServer.InstancesPerEvaluator).
+      /// </summary>
+      public readonly List<EvaluatorInstance> Instances = new();
 
       /// <summary>
       /// Full path to the network file (if resolved), for staleness detection.
@@ -126,6 +152,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
         ResultFlags = resultFlags;
         Key = key;
         LastUsedUtc = DateTime.UtcNow;
+        Instances.Add(new EvaluatorInstance(evaluator));
 
         NetworkFilePath = networkFilePath;
         if (networkFilePath != null && File.Exists(networkFilePath))
@@ -151,6 +178,22 @@ namespace Ceres.Chess.NNEvaluators.Remote
     }
 
     /// <summary>
+    /// One instance of a cached evaluator. A client connection evaluates on one instance; connections
+    /// sharing an instance take turns (the evaluator and its buffers are not thread-safe).
+    /// </summary>
+    class EvaluatorInstance
+    {
+      public readonly NNEvaluator Evaluator;
+      public readonly object InferenceLock = new();
+      public int ActiveUsers;
+
+      public EvaluatorInstance(NNEvaluator evaluator)
+      {
+        Evaluator = evaluator;
+      }
+    }
+
+    /// <summary>
     /// Cache of evaluators keyed by "netSpec|deviceSpec|optionsStr".
     /// </summary>
     readonly Dictionary<string, CachedEvaluator> evaluatorCache = new();
@@ -165,12 +208,14 @@ namespace Ceres.Chess.NNEvaluators.Remote
     public NNRemoteServer(int port = NNRemoteProtocol.DEFAULT_PORT,
                            int maxClients = 4,
                            string defaultNetworkSpec = null,
-                           string defaultDeviceSpec = null)
+                           string defaultDeviceSpec = null,
+                           int instancesPerEvaluator = 1)
     {
       Port = port;
       MaxClients = maxClients;
       DefaultNetworkSpec = defaultNetworkSpec;
       DefaultDeviceSpec = defaultDeviceSpec;
+      InstancesPerEvaluator = Math.Max(1, instancesPerEvaluator);
     }
 
 
@@ -249,7 +294,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
       {
         foreach (var entry in evaluatorCache.Values)
         {
-          try { entry.Evaluator.Shutdown(); } catch { }
+          ShutdownInstances(entry);
         }
         evaluatorCache.Clear();
       }
@@ -289,7 +334,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
             evaluatorCache.Remove(key);
             if (cached.ActiveUsers == 0)
             {
-              try { cached.Evaluator.Shutdown(); } catch { }
+              ShutdownInstances(cached);
             }
             // Fall through to rebuild below.
           }
@@ -315,7 +360,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
           {
             Console.WriteLine($"[SERVER] Evicting cached evaluator: {evictCandidate.Key}");
             evaluatorCache.Remove(evictCandidate.Key);
-            try { evictCandidate.Evaluator.Shutdown(); } catch { }
+            ShutdownInstances(evictCandidate);
           }
           else
           {
@@ -400,10 +445,22 @@ namespace Ceres.Chess.NNEvaluators.Remote
 
 
     /// <summary>
+    /// Shuts down all instances of a cached evaluator.
+    /// </summary>
+    static void ShutdownInstances(CachedEvaluator cached)
+    {
+      foreach (EvaluatorInstance instance in cached.Instances)
+      {
+        try { instance.Evaluator.Shutdown(); } catch { }
+      }
+    }
+
+
+    /// <summary>
     /// Releases a cached evaluator (decrements ActiveUsers).
     /// The evaluator is NOT disposed -- it remains in the cache for future reuse.
     /// </summary>
-    void ReleaseEvaluator(CachedEvaluator cached)
+    void ReleaseEvaluator(CachedEvaluator cached, EvaluatorInstance instance)
     {
       if (cached == null) return;
 
@@ -411,6 +468,36 @@ namespace Ceres.Chess.NNEvaluators.Remote
       {
         cached.ActiveUsers--;
         cached.LastUsedUtc = DateTime.UtcNow;
+        if (instance != null)
+        {
+          instance.ActiveUsers--;
+        }
+      }
+    }
+
+
+    /// <summary>
+    /// Chooses the instance of a cached evaluator which a new client connection will evaluate on:
+    /// the least used one, or a newly built one if all are in use and fewer than InstancesPerEvaluator exist.
+    /// </summary>
+    EvaluatorInstance AcquireInstance(CachedEvaluator cached, string netSpec, string deviceSpec, string optionsStr,
+                                      string clientEndpoint)
+    {
+      lock (cacheLock)
+      {
+        EvaluatorInstance best = cached.Instances.MinBy(i => i.ActiveUsers);
+        if (best.ActiveUsers > 0 && cached.Instances.Count < InstancesPerEvaluator)
+        {
+          // Build another instance over the same devices, sharing the first instance's loaded network.
+          Console.WriteLine($"[SERVER] Client {clientEndpoint}: building evaluator instance {cached.Instances.Count + 1} for {cached.Key}");
+          NNEvaluatorDef evalDef = NNEvaluatorDef.FromSpecification(netSpec, deviceSpec);
+          if (optionsStr != null) evalDef.OptionsString = optionsStr;
+          best = new EvaluatorInstance(NNEvaluatorFactory.BuildEvaluator(evalDef, cached.Evaluator));
+          cached.Instances.Add(best);
+        }
+
+        best.ActiveUsers++;
+        return best;
       }
     }
 
@@ -445,7 +532,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
       foreach (var entry in toRemove)
       {
         Console.WriteLine($"[SERVER] Expiring unused evaluator: {entry.Key} (last used {(DateTime.UtcNow - entry.LastUsedUtc).TotalMinutes:F0} min ago)");
-        try { entry.Evaluator.Shutdown(); } catch { }
+        ShutdownInstances(entry);
       }
     }
 
@@ -459,6 +546,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
     {
       string clientEndpoint = tcpClient.Client.RemoteEndPoint?.ToString() ?? "unknown";
       CachedEvaluator cachedEval = null;
+      EvaluatorInstance instance = null;
       long clientBatches = 0;
       long clientPositions = 0;
       bool useCompression = false;
@@ -484,7 +572,8 @@ namespace Ceres.Chess.NNEvaluators.Remote
           return;
         }
 
-        var (networkSpec, deviceSpec, optionsStr, maxBatchSize, clientUseCompression, protocolVersion) =
+        (string networkSpec, string deviceSpec, string optionsStr, int maxBatchSize, bool clientUseCompression,
+         int protocolVersion, bool clientAcceptsCompactPolicies) =
           NNRemoteSerializer.DeserializeHandshake(readBuffer.AsSpan(0, payloadLen));
 
         // Validate protocol version.
@@ -509,18 +598,23 @@ namespace Ceres.Chess.NNEvaluators.Remote
         }
 
         useCompression = clientUseCompression;
+
+        // Results for clients which can read them carry only the used move slots of each policy
+        // (smaller than what Zstd makes of the full vectors, at almost no CPU cost).
+        bool compactPolicies = clientAcceptsCompactPolicies;
         if (useCompression)
         {
           compressBuffer = new byte[ZstdBlockCompress.CompressBound(writeBuffer.Length)];
           decompressBuffer = new byte[readBuffer.Length];
         }
 
-        Console.WriteLine($"[SERVER] Client {clientEndpoint} connected: net={netSpec}, device={devSpec}, maxBatch={maxBatchSize}, compression={useCompression}");
+        Console.WriteLine($"[SERVER] Client {clientEndpoint} connected: net={netSpec}, device={devSpec}, maxBatch={maxBatchSize}, compression={useCompression}, compactPolicies={compactPolicies}");
 
         // Acquire (or reuse) a cached evaluator.
         try
         {
           cachedEval = AcquireEvaluator(netSpec, devSpec, optionsStr, clientEndpoint);
+          instance = AcquireInstance(cachedEval, netSpec, devSpec, optionsStr, clientEndpoint);
         }
         catch (Exception ex)
         {
@@ -530,14 +624,17 @@ namespace Ceres.Chess.NNEvaluators.Remote
           return;
         }
 
-        NNEvaluator evaluator = cachedEval.Evaluator;
+        NNEvaluator evaluator = instance.Evaluator;
         NNRemoteResultFlags resultFlags = cachedEval.ResultFlags;
 
         // Send HandshakeAck.
+        long networkFileSizeBytes = 0;
+        try { networkFileSizeBytes = evaluator.Info?.NetworkFileSizeBytes ?? 0; } catch { }
         int ackLen = NNRemoteSerializer.SerializeHandshakeAck(writeBuffer,
           true, resultFlags, evaluator.MaxBatchSize,
           evaluator.InputsRequired, evaluator.EngineNetworkID,
-          $"Ceres NNRemoteServer on {Environment.MachineName}");
+          $"Ceres NNRemoteServer on {Environment.MachineName}",
+          evaluator.NumDevices, networkFileSizeBytes);
         NNRemoteProtocol.WriteMessage(stream, NNRemoteMessageType.HandshakeAck,
           writeBuffer.AsSpan(0, ackLen), false, null);
 
@@ -555,10 +652,24 @@ namespace Ceres.Chess.NNEvaluators.Remote
           if (decompressBuffer.Length < maxInputSize) decompressBuffer = new byte[maxInputSize];
         }
 
+        // Flags written with each result (the evaluator's capabilities plus the per-connection encoding).
+        NNRemoteResultFlags sendFlags = compactPolicies ? resultFlags | NNRemoteResultFlags.CompactPolicies : resultFlags;
+
+        // Optional per-phase timing (CERES_REMOTE_PERF=1).
+        const int PERF_IDLE = 0, PERF_RECEIVE = 1, PERF_DECOMPRESS = 2, PERF_DESERIALIZE = 3, PERF_PREPARE = 4,
+                  PERF_LOCKWAIT = 5, PERF_EVALUATE = 6, PERF_SERIALIZE = 7, PERF_COMPRESS = 8, PERF_SEND = 9;
+        NNRemotePerfStats perf = NNRemotePerfStats.CreateIfEnabled($"server {Environment.MachineName} {devSpec} <- {clientEndpoint}",
+          "idle", "receive", "decompress", "deserialize", "prepare", "lockwait", "evaluate", "serialize", "compress", "send");
+        long perfLastEnd = 0;
+
         // -- Evaluation loop --
         while (isRunning)
         {
           var (reqType, reqLen) = NNRemoteProtocol.ReadMessage(stream, ref readBuffer, ref decompressBuffer);
+          long tRead = Stopwatch.GetTimestamp();
+          long tHeader = NNRemoteProtocol.PerfHeaderTimestamp;
+          long decompressTicks = NNRemoteProtocol.PerfCodecTicks;
+          int wireIn = NNRemoteProtocol.PerfWireBytes;
 
           switch (reqType)
           {
@@ -573,16 +684,29 @@ namespace Ceres.Chess.NNEvaluators.Remote
                 ((IEncodedPositionBatchFlat)batch).TrySetMoves();
 
                 IPositionEvaluationBatch result;
+                long tDeserialized = Stopwatch.GetTimestamp();
 
-                // Serialize inference on this evaluator (GPU is not thread-safe).
-                lock (cachedEval.InferenceLock)
+                // CPU-side input preparation (such as materializing planes from the compact records) touches
+                // neither the evaluator's buffers nor the device, so it is done before taking the evaluator
+                // lock: it then overlaps the evaluation of another client's batch instead of delaying it.
+                evaluator.PrepareBatchInputs(batch);
+                long tPrepared = Stopwatch.GetTimestamp();
+
+                int resultLen;
+                long tLocked, tEvaluated, tSerialized;
+
+                // Serialize inference on this evaluator (GPU is not thread-safe). Only the evaluation and the
+                // copy of its result are done under the lock: a client such as the MCGS search keeps two batches
+                // in flight on two connections, and everything else done here would hold up the other batch.
+                lock (instance.InferenceLock)
                 {
+                  tLocked = Stopwatch.GetTimestamp();
                   result = evaluator.EvaluateIntoBuffers(batch);
+                  tEvaluated = Stopwatch.GetTimestamp();
 
-                  // Serialize result while still holding the lock
-                  // (result references evaluator's internal buffers).
-                  // Grow the buffer if this result needs more room than the initial estimate
-                  // (e.g. networks with large State outputs).
+                  // Serialize the result while still holding the lock (it references the evaluator's
+                  // internal buffers). Grow the buffer if this result needs more room than the initial
+                  // estimate (e.g. networks with large State outputs).
                   int requiredLen = NNRemoteSerializer.RequiredResultSize(result, resultFlags);
                   if (writeBuffer.Length < requiredLen)
                   {
@@ -593,12 +717,38 @@ namespace Ceres.Chess.NNEvaluators.Remote
                     }
                   }
 
-                  int resultLen = NNRemoteSerializer.SerializeBatchResult(
-                    result, resultFlags, writeBuffer);
+                  resultLen = NNRemoteSerializer.SerializeBatchResult(result, sendFlags, writeBuffer);
+                  tSerialized = Stopwatch.GetTimestamp();
+                }
 
-                  // Send response (can happen outside the lock since writeBuffer is per-client).
-                  NNRemoteProtocol.WriteMessage(stream, NNRemoteMessageType.EvalResponse,
-                    writeBuffer.AsSpan(0, resultLen), useCompression, compressBuffer);
+                // A compact result holding little beyond policies and values is not worth compressing (it is
+                // dense, and Zstd costs more time than it saves on the wire). One which also carries bulky outputs
+                // such as ply-bin distributions still compresses several-fold, so that is compressed as before.
+                bool compressResult = useCompression
+                                   && (!compactPolicies || resultLen > (long)batch.NumPos * COMPACT_RESULT_COMPRESSION_MIN_BYTES_PER_POSITION);
+
+                // The result now lives in this client's own write buffer, so it is compressed and sent
+                // after the evaluator has been released to the next batch.
+                NNRemoteProtocol.WriteMessage(stream, NNRemoteMessageType.EvalResponse,
+                  writeBuffer.AsSpan(0, resultLen), compressResult, compressBuffer);
+
+                if (perf != null)
+                {
+                  long tSent = Stopwatch.GetTimestamp();
+                  long compressTicks = NNRemoteProtocol.PerfCodecTicks;
+                  if (perfLastEnd != 0) perf.Add(PERF_IDLE, tHeader - perfLastEnd);
+                  perf.Add(PERF_RECEIVE, tRead - tHeader - decompressTicks);
+                  perf.Add(PERF_DECOMPRESS, decompressTicks);
+                  perf.Add(PERF_DESERIALIZE, tDeserialized - tRead);
+                  perf.Add(PERF_PREPARE, tPrepared - tDeserialized);
+                  perf.Add(PERF_LOCKWAIT, tLocked - tPrepared);
+                  perf.Add(PERF_EVALUATE, tEvaluated - tLocked);
+                  perf.Add(PERF_SERIALIZE, tSerialized - tEvaluated);
+                  perf.Add(PERF_COMPRESS, compressTicks);
+                  perf.Add(PERF_SEND, tSent - tSerialized - compressTicks);
+                  perf.AddBytes(resultLen, NNRemoteProtocol.PerfWireBytes, reqLen, wireIn);
+                  perfLastEnd = tSent;
+                  perf.EndBatch(batch.NumPos);
                 }
 
                 // Update statistics.
@@ -642,7 +792,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
       }
       finally
       {
-        ReleaseEvaluator(cachedEval);
+        ReleaseEvaluator(cachedEval, instance);
         tcpClient?.Close();
         Interlocked.Decrement(ref activeClients);
       }
@@ -707,6 +857,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
       Console.WriteLine($"Max clients: {MaxClients}");
       Console.WriteLine($"Host:        {Environment.MachineName}");
       Console.WriteLine($"Max cached:  {MAX_CACHED_EVALUATORS}");
+      Console.WriteLine($"Instances:   {InstancesPerEvaluator} per evaluator");
       Console.WriteLine("------------------------------------------------------------");
     }
   }

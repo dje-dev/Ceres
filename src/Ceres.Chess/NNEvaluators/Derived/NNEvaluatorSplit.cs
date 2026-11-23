@@ -110,6 +110,13 @@ namespace Ceres.Chess.NNEvaluators
 
     int indexPerferredEvalator;
 
+    // Optional per-phase timing (CERES_REMOTE_PERF=1), see NNRemotePerfStats.
+    Remote.NNRemotePerfStats perf;
+    long perfLastEnd;
+    long[] perfPositions;
+    long perfBatches;
+
+
     /// <summary>
     /// Work item for dedicated evaluator threads.
     /// </summary>
@@ -124,6 +131,11 @@ namespace Ceres.Chess.NNEvaluators
       /// Failure (if any) from the worker thread, to be rethrown on the calling thread.
       /// </summary>
       public ExceptionDispatchInfo Exception;
+
+      /// <summary>
+      /// Stopwatch ticks the evaluator took for this sub-batch (performance diagnostics).
+      /// </summary>
+      public long ElapsedTicks;
 
       public void Reset()
       {
@@ -312,6 +324,7 @@ namespace Ceres.Chess.NNEvaluators
       {
         foreach (EvaluatorWorkItem workItem in workQueues[evaluatorIndex].GetConsumingEnumerable(shutdownTokenSource.Token))
         {
+          long startTicks = Stopwatch.GetTimestamp();
           try
           {
             workItem.Result = Evaluators[evaluatorIndex].EvaluateIntoBuffers(workItem.SubBatch, workItem.RetrieveSupplementalResults);
@@ -329,6 +342,7 @@ namespace Ceres.Chess.NNEvaluators
           }
           finally
           {
+            workItem.ElapsedTicks = Stopwatch.GetTimestamp() - startTicks;
             workItem.CompletionSignal.Set();
           }
         }
@@ -366,6 +380,8 @@ namespace Ceres.Chess.NNEvaluators
 }
 #endif
 
+      long perfStart = Stopwatch.GetTimestamp();
+
       // Compute the allocation of positions across evaluators.
       int[] allocations;
       if (Balancer != null)
@@ -374,7 +390,7 @@ namespace Ceres.Chess.NNEvaluators
         {
           throw new Exception($"Batch of {positions.NumPos} exceeds balanced split maximum {Balancer.MaxTotalBatchSize}");
         }
-        allocations = Balancer.Plans[positions.NumPos]; // precomputed, read-only
+        allocations = Balancer.GetPlan(positions.NumPos); // shared, read-only
       }
       else
       {
@@ -426,6 +442,55 @@ namespace Ceres.Chess.NNEvaluators
       if (Balancer == null)
       {
         EvaluatorAllocator.Deallocate(allocations);
+      }
+      else if (firstFailure == null)
+      {
+        // Let the balancer learn from how long each evaluator took for its share (see AdaptiveEnabled).
+        Span<float> elapsedMs = stackalloc float[Evaluators.Length];
+        for (int i = 0; i < Evaluators.Length; i++)
+        {
+          elapsedMs[i] = allocations[i] > 0 ? (float)(workItemPool[i].ElapsedTicks * 1000.0 / Stopwatch.Frequency) : 0;
+        }
+        Balancer.ObserveCompletionTimes(allocations, elapsedMs);
+      }
+
+      if (Remote.NNRemotePerfStats.Enabled)
+      {
+        // Phases: gap between calls, wall time of this call, then each evaluator's own time.
+        if (perf == null)
+        {
+          string[] names = new string[2 + Evaluators.Length];
+          names[0] = "gap";
+          names[1] = "eval";
+          for (int i = 0; i < Evaluators.Length; i++)
+          {
+            names[2 + i] = $"own{i}";
+          }
+          perf = Remote.NNRemotePerfStats.CreateIfEnabled($"split[{Evaluators.Length}]", names);
+          perfPositions = new long[Evaluators.Length];
+          perf.ExtraInfo = () =>
+          {
+            // Mean sub-batch size per evaluator since the previous line, and the balancer's learned scales.
+            string sizes = string.Join(", ", perfPositions.Select(p => (p / Math.Max(1, perfBatches)).ToString()));
+            Array.Clear(perfPositions);
+            perfBatches = 0;
+            string scales = Balancer == null ? "" :
+              $" adaptive scales [{string.Join(", ", Balancer.AdaptiveScales.Select(v => v.ToString("F3")))}] replans {Balancer.NumAdaptiveReplans}";
+            return $"sub-batches [{sizes}]{scales}";
+          };
+        }
+        long perfEnd = Stopwatch.GetTimestamp();
+        if (perfLastEnd != 0) perf.Add(0, perfStart - perfLastEnd);
+        perf.Add(1, perfEnd - perfStart);
+        for (int i = 0; i < evaluatorsAllocated; i++)
+        {
+          int evaluatorIndex = evaluatorIndicesBuffer[i];
+          perf.Add(2 + evaluatorIndex, workItemPool[evaluatorIndex].ElapsedTicks);
+          perfPositions[evaluatorIndex] += subBatchSizesBuffer[i];
+        }
+        perfBatches++;
+        perfLastEnd = perfEnd;
+        perf.EndBatch(positions.NumPos);
       }
 
       if (firstFailure != null)

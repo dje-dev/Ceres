@@ -25,12 +25,18 @@ namespace Ceres.Commands
   /// <summary>
   /// Parses and executes the SERVER command to start a remote NN evaluation server.
   ///
-  /// Usage: Ceres SERVER [net=NONE] [device=GPU:0] [port=50055] [maxclients=16]
+  /// Usage: Ceres SERVER [net=NONE] [device=GPU:0] [port=50055] [maxclients=16] [instances=1]
   ///
   /// All parameters are optional. Clients always send their own network and device specification
   /// in the handshake, so NET/DEVICE are only fallbacks for clients that omit them
   /// (NET=NONE: no default network). MAXCLIENTS defaults to 16 because each MCGS engine opens two
   /// connections per server (dual evaluators).
+  ///
+  /// INSTANCES is the number of instances built of each evaluator (default 1: the batches of all clients
+  /// of an evaluator execute one at a time). With INSTANCES=2 the two connections of an MCGS engine each
+  /// get their own instance, so their two batches in flight execute concurrently on the device(s).
+  /// Whether that is faster depends on the device and on the other servers the client uses
+  /// (see NNRemoteServer.InstancesPerEvaluator); it needs a second set of execution contexts in device memory.
   /// </summary>
   public static class FeatureServerParams
   {
@@ -39,13 +45,14 @@ namespace Ceres.Commands
       KeyValueSetParsed keys = new KeyValueSetParsed(args,
         new System.Collections.Generic.List<string>
         {
-          "NET", "DEVICE", "PORT", "MAXCLIENTS"
+          "NET", "DEVICE", "PORT", "MAXCLIENTS", "INSTANCES"
         });
 
       string netSpec = keys.GetValueOrDefault("NET", "NONE", false);
       string deviceSpec = keys.GetValueOrDefault("DEVICE", "GPU:0", false);
       string portStr = keys.GetValueOrDefault("PORT", NNRemoteProtocol.DEFAULT_PORT.ToString(), false);
       string maxClientsStr = keys.GetValueOrDefault("MAXCLIENTS", "16", false);
+      string instancesStr = keys.GetValueOrDefault("INSTANCES", "1", false);
 
       if (!int.TryParse(portStr, out int port))
       {
@@ -59,6 +66,12 @@ namespace Ceres.Commands
         return;
       }
 
+      if (!int.TryParse(instancesStr, out int instances) || instances < 1)
+      {
+        DispatchCommands.ShowErrorExit($"Invalid INSTANCES value: {instancesStr}");
+        return;
+      }
+
       // NET=NONE means no default network (clients must specify their own).
       string defaultNet = netSpec.Equals("NONE", StringComparison.OrdinalIgnoreCase) ? null : netSpec;
 
@@ -66,7 +79,8 @@ namespace Ceres.Commands
         port: port,
         maxClients: maxClients,
         defaultNetworkSpec: defaultNet,
-        defaultDeviceSpec: deviceSpec);
+        defaultDeviceSpec: deviceSpec,
+        instancesPerEvaluator: instances);
 
       server.Start(); // Blocks until Ctrl+C.
     }

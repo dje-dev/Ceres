@@ -43,7 +43,10 @@ namespace Ceres.Chess.NNEvaluators
   ///    evaluator and remote hosts only receive work once a batch is large enough to pay for it.
   ///    All plans are precomputed, so the per-batch cost at run time is a table lookup.
   ///
-  /// No recalibration is performed while running (each server is assumed to serve a single client).
+  /// 3. Adaptation (optional, see AdaptiveEnabled): while running, the plans are nudged so that the
+  ///    sub-evaluators of a batch finish together, using only the completion times of the real batches.
+  ///
+  /// No recalibration (probe evaluation) is performed while running (each server is assumed to serve a single client).
   /// </summary>
   public sealed class NNEvaluatorSplitBalancer
   {
@@ -122,6 +125,9 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       (Plans, PredictedMs) = BuildPlans(Times, splitPenaltyMs);
+
+      subsets = BuildSubsets(names.Length);
+      logScales = new double[names.Length];
     }
 
 
@@ -242,6 +248,60 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
+    #region Planning
+
+    /// <summary>
+    /// Returns the candidate subsets (bit masks) of evaluators considered when planning.
+    /// </summary>
+    static int[] BuildSubsets(int numEvaluators)
+    {
+      List<int> subsets = new();
+      if (numEvaluators <= MAX_EVALUATORS_SUBSET_SEARCH)
+      {
+        for (int mask = 1; mask < (1 << numEvaluators); mask++)
+        {
+          subsets.Add(mask);
+        }
+      }
+      else
+      {
+        subsets.Add((1 << numEvaluators) - 1); // all
+        for (int i = 0; i < numEvaluators; i++)
+        {
+          subsets.Add(1 << i);
+        }
+      }
+      return subsets.ToArray();
+    }
+
+
+    /// <summary>
+    /// Returns the candidate makespans, sorted: every (scaled) table value (the optimum is always one of them).
+    /// </summary>
+    static float[] BuildCandidates(float[][] times, float[] scales)
+    {
+      int count = 0;
+      for (int i = 0; i < times.Length; i++)
+      {
+        count += times[i].Length - 1;
+      }
+
+      float[] values = new float[count];
+      int next = 0;
+      for (int i = 0; i < times.Length; i++)
+      {
+        for (int n = 1; n < times[i].Length; n++)
+        {
+          values[next++] = times[i][n] * scales[i];
+        }
+      }
+
+      // Sorted (duplicates are harmless to the binary search over this array).
+      Array.Sort(values);
+      return values;
+    }
+
+
     /// <summary>
     /// Computes the optimal allocation for every total batch size.
     /// </summary>
@@ -253,101 +313,96 @@ namespace Ceres.Chess.NNEvaluators
       float[] predicted = new float[maxTotal + 1];
       plans[0] = new int[k];
 
-      // Candidate subsets (bit masks) of evaluators.
-      List<int> subsets = new();
-      if (k <= MAX_EVALUATORS_SUBSET_SEARCH)
-      {
-        for (int mask = 1; mask < (1 << k); mask++)
-        {
-          subsets.Add(mask);
-        }
-      }
-      else
-      {
-        subsets.Add((1 << k) - 1); // all
-        for (int i = 0; i < k; i++)
-        {
-          subsets.Add(1 << i);
-        }
-      }
-
-      // Candidate makespans: every distinct table value (the optimum is always one of them).
-      float[] candidates = times.SelectMany(t => t.Skip(1)).Distinct().OrderBy(v => v).ToArray();
+      float[] scales = Enumerable.Repeat(1.0f, k).ToArray();
+      int[] subsets = BuildSubsets(k);
+      float[] candidates = BuildCandidates(times, scales);
 
       for (int N = 1; N <= maxTotal; N++)
       {
-        float bestScore = float.MaxValue;
-        float bestMakespan = 0;
-        int[] best = null;
-
-        foreach (int mask in subsets)
-        {
-          int maxInSubset = 0;
-          int count = 0;
-          for (int i = 0; i < k; i++)
-          {
-            if ((mask & (1 << i)) != 0)
-            {
-              maxInSubset += times[i].Length - 1;
-              count++;
-            }
-          }
-          if (maxInSubset < N)
-          {
-            continue;
-          }
-
-          // Smallest candidate makespan T such that the subset can cover N positions within T.
-          int lo = 0, hi = candidates.Length - 1;
-          while (lo < hi)
-          {
-            int mid = (lo + hi) / 2;
-            if (SubsetCapacity(times, mask, candidates[mid]) >= N)
-            {
-              hi = mid;
-            }
-            else
-            {
-              lo = mid + 1;
-            }
-          }
-          float T = candidates[lo];
-
-          float score = T + splitPenaltyMs * (count - 1);
-          if (score < bestScore - 1e-6f)
-          {
-            int[] alloc = new int[k];
-            for (int i = 0; i < k; i++)
-            {
-              alloc[i] = (mask & (1 << i)) != 0 ? Capacity(times[i], T) : 0;
-            }
-            float makespan = TrimExcess(times, alloc, N);
-            score = makespan + splitPenaltyMs * (alloc.Count(a => a > 0) - 1);
-            if (score < bestScore - 1e-6f)
-            {
-              bestScore = score;
-              bestMakespan = makespan;
-              best = alloc;
-            }
-          }
-        }
-
-        plans[N] = best;
-        predicted[N] = bestMakespan;
+        (plans[N], predicted[N]) = PlanFor(N, times, scales, candidates, subsets, splitPenaltyMs);
       }
 
       return (plans, predicted);
     }
 
 
-    static int SubsetCapacity(float[][] times, int mask, float limitMs)
+    /// <summary>
+    /// Computes the optimal allocation of N positions, where evaluator i is estimated
+    /// to take scales[i] * times[i][n] milliseconds for n positions.
+    /// Returns the allocation and its makespan (excluding the split penalty).
+    /// </summary>
+    static (int[] plan, float makespan) PlanFor(int N, float[][] times, float[] scales, float[] candidates,
+                                                 int[] subsets, float splitPenaltyMs)
+    {
+      int k = times.Length;
+      float bestScore = float.MaxValue;
+      float bestMakespan = 0;
+      int[] best = null;
+
+      foreach (int mask in subsets)
+      {
+        int maxInSubset = 0;
+        int count = 0;
+        for (int i = 0; i < k; i++)
+        {
+          if ((mask & (1 << i)) != 0)
+          {
+            maxInSubset += times[i].Length - 1;
+            count++;
+          }
+        }
+        if (maxInSubset < N)
+        {
+          continue;
+        }
+
+        // Smallest candidate makespan T such that the subset can cover N positions within T.
+        int lo = 0, hi = candidates.Length - 1;
+        while (lo < hi)
+        {
+          int mid = (lo + hi) / 2;
+          if (SubsetCapacity(times, scales, mask, candidates[mid]) >= N)
+          {
+            hi = mid;
+          }
+          else
+          {
+            lo = mid + 1;
+          }
+        }
+        float T = candidates[lo];
+
+        float score = T + splitPenaltyMs * (count - 1);
+        if (score < bestScore - 1e-6f)
+        {
+          int[] alloc = new int[k];
+          for (int i = 0; i < k; i++)
+          {
+            alloc[i] = (mask & (1 << i)) != 0 ? Capacity(times[i], T / scales[i]) : 0;
+          }
+          float makespan = TrimExcess(times, scales, alloc, N);
+          score = makespan + splitPenaltyMs * (alloc.Count(a => a > 0) - 1);
+          if (score < bestScore - 1e-6f)
+          {
+            bestScore = score;
+            bestMakespan = makespan;
+            best = alloc;
+          }
+        }
+      }
+
+      return (best, bestMakespan);
+    }
+
+
+    static int SubsetCapacity(float[][] times, float[] scales, int mask, float limitMs)
     {
       int sum = 0;
       for (int i = 0; i < times.Length; i++)
       {
         if ((mask & (1 << i)) != 0)
         {
-          sum += Capacity(times[i], limitMs);
+          sum += Capacity(times[i], limitMs / scales[i]);
         }
       }
       return sum;
@@ -358,18 +413,23 @@ namespace Ceres.Chess.NNEvaluators
     /// Removes the excess over N, one position at a time from the evaluator currently finishing last.
     /// Returns the resulting makespan.
     /// </summary>
-    static float TrimExcess(float[][] times, int[] alloc, int N)
+    static float TrimExcess(float[][] times, float[] scales, int[] alloc, int N)
     {
       int excess = alloc.Sum() - N;
       while (excess > 0)
       {
         int worst = -1;
+        float worstTime = 0;
         for (int i = 0; i < alloc.Length; i++)
         {
-          if (alloc[i] > 0 && (worst < 0 || times[i][alloc[i]] > times[worst][alloc[worst]]
-                                          || (times[i][alloc[i]] == times[worst][alloc[worst]] && alloc[i] > alloc[worst])))
+          if (alloc[i] > 0)
           {
-            worst = i;
+            float time = times[i][alloc[i]] * scales[i];
+            if (worst < 0 || time > worstTime || (time == worstTime && alloc[i] > alloc[worst]))
+            {
+              worst = i;
+              worstTime = time;
+            }
           }
         }
         alloc[worst]--;
@@ -381,11 +441,186 @@ namespace Ceres.Chess.NNEvaluators
       {
         if (alloc[i] > 0)
         {
-          makespan = MathF.Max(makespan, times[i][alloc[i]]);
+          makespan = MathF.Max(makespan, times[i][alloc[i]] * scales[i]);
         }
       }
       return makespan;
     }
+
+    #endregion
+
+
+    #region Adaptive balancing (feedback from completion times observed during real evaluation)
+
+    /// <summary>
+    /// If the plans are continuously adapted so that the sub-evaluators of a batch finish at the same time.
+    ///
+    /// The startup calibration times each sub-evaluator in isolation, one batch at a time. During search
+    /// two batches are in flight (overlapped iterators), so a sub-batch also queues behind the other
+    /// iterator's sub-batch on the same device, and whichever sub-evaluator finishes last sets the pace
+    /// while the others idle. Which one that is depends on small differences that the isolated calibration
+    /// cannot see (and on its measurement noise). The adaptation uses only the completion times of the real
+    /// batches (no extra evaluations): each sub-evaluator's time table is scaled by a slowly learned factor,
+    /// raised when it finishes later than the others and lowered when it finishes earlier,
+    /// and the plans are recomputed from the scaled tables.
+    ///
+    /// Can be disabled by setting the environment variable CERES_SPLIT_ADAPTIVE=0.
+    /// </summary>
+    public static bool AdaptiveEnabled = Environment.GetEnvironmentVariable("CERES_SPLIT_ADAPTIVE") != "0";
+
+    /// <summary>
+    /// Fraction of the relative completion time difference applied to the scales per observed batch.
+    /// </summary>
+    const double ADAPTIVE_GAIN = 0.02;
+
+    /// <summary>
+    /// The learned scales are kept within [1/e^LIMIT, e^LIMIT].
+    /// </summary>
+    const double ADAPTIVE_LOG_SCALE_LIMIT = 0.7;
+
+    /// <summary>
+    /// Plans are recomputed once a scale has drifted by this much (in log units) from the scales they were built with.
+    /// </summary>
+    const double ADAPTIVE_REPLAN_THRESHOLD = 0.01;
+
+    /// <summary>
+    /// Sub-batches smaller than this are too noisy to learn from.
+    /// </summary>
+    const int ADAPTIVE_MIN_SUB_BATCH = 16;
+
+
+    /// <summary>
+    /// Plans for one set of scales (immutable apart from the plan cache, which is filled on demand).
+    /// </summary>
+    sealed class ScaledPlanSet
+    {
+      public readonly float[] Scales;
+      public readonly float[] Candidates;
+      public readonly int[][] Plans;
+
+      public ScaledPlanSet(float[][] times, float[] scales, int maxTotalBatchSize)
+      {
+        Scales = scales;
+        Candidates = BuildCandidates(times, scales);
+        Plans = new int[maxTotalBatchSize + 1][];
+      }
+    }
+
+    readonly object adaptiveLock = new();
+    readonly int[] subsets;
+    readonly double[] logScales;
+    volatile ScaledPlanSet scaledPlans;
+
+    /// <summary>
+    /// Number of times the plans were recomputed from adapted scales.
+    /// </summary>
+    public int NumAdaptiveReplans { get; private set; }
+
+    /// <summary>
+    /// Current learned scales of the sub-evaluators' time tables (1 = as calibrated).
+    /// </summary>
+    public float[] AdaptiveScales
+    {
+      get
+      {
+        lock (adaptiveLock)
+        {
+          return logScales.Select(v => (float)Math.Exp(v)).ToArray();
+        }
+      }
+    }
+
+
+    /// <summary>
+    /// Returns the allocation (number of positions per sub-evaluator) for a batch of the given size.
+    /// The returned array is shared and must not be modified.
+    /// </summary>
+    public int[] GetPlan(int numPositions)
+    {
+      ScaledPlanSet set = scaledPlans;
+      if (set == null)
+      {
+        return Plans[numPositions];
+      }
+
+      int[] plan = set.Plans[numPositions];
+      if (plan == null)
+      {
+        // Computed on first use (two threads may both compute it, with identical results).
+        plan = numPositions == 0 ? Plans[0]
+                                 : PlanFor(numPositions, Times, set.Scales, set.Candidates, subsets, SplitPenaltyMs).plan;
+        set.Plans[numPositions] = plan;
+      }
+      return plan;
+    }
+
+
+    /// <summary>
+    /// Reports how long each sub-evaluator took for its share of one batch
+    /// (elapsedMs[i] is used only where plan[i] is positive). See AdaptiveEnabled.
+    /// </summary>
+    public void ObserveCompletionTimes(int[] plan, ReadOnlySpan<float> elapsedMs)
+    {
+      if (!AdaptiveEnabled)
+      {
+        return;
+      }
+
+      int numUsed = 0;
+      float sum = 0;
+      for (int i = 0; i < plan.Length; i++)
+      {
+        if (plan[i] > 0)
+        {
+          if (plan[i] < ADAPTIVE_MIN_SUB_BATCH)
+          {
+            return;
+          }
+          numUsed++;
+          sum += elapsedMs[i];
+        }
+      }
+      if (numUsed < 2 || sum <= 0)
+      {
+        return;
+      }
+      float mean = sum / numUsed;
+
+      lock (adaptiveLock)
+      {
+        // An evaluator finishing later than the others is treated as slower than believed (and gets fewer
+        // positions from then on); one finishing earlier as faster.
+        for (int i = 0; i < plan.Length; i++)
+        {
+          if (plan[i] > 0)
+          {
+            double relativeError = (elapsedMs[i] - mean) / mean;
+            logScales[i] = Math.Clamp(logScales[i] + ADAPTIVE_GAIN * relativeError,
+                                      -ADAPTIVE_LOG_SCALE_LIMIT, ADAPTIVE_LOG_SCALE_LIMIT);
+          }
+        }
+
+        ScaledPlanSet current = scaledPlans;
+        bool replan = false;
+        for (int i = 0; i < logScales.Length; i++)
+        {
+          double currentLogScale = current == null ? 0 : Math.Log(current.Scales[i]);
+          if (Math.Abs(logScales[i] - currentLogScale) > ADAPTIVE_REPLAN_THRESHOLD)
+          {
+            replan = true;
+          }
+        }
+
+        if (replan)
+        {
+          float[] scales = logScales.Select(v => (float)Math.Exp(v)).ToArray();
+          scaledPlans = new ScaledPlanSet(Times, scales, MaxTotalBatchSize);
+          NumAdaptiveReplans++;
+        }
+      }
+    }
+
+    #endregion
 
 
     /// <summary>
@@ -401,7 +636,7 @@ namespace Ceres.Chess.NNEvaluators
         string pts = string.Join("  ", showSizes.Where(s => s <= MaxBatchSizes[i]).Select(s => $"{s}:{Times[i][s]:F2}"));
         sb.AppendLine($"[BalancedSplit]   #{i} {Names[i]}  max={MaxBatchSizes[i]}  ms@n  {pts}");
       }
-      foreach (int n in new[] { 1, 8, 16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048, 3072 })
+      foreach (int n in new[] { 1, 8, 16, 32, 64, 96, 128, 192, 256, 320, 384, 448, 512, 640, 768, 1024, 1536, 2048, 3072 })
       {
         if (n <= MaxTotalBatchSize)
         {
@@ -478,6 +713,11 @@ namespace Ceres.Chess.NNEvaluators
           batch.Moves[i] = moves;
         }
       }
+
+      // Also carry the compact position histories, as the batches of the search do. A remote evaluator
+      // then sends these (about a third of the size of the planes) and its server materializes the planes,
+      // so that calibration measures the same work and bytes on the wire as real search batches.
+      batch.EnsureCompactHistories();
       return batch;
     }
 

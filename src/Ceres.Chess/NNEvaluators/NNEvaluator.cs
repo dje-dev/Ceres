@@ -492,7 +492,7 @@ namespace Ceres.Chess.NNEvaluators
     /// CompactHistoriesPopulated flag (never per-row IsPopulated on a reused batch) decides
     /// whether a representation must be (re)generated for all rows.
     /// </summary>
-    private void PrepareBatchInputs(IEncodedPositionBatchFlat positions)
+    public void PrepareBatchInputs(IEncodedPositionBatchFlat positions)
     {
       // Null-guard first (also fixes a latent NRE on the async path, which dereferenced the
       // batch for ZeroHistoryPlanes before its own null check).

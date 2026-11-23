@@ -14,6 +14,8 @@
 #region Using directives
 
 using System;
+using System.Diagnostics;
+using System.Net;
 using System.Net.Sockets;
 
 using Ceres.Chess.LC0.Batches;
@@ -60,9 +62,16 @@ namespace Ceres.Chess.NNEvaluators.Remote
     readonly string optionsString;
 
     /// <summary>
-    /// Whether to use Zstd compression for payloads above the threshold.
+    /// Whether Zstd compression of requests was asked for by the creator of this evaluator.
     /// </summary>
-    readonly bool useCompression;
+    readonly bool compressionRequested;
+
+    /// <summary>
+    /// Whether requests on the current connection are Zstd compressed (above the size threshold):
+    /// as requested, unless disabled globally (NNRemoteProtocol.CompressionEnabled)
+    /// or the server is on this machine.
+    /// </summary>
+    bool useCompression;
 
     /// <summary>
     /// Maximum batch size supported.
@@ -94,6 +103,19 @@ namespace Ceres.Chess.NNEvaluators.Remote
     int cachedMaxBatchSize;
     InputTypes cachedInputsRequired;
     NNRemoteResultFlags cachedResultFlags;
+    int cachedNumDevices = 1;
+    EvaluatorInfo cachedInfo;
+
+    #endregion
+
+
+    #region Performance diagnostics
+
+    // Phases of one remote evaluation as seen by the client (see NNRemotePerfStats).
+    const int PERF_GAP = 0, PERF_SERIALIZE = 1, PERF_COMPRESS = 2, PERF_SEND = 3, PERF_WAIT = 4,
+              PERF_RECEIVE = 5, PERF_DECOMPRESS = 6, PERF_DESERIALIZE = 7;
+    NNRemotePerfStats perf;
+    long perfLastEnd;
 
     #endregion
 
@@ -120,6 +142,17 @@ namespace Ceres.Chess.NNEvaluators.Remote
     public override int MaxBatchSize => cachedMaxBatchSize;
     public override InputTypes InputsRequired => cachedInputsRequired;
 
+    /// <summary>
+    /// Number of compute devices behind the remote evaluator (as reported by the server,
+    /// otherwise the number of devices named in the device specification).
+    /// </summary>
+    public override int NumDevices => cachedNumDevices;
+
+    /// <summary>
+    /// Information about the remote evaluator (network file size as reported by the server), or null if unknown.
+    /// </summary>
+    public override EvaluatorInfo Info => cachedInfo;
+
     #endregion
 
 
@@ -137,15 +170,18 @@ namespace Ceres.Chess.NNEvaluators.Remote
       this.networkSpec = networkSpec;
       this.deviceSpec = deviceSpec;
       this.optionsString = optionsString;
-      this.useCompression = useCompression;
+      this.compressionRequested = useCompression && NNRemoteProtocol.CompressionEnabled;
       this.requestedMaxBatchSize = maxBatchSize;
 
-      // Pre-allocate buffers.
+      // Pre-allocate buffers (a decompression buffer is allocated on demand if a server compresses unasked).
       sendBuffer = new byte[NNRemoteSerializer.MaxSerializedInputSize(maxBatchSize)];
       receiveBuffer = new byte[NNRemoteSerializer.MaxSerializedResultSize(maxBatchSize,
         (NNRemoteResultFlags)0x7F)]; // all flags set for max size
-      compressBuffer = useCompression ? new byte[ZstdBlockCompress.CompressBound(sendBuffer.Length)] : null;
-      decompressBuffer = useCompression ? new byte[receiveBuffer.Length] : null;
+      compressBuffer = compressionRequested ? new byte[ZstdBlockCompress.CompressBound(sendBuffer.Length)] : null;
+      decompressBuffer = compressionRequested ? new byte[receiveBuffer.Length] : null;
+
+      perf = NNRemotePerfStats.CreateIfEnabled($"client {hostname}:{port} {deviceSpec}",
+               "gap", "serialize", "compress", "send", "wait", "receive", "decompress", "deserialize");
 
       Connect();
     }
@@ -165,6 +201,9 @@ namespace Ceres.Chess.NNEvaluators.Remote
         tcpClient.Connect(hostname, port);
         stream = tcpClient.GetStream();
         stream.ReadTimeout = NNRemoteProtocol.DEFAULT_READ_TIMEOUT_MS;
+
+        // Compression only costs time when the server is on this machine.
+        useCompression = compressionRequested && !IsConnectedToLocalMachine(tcpClient.Client);
       }
       catch (Exception ex)
       {
@@ -178,6 +217,25 @@ namespace Ceres.Chess.NNEvaluators.Remote
 
 
     /// <summary>
+    /// Returns if the socket is connected to a server on this machine
+    /// (via a loopback address, or via one of the machine's own addresses).
+    /// </summary>
+    static bool IsConnectedToLocalMachine(Socket socket)
+    {
+      if (socket.RemoteEndPoint is not IPEndPoint remote || socket.LocalEndPoint is not IPEndPoint local)
+      {
+        return false;
+      }
+
+      // A dual-mode socket reports IPv4 addresses in IPv4-mapped IPv6 form,
+      // which IPAddress.IsLoopback recognizes only for 127.0.0.1 itself.
+      IPAddress remoteAddress = remote.Address.IsIPv4MappedToIPv6 ? remote.Address.MapToIPv4() : remote.Address;
+      IPAddress localAddress = local.Address.IsIPv4MappedToIPv6 ? local.Address.MapToIPv4() : local.Address;
+      return IPAddress.IsLoopback(remoteAddress) || remoteAddress.Equals(localAddress);
+    }
+
+
+    /// <summary>
     /// Sends handshake and processes acknowledgment.
     /// </summary>
     void PerformHandshake()
@@ -186,7 +244,7 @@ namespace Ceres.Chess.NNEvaluators.Remote
       byte[] hsBuffer = new byte[4096];
       int hsLen = NNRemoteSerializer.SerializeHandshake(
         hsBuffer, networkSpec, deviceSpec, optionsString,
-        requestedMaxBatchSize, useCompression);
+        requestedMaxBatchSize, useCompression, NNRemoteProtocol.CompactPoliciesEnabled);
 
       NNRemoteProtocol.WriteMessage(stream, NNRemoteMessageType.Handshake,
         hsBuffer.AsSpan(0, hsLen), false, null);
@@ -206,7 +264,8 @@ namespace Ceres.Chess.NNEvaluators.Remote
           $"Expected HandshakeAck, received {type}");
       }
 
-      var (success, resultFlags, maxBatch, inputsReq, engineNetID, serverInfo) =
+      (bool success, NNRemoteResultFlags resultFlags, int maxBatch, InputTypes inputsReq, string engineNetID,
+       string serverInfo, int serverNumDevices, long serverNetFileSize) =
         NNRemoteSerializer.DeserializeHandshakeAck(receiveBuffer.AsSpan(0, payloadLen));
 
       if (!success)
@@ -245,10 +304,33 @@ namespace Ceres.Chess.NNEvaluators.Remote
       EngineNetworkID = engineNetID;
       Description = $"Remote({hostname}:{port})";
 
+      // Devices and network size behind the server's evaluator. The search sizes its batches from these,
+      // exactly as for a local evaluator (a server predating these fields reports neither; the device
+      // count is then taken from the device specification).
+      cachedNumDevices = serverNumDevices > 0 ? serverNumDevices : CountDevicesInSpecification(deviceSpec);
+      cachedInfo = serverNetFileSize > 0 ? new EvaluatorInfo(0, serverNetFileSize) : null;
+
       // Ceres/TPG networks (which advertise CompactHistories) need position histories in the
       // batches they receive. The client feeds batches through EvaluateIntoBuffers, so the
       // choke-point hook 1 derives the compact records from planes (for producers that supply
       // only planes) before serialization ships them - no retained PositionsBuffer needed.
+    }
+
+
+    /// <summary>
+    /// Returns the number of devices named in a device specification such as "GPU:0,1,2#TensorRTNative".
+    /// </summary>
+    static int CountDevicesInSpecification(string deviceSpecification)
+    {
+      if (string.IsNullOrEmpty(deviceSpecification))
+      {
+        return 1;
+      }
+
+      int start = deviceSpecification.IndexOf(':') + 1;
+      int end = deviceSpecification.IndexOfAny(['#', '@', '/'], start);
+      string indices = end < 0 ? deviceSpecification.Substring(start) : deviceSpecification.Substring(start, end - start);
+      return Math.Max(1, indices.Split(',', StringSplitOptions.RemoveEmptyEntries).Length);
     }
 
 
@@ -339,6 +421,8 @@ namespace Ceres.Chess.NNEvaluators.Remote
     {
       try
       {
+        long t0 = Stopwatch.GetTimestamp();
+
         // Grow the send buffer if this batch needs more room than the initial estimate
         // (e.g. large input State vectors).
         int requiredLen = NNRemoteSerializer.RequiredInputSize(positions, cachedInputsRequired);
@@ -355,13 +439,19 @@ namespace Ceres.Chess.NNEvaluators.Remote
         int serializedLen = NNRemoteSerializer.SerializeBatchInput(
           positions, cachedInputsRequired, sendBuffer);
 
+        long t1 = Stopwatch.GetTimestamp();
+
         // Send as EvalRequest.
         NNRemoteProtocol.WriteMessage(stream, NNRemoteMessageType.EvalRequest,
           sendBuffer.AsSpan(0, serializedLen), useCompression, compressBuffer);
+        long t2 = Stopwatch.GetTimestamp();
+        long compressTicks = NNRemoteProtocol.PerfCodecTicks;
+        int wireOut = NNRemoteProtocol.PerfWireBytes;
 
         // Read response.
         var (type, payloadLen) = NNRemoteProtocol.ReadMessage(
           stream, ref receiveBuffer, ref decompressBuffer);
+        long t3 = Stopwatch.GetTimestamp();
 
         if (type == NNRemoteMessageType.Error)
         {
@@ -377,7 +467,27 @@ namespace Ceres.Chess.NNEvaluators.Remote
         }
 
         // Deserialize the result.
-        return NNRemoteSerializer.DeserializeBatchResult(receiveBuffer.AsSpan(0, payloadLen));
+        IPositionEvaluationBatch result = NNRemoteSerializer.DeserializeBatchResult(receiveBuffer.AsSpan(0, payloadLen));
+
+        if (perf != null)
+        {
+          long t4 = Stopwatch.GetTimestamp();
+          long tHeader = NNRemoteProtocol.PerfHeaderTimestamp;
+          long decompressTicks = NNRemoteProtocol.PerfCodecTicks;
+          if (perfLastEnd != 0) perf.Add(PERF_GAP, t0 - perfLastEnd);
+          perf.Add(PERF_SERIALIZE, t1 - t0);
+          perf.Add(PERF_COMPRESS, compressTicks);
+          perf.Add(PERF_SEND, t2 - t1 - compressTicks);
+          perf.Add(PERF_WAIT, tHeader - t2);
+          perf.Add(PERF_RECEIVE, t3 - tHeader - decompressTicks);
+          perf.Add(PERF_DECOMPRESS, decompressTicks);
+          perf.Add(PERF_DESERIALIZE, t4 - t3);
+          perf.AddBytes(serializedLen, wireOut, payloadLen, NNRemoteProtocol.PerfWireBytes);
+          perfLastEnd = t4;
+          perf.EndBatch(positions.NumPos);
+        }
+
+        return result;
       }
       catch (NNRemoteEvaluationException)
       {

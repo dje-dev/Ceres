@@ -817,6 +817,22 @@ namespace Ceres.Chess.NNEvaluators
         throw new Exception("DeviceComboType.Single is not expected when number of DeviceIndices is greater than 1.");
       }
 
+      // Several devices which all live on one remote host (e.g. "GPU:0,1,2#TensorRTNative@HOP") are served
+      // by a single remote evaluator over one connection. The server then runs its own multi-device evaluator
+      // (for TensorRTNative the native multi-GPU engine pool), just as that device string would locally,
+      // rather than the client splitting every batch evenly over one single-device remote evaluator per GPU.
+      if (def.NetCombo == NNEvaluatorNetComboType.Single
+       && def.DeviceCombo == NNEvaluatorDeviceComboType.Split
+       && def.Devices.Length > 1
+       && def.Devices.All(d => d.Device.RemoteHost != null
+                            && d.Device.RemoteHost == def.Devices[0].Device.RemoteHost
+                            && d.Device.RemotePort == def.Devices[0].Device.RemotePort
+                            && d.Device.OverrideEngineType == def.Devices[0].Device.OverrideEngineType
+                            && d.Fraction == def.Devices[0].Fraction))
+      {
+        return BuildRemote(def.Nets[0].Net, def.Devices.Select(d => d.Device).ToArray(), options);
+      }
+
       // TODO: restore implementation, test more to see if faster or memory efficient
       const bool LC0_SERVER_ENABLE_MULTI_GPU = false; // seems somewhat slower
       if (LC0_SERVER_ENABLE_MULTI_GPU
