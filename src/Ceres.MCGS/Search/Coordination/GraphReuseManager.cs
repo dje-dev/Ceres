@@ -45,10 +45,14 @@ public static class GraphReuseManager
   #region Constants
 
   /// <summary>
-  /// A reused graph whose root has fewer than this many visits (N) is "trivially small":
-  /// it is always reused as-is (never extracted or abandoned).
+  /// A reused graph containing fewer than this many nodes is "trivially small":
+  /// it is always reused as-is (never extracted or abandoned), since its memory footprint
+  /// (well under 1 GB) is not worth reclaiming. This is deliberately based on the node count
+  /// rather than root visits (N): visits can grow almost without bound while the node count
+  /// stays tiny (e.g. when repeated visits to nearby terminal/mate nodes dominate the search),
+  /// and N is not a measure of graph size or memory.
   /// </summary>
-  public const int TRIVIALLY_SMALL_ROOT_N = 1_000_000;
+  public const int TRIVIALLY_SMALL_NUM_NODES = 1_000_000;
 
   /// <summary>
   /// One-time flag for the warning issued when a store is too small for the upcoming search but is
@@ -379,7 +383,7 @@ public static class GraphReuseManager
   /// Policy:
   ///   - store too small for the upcoming search (minStoreNodesNeeded)      -> promote (copy into a
   ///         larger store), or reuse + capacity-stop when already at maximum size
-  ///   - trivially small graph                                              -> reuse
+  ///   - trivially small graph (node count &lt; TRIVIALLY_SMALL_NUM_NODES)    -> reuse
   ///   - memory used &lt; 35%                                               -> reuse
   ///   - memory used &gt; 70% (high): extract if it frees enough (reachableFraction &le;
   ///         HIGH_MEM_EXTRACT_MAX_RETENTION) AND fits time (timeToExtract &le; 80% avail);
@@ -432,8 +436,8 @@ public static class GraphReuseManager
       return new ReuseDecision(GraphReuseAction.Reuse, null, 0.0, -1, default);
     }
 
-    // Trivially small graph: always reuse (no BFS).
-    if (graph.GraphRootNode.N < TRIVIALLY_SMALL_ROOT_N)
+    // Trivially small graph (by node count, not visits): always reuse (no BFS).
+    if (graph.Store.NodesStore.NumUsedNodes < TRIVIALLY_SMALL_NUM_NODES)
     {
       return new ReuseDecision(GraphReuseAction.Reuse, null, 0.0, -1, default);
     }
