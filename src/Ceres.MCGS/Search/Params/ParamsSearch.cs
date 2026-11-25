@@ -84,7 +84,7 @@ public record ParamsSearch
   /// Default fraction of physical RAM to use as maximum memory for each search
   /// (for machines with > 512GB of RAM).
   /// </summary>
-  public const double DEFAULT_MAX_MEMORY_FRACTION_GT_512GB = 0.32;
+  public const double DEFAULT_MAX_MEMORY_FRACTION_GT_512GB = 0.40;
 
   /// <summary>
   /// Default value used by LC0 for smart pruning.

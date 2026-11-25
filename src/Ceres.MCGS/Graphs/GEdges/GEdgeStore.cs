@@ -159,7 +159,18 @@ public class GEdgeStore
   /// <summary>
   /// Resizes memory store to exactly fit current used space.
   /// </summary>
-  public void ResizeToCurrent() => ResizeToNumBlocks(nextFreeBlockIndex.Value);
+  public void ResizeToCurrent()
+  {
+    // A store which has never allocated an edge block (only the reserved null block 0 counts as
+    // "used") has never committed any memory, so there is nothing to release (e.g. a freshly
+    // extracted graph whose nodes have no expanded edges).
+    if (nextFreeBlockIndex.Value == 1 && edgeStoreMemoryBuffer.NumItemsAllocated == 0)
+    {
+      return;
+    }
+
+    ResizeToNumBlocks(nextFreeBlockIndex.Value);
+  }
 
 
   /// <summary>

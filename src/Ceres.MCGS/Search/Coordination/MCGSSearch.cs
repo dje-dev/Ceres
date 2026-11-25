@@ -445,12 +445,15 @@ As a workaround, EvaluatorSygyzy will just return as if no hit.
 
 
   /// <summary>
-  /// Assumed lower bound on average COMMITTED bytes per node across all graph data structures
-  /// (average probably more typically 400). Used to convert the MaxMemoryBytes budget into a
-  /// node-count cap. Note this bounds committed memory; the reserve-only virtual address space
-  /// per node is larger (~1 KB) but nearly free (see MCGSParamsFixed.SMALL_TIER_MAX_STORE_NODES).
+  /// Assumed average COMMITTED bytes per node across all graph data structures. Used to convert
+  /// the MaxMemoryBytes budget into a node-count cap. Measured (Nov 2026, middlegame, 4.5M-23M nodes,
+  /// after a full GC): ~384 bytes/node in the native stores (dominated by edge headers at ~233,
+  /// which are allocated in blocks of 32) plus ~32 bytes/node of live managed data, i.e. ~415 live;
+  /// process resident memory runs ~10-15% higher. Endgame nodes (fewer legal moves) are smaller.
+  /// Note this bounds committed memory; the reserve-only virtual address space per node is larger
+  /// (~1 KB) but nearly free (see MCGSParamsFixed.SMALL_TIER_MAX_STORE_NODES).
   /// </summary>
-  const long MIN_BYTES_PER_NODE = 300;
+  const long MIN_BYTES_PER_NODE = 425;
 
   /// <summary>
   /// Returns the "full tier" graph store size in nodes: the largest store this engine instance is

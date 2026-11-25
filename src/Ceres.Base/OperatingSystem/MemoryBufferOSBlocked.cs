@@ -118,7 +118,19 @@ namespace Ceres.Base.OperatingSystem
     /// <summary>
     /// Resizes the underlying memory to exactly the number of currently used items.
     /// </summary>
-    public void ResizeToCurrent() => ResizeToNumItems((long)nextFreeBlockIndex.Value * itemsPerBlock);
+    public void ResizeToCurrent()
+    {
+      // A store which has never allocated anything (only the reserved block 0 counts as "used")
+      // has never committed any memory, so there is nothing to release. This arises for example
+      // with the parents detail store of a freshly extracted graph containing no multi-parent
+      // (transposition) nodes; without this check the size test below would spuriously throw.
+      if (nextFreeBlockIndex.Value == 1 && entries.NumItemsAllocated == 0)
+      {
+        return;
+      }
+
+      ResizeToNumItems((long)nextFreeBlockIndex.Value * itemsPerBlock);
+    }
 
 
     /// <summary>
