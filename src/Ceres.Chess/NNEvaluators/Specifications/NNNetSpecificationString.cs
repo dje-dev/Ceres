@@ -155,8 +155,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     /// </summary>
     /// <param name="comboType"></param>
     /// <param name="nets"></param>
+    /// <param name="optionsString">optionally the options string of the specification (the part after "|");
+    /// currently only reproduced for LC0EX networks, where it may name the executable file</param>
     /// <returns></returns>
-    public static string ToSpecificationString(NNEvaluatorNetComboType comboType, IEnumerable<(NNEvaluatorNetDef, float, float, float, float, float, float)> nets)
+    public static string ToSpecificationString(NNEvaluatorNetComboType comboType, IEnumerable<(NNEvaluatorNetDef, float, float, float, float, float, float)> nets,
+                                               string optionsString = null)
     {
       // TODO: Currently support conversion back to original specification string only for simple cases
       if (comboType == NNEvaluatorNetComboType.Single && nets.Count() == 1)
@@ -169,6 +172,12 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         if (typeOfFirst == NNEvaluatorType.LC0)
         {
           return $"Network=LC0:{nets.First().Item1.NetworkID}";
+        }
+        if (typeOfFirst == NNEvaluatorType.LC0EX)
+        {
+          // The options are part of what identifies the network here: LC0EX=<file> names the executable.
+          string options = string.IsNullOrEmpty(optionsString) ? "" : "|" + optionsString;
+          return $"Network=LC0EX:{nets.First().Item1.NetworkID}{options}";
         }
       }
 

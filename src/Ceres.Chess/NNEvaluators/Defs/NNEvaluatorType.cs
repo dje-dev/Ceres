@@ -68,6 +68,12 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <summary>
     /// A custom evaluator installed into NNEvaluatorDefFactory.Custom2Factory.
     /// </summary>
-    Custom2
+    Custom2,
+
+    /// <summary>
+    /// An Lc0 network compiled into an lc0ex neural executable (precompiled per-GPU kernels),
+    /// with weights from the lc0ex builder's carrier .pb.gz (see NNEvaluatorLC0EX).
+    /// </summary>
+    LC0EX
   };
 }

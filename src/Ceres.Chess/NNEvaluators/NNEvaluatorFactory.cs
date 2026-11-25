@@ -27,6 +27,7 @@ using Ceres.Chess.NNEvaluators.Ceres;
 using Ceres.Chess.NNEvaluators.Ceres.TPG;
 using Ceres.Chess.NNEvaluators.CUDA;
 using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.Chess.NNEvaluators.LC0EX;
 using Ceres.Chess.NNEvaluators.TensorRT;
 using Ceres.Chess.NNEvaluators.Remote;
 using Ceres.Chess.NNFiles;
@@ -540,6 +541,59 @@ namespace Ceres.Chess.NNEvaluators
 
           break;
 
+        case NNEvaluatorType.LC0EX:
+          {
+            // Weights: the lc0ex builder's carrier .pb.gz. As for LC0 networks, the name may be given without
+            // its extension and is looked for as is (absolute or relative) and then in the LC0 networks directory.
+            string dirLC0EX = CeresUserSettingsManager.Settings.DirLC0Networks ?? ".";
+            string carrierFN = new[] { "", ".pb.gz", ".pb" }
+                                 .SelectMany(ext => new[] { netDef.NetworkID + ext, Path.Combine(dirLC0EX, netDef.NetworkID + ext) })
+                                 .FirstOrDefault(File.Exists)
+                               ?? throw new Exception($"LC0EX carrier (weights) file not found: {netDef.NetworkID} (also looked in {dirLC0EX})");
+
+            // Executable: option LC0EX=<file>, else <carrier stem>_sm<major><minor>.lc0ex next to the carrier.
+            string artifactFN = null;
+            if (optionsDict != null && optionsDict.TryGetValue("LC0EX", out string artifactOption) && artifactOption != null)
+            {
+              artifactFN = Path.IsPathRooted(artifactOption) ? artifactOption
+                                                            : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(carrierFN)), artifactOption);
+            }
+            else
+            {
+              Base.CUDA.CUDADevice device = Base.CUDA.CUDADevice.GetContext(deviceDef.DeviceIndex);
+              string stem = Path.GetFileName(carrierFN);
+              foreach (string ext in new[] { ".pb.gz", ".pb", ".gz" })
+              {
+                if (stem.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+                {
+                  stem = stem[..^ext.Length];
+                  break;
+                }
+              }
+              artifactFN = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(carrierFN)),
+                                        $"{stem}_sm{device.CUDACapabilityMajor}{device.CUDACapabilityMinor}.lc0ex");
+            }
+            if (!File.Exists(artifactFN))
+            {
+              throw new Exception($"LC0EX executable not found: {artifactFN} (specify with option LC0EX=<file.lc0ex>).");
+            }
+
+            // The evaluator accepts any batch up to the configured maximum (it covers a batch with
+            // several program launches as needed). A per-device batch size in the device specification
+            // (e.g. "GPU:0[256]") is a sub-batching hint for other backends and is not used here; in particular
+            // it must not lower MaxBatchSize, which search does not consult when sizing batches.
+            int maxBatchSizeLC0EX = CeresUserSettingsManager.Settings.MaxBatchSize;
+
+            NNEvaluatorOptions optionsLC0EX = new NNEvaluatorOptions().OptionsWithOptionsDictApplied(optionsDict);
+            bool useGraphsLC0EX = CeresUserSettingsManager.Settings.EnableCUDAGraphs && optionsLC0EX.EnableCUDAGraphs;
+
+            // Weights are shared automatically between instances on the same GPU (LC0EXExecutable cache),
+            // so no reference evaluator plumbing is needed.
+            NNEvaluatorLC0EX evaluatorLC0EX = new(carrierFN, artifactFN, deviceDef.DeviceIndex, maxBatchSizeLC0EX, useGraphsLC0EX);
+            evaluatorLC0EX.Options = optionsLC0EX;
+            return evaluatorLC0EX;
+          }
+
         case NNEvaluatorType.ComboPhased:
           // TODO: 
           if (ComboPhasedFactory == null)
@@ -699,6 +753,7 @@ namespace Ceres.Chess.NNEvaluators
       string netPrefix = netDef.Type switch
       {
         NNEvaluatorType.LC0 => "LC0",
+        NNEvaluatorType.LC0EX => "LC0EX",
         NNEvaluatorType.Ceres => "Ceres",
         NNEvaluatorType.ONNXViaTRT => "ONNX_TRT",
         NNEvaluatorType.ONNXViaORT => "ONNX_ORT",

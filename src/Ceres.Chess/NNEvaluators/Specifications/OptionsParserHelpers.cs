@@ -222,7 +222,14 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Internal
         }
       }
 
-      if (netStrWithPrecision.ToUpper().StartsWith("LC0:"))
+      if (netStrWithPrecision.ToUpper().StartsWith("LC0EX:"))
+      {
+        // Net specification "LC0EX:<carrier.pb.gz>" (artifact via option LC0EX=<file.lc0ex>,
+        // otherwise found next to the carrier, see NNEvaluatorFactory).
+        thisNetID = netStrWithPrecision.Substring(6);
+        NN_EVAL_TYPE = NNEvaluatorType.LC0EX;
+      }
+      else if (netStrWithPrecision.ToUpper().StartsWith("LC0:"))
       {
         // Net specification "LC0:703810=0.5,66193=0.5";
         thisNetID = netStrWithPrecision.Substring(4);

@@ -146,7 +146,7 @@ public class GameEngineCeresMCGSUCI : GameEngineUCI
   /// <returns></returns>
   static string ExtraArgsForEvaluator(NNEvaluatorDef evaluatorDef)
   {
-    string netSpecString = NNNetSpecificationString.ToSpecificationString(evaluatorDef.NetCombo, evaluatorDef.Nets);
+    string netSpecString = NNNetSpecificationString.ToSpecificationString(evaluatorDef.NetCombo, evaluatorDef.Nets, evaluatorDef.OptionsString);
     if (evaluatorDef.Description.StartsWith("~", StringComparison.OrdinalIgnoreCase))
     {
       netSpecString = "Network=" + evaluatorDef.Description.Split(" ")[0]; // split off only network parg
