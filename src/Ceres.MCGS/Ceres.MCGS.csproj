@@ -52,11 +52,11 @@
 
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\Ceres\src\Ceres.Base\Ceres.Base.csproj" />
-    <ProjectReference Include="..\..\..\Ceres\src\Ceres.Chess\Ceres.Chess.csproj" />
+    <ProjectReference Include="..\Ceres.Base\Ceres.Base.csproj" />
+    <ProjectReference Include="..\Ceres.Chess\Ceres.Chess.csproj" />
   </ItemGroup>
 
-  
+
   <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
