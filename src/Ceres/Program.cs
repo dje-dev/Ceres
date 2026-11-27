@@ -46,6 +46,10 @@ namespace Ceres
     /// <param name="args"></param>
     static void Main(string[] args)
     {
+      // Make sure an exception which is unhandled on any thread leaves a usable diagnostic
+      // (standard output, standard error and crash log file) before the process terminates.
+      FatalErrorReporter.InstallUnhandledExceptionHandler();
+
       // Scan for /v1 flag to select legacy MCTS engine.
       List<string> filteredArgs = new List<string>();
       if (args != null)

@@ -165,6 +165,13 @@ public unsafe partial class Graph : IDisposable
 
   public bool IsDisposed => Store == null;
 
+  /// <summary>
+  /// Set when a search detected inconsistent data while using this graph (see MCGSSelect).
+  /// Whatever caused it may have left other damage which was not detected, so such a graph
+  /// is not carried over to the next search (see GraphReuseManager.PrepareGraphToUse).
+  /// </summary>
+  public volatile bool InconsistencyDetected;
+
   public bool GraphEnabled => Store.GraphEnabled;
 
   /// <summary>

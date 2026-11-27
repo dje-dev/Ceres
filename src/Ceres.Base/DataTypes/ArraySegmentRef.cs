@@ -122,7 +122,12 @@ public record struct ArraySegmentRef<T> where T : struct
     // Copy existing data to the new segment.
     Span.CopyTo(bigger.Span);
 
-    startIndex = bigger.startIndex;
+    // Other threads may be reading earlier items of this segment while it is relocated
+    // (search paths read the entries of the path they continue from). The volatile write
+    // orders the copy above ahead of the store which makes the new location visible;
+    // with a plain store a reader on a weakly ordered processor (ARM) could see the
+    // new location before the copied items. (On x86/x64 this is an ordinary store.)
+    System.Threading.Volatile.Write(ref startIndex, bigger.startIndex);
     numItemsAllocated = bigger.numItemsAllocated;
   }
 }

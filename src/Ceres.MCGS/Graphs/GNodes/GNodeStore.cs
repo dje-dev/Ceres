@@ -130,7 +130,14 @@ public partial class GNodeStore
 
     string memorySegmentName = useExistingSharedMem ? "CeresSharedNodes" : null;
 
-    nodes = new MemoryBufferOS<GNodeStruct>(numNodes + BUFFER_NODES, largePages, memorySegmentName, useExistingSharedMem, useIncrementalAlloc);
+    // Reserve (virtual address space only) some slack beyond the nominal capacity.
+    // A search is stopped when the number of nodes approaches MaxNodes (see MCGSManager.CalcSearchStopStatus),
+    // but that stop is only evaluated between batches, whereas nodes are allocated continuously by the
+    // (parallel, possibly overlapped) select phase. The node count can therefore overshoot MaxNodes
+    // by considerably more than one batch (about 12,000 nodes were measured at 220,000 nodes/second),
+    // and allocating past the reservation is fatal ("Allocation overflow").
+    long numSlackNodes = Math.Max(BUFFER_NODES, Math.Min(MAX_SLACK_NODES, numNodes / 8));
+    nodes = new MemoryBufferOS<GNodeStruct>(numNodes + numSlackNodes, largePages, memorySegmentName, useExistingSharedMem, useIncrementalAlloc);
 
     Reset(priorMoves, false);
   }
@@ -201,6 +208,11 @@ public partial class GNodeStore
   /// Overallocate sufficiently to make sure allocation reaches to end of a (possibly large) page
   /// </summary>
   static int BUFFER_NODES => (2048 * 1024) / GNodeStruct.MCGSNodeStructSizeBytes;
+
+  /// <summary>
+  /// Maximum number of extra nodes reserved beyond MaxNodes (see constructor).
+  /// </summary>
+  const int MAX_SLACK_NODES = 1_000_000;
 
 
   /// <summary>

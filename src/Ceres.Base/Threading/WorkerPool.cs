@@ -104,6 +104,13 @@ public sealed class WorkerPool<T> : IDisposable
     drainedEvent = new ManualResetEventSlim(true); // no work yet => "drained"
     workers = new List<Thread>();
     shutdownTokenSource = new CancellationTokenSource();
+
+    // An exception escaping a work item is deliberately left unhandled: the runtime then
+    // terminates the process at the point of failure (so a crash dump, if enabled, shows the
+    // faulting stack). Make sure the exception text is first also written to standard output
+    // and the crash log file, since the runtime itself reports only on standard error.
+    Ceres.Base.Misc.FatalErrorReporter.InstallUnhandledExceptionHandler();
+
     StartThreads(initialThreads);
   }
 

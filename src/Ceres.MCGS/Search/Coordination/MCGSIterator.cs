@@ -321,9 +321,9 @@ public partial class MCGSIterator : IDisposable
     }
     catch (Exception e)
     {
-      // Make sure Exceptions are not silently swallowed.
-      Console.WriteLine(e);
-      System.Environment.Exit(3);    
+      // Make sure Exceptions are not silently swallowed
+      // (reported to standard output, standard error and the crash log file).
+      FatalErrorReporter.ReportAndExit("search iterator", e);
     }
   }
 

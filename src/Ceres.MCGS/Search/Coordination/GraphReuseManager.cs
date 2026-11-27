@@ -77,6 +77,15 @@ public static class GraphReuseManager
   /// </summary>
   public const double HIGH_MEM_EXTRACT_MAX_RETENTION = 0.50;
 
+  /// <summary>
+  /// A graph whose store is at its maximum permitted size is never carried into another search
+  /// with fewer than this many free node slots (or a quarter of the store, if smaller).
+  /// Every search allocates at least a few batches of nodes before the node capacity stop
+  /// (MCGSManager.CalcSearchStopStatus) can engage, so reusing an (almost) full store move after
+  /// move would eventually exhaust the hard reservation of the store, which is fatal.
+  /// </summary>
+  public const int MIN_FREE_NODES_FOR_REUSE_AT_CAPACITY = 250_000;
+
   #endregion
 
   #region Action
@@ -292,8 +301,27 @@ public static class GraphReuseManager
       return null;
     }
 
-    ReuseDecision decision = DecideAction(graph, searchRootNodeInfo, paramsSearch, searchLimit,
-                                          minStoreNodesNeeded, promoteTargetMaxNodes);
+    ReuseDecision decision;
+    if (graph.InconsistencyDetected)
+    {
+      // A previous search found inconsistent data in this graph. The cause is not known, so other
+      // (undetected) damage cannot be excluded: start the next search from a new graph.
+      // (Extraction is not an alternative, it would copy any damage into the new graph.)
+      decision = new ReuseDecision(GraphReuseAction.Abandon, "inconsistency detected during a previous search", 0.0, -1, default);
+    }
+    else
+    try
+    {
+      decision = DecideAction(graph, searchRootNodeInfo, paramsSearch, searchLimit,
+                              minStoreNodesNeeded, promoteTargetMaxNodes);
+    }
+    catch (Exception exc)
+    {
+      // The decision (in particular the reachability enumeration) failed, which suggests the graph
+      // is not in a consistent state. Abandon it rather than terminate the engine.
+      FatalErrorReporter.ReportRecovered("graph reuse decision failed, graph will be abandoned", exc);
+      decision = new ReuseDecision(GraphReuseAction.Abandon, "reuse decision failed: " + exc.Message, 0.0, -1, default);
+    }
     string reason = decision.Reason;
 
     if (decision.Action == GraphReuseAction.Reuse)
@@ -421,19 +449,8 @@ public static class GraphReuseManager
           swPromote.Elapsed.TotalSeconds, reachablePromote.Count, reachablePromote);
       }
 
-      // Store already at its maximum permitted size: promotion cannot help. Reuse the graph and let
-      // the graceful capacity stop bound the search (MCGSManager.CalcSearchStopStatus /
-      // MaxGraphAllocatedNodesExceeded). Abandoning would be strictly worse: the replacement store
-      // would be subject to the same caps, losing all evaluations each move for nothing.
-      if (!haveWarnedStoreAtMaxCapacity)
-      {
-        haveWarnedStoreAtMaxCapacity = true;
-        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
-          $"Graph store at maximum permitted capacity ({graph.Store.MaxNodes:N0} nodes) but search "
-        + $"needs ~{minStoreNodesNeeded:N0}; searches will be bounded by the node capacity stop "
-        + $"(warning issued once).");
-      }
-      return new ReuseDecision(GraphReuseAction.Reuse, null, 0.0, -1, default);
+      // Store already at its maximum permitted size: promotion cannot help.
+      return DecideActionAtMaxStoreCapacity(graph, searchRootNodeInfo, searchLimit, minStoreNodesNeeded);
     }
 
     // Trivially small graph (by node count, not visits): always reuse (no BFS).
@@ -513,6 +530,96 @@ public static class GraphReuseManager
 
     // Otherwise: reuse.
     return new ReuseDecision(GraphReuseAction.Reuse, null, reachabilitySeconds, reachableNodes, reachable);
+  }
+
+
+  /// <summary>
+  /// Decides what to do with a reusable graph whose store is already at its maximum permitted size
+  /// (so that it cannot be promoted into a larger one) and which does not have room for the nodes
+  /// the upcoming search is expected to add.
+  ///
+  /// The store never grows, and nodes no longer reachable from the search root are never reclaimed
+  /// in place. Simply reusing such a graph therefore leaves the search (and every later search)
+  /// truncated by the node capacity stop almost immediately, i.e. the engine would move more or less
+  /// instantly for the rest of the game; and since every search still allocates some nodes before
+  /// that stop engages, the store's hard reservation would eventually be exhausted (which is fatal).
+  ///
+  /// Policy:
+  ///   - extract (compact the subgraph reachable from the search root into a fresh store of the same
+  ///     size) if this leaves room for the search and the copy fits within the time available;
+  ///   - otherwise reuse (search bounded by the node capacity stop), but only if some room remains
+  ///     and the retained subtree is worth at least as much as the search which is forgone;
+  ///   - otherwise abandon (the search starts from scratch in an empty store).
+  /// </summary>
+  /// <param name="graph"></param>
+  /// <param name="searchRootNodeInfo"></param>
+  /// <param name="searchLimit"></param>
+  /// <param name="minStoreNodesNeeded">node capacity (with safety margin) which was estimated
+  /// to be required by the upcoming search (see MCGSSearch)</param>
+  /// <returns></returns>
+  private static ReuseDecision DecideActionAtMaxStoreCapacity(Graph graph,
+                                                              GraphRootToSearchRootNodeInfo searchRootNodeInfo,
+                                                              SearchLimit searchLimit,
+                                                              long minStoreNodesNeeded)
+  {
+    long maxNodes = graph.Store.MaxNodes;
+    long nodesInGraph = graph.Store.NodesStore.NumTotalNodes;
+    long freeNodes = Math.Max(0, maxNodes - nodesInGraph);
+
+    // Number of nodes the upcoming search is expected to add
+    // (minStoreNodesNeeded was computed with a 2x safety margin over this estimate).
+    long estSearchNodes = Math.Max(1, (minStoreNodesNeeded - nodesInGraph) / 2);
+
+    // Extraction is only useful if the retained subgraph leaves room for the search (with the same
+    // 2x margin, so that the next move does not immediately face the same shortage), though a
+    // retention of up to half of the store is always accepted.
+    long maxRetainNodes = Math.Max(1, maxNodes - Math.Min(2 * estSearchNodes, maxNodes / 2));
+
+    // Bound also by what can be copied within the time available for this move
+    // (which also bounds the cost of the enumeration itself, as in DecideAction).
+    double availableTime = searchLimit.IsTimeLimit ? searchLimit.Value : double.MaxValue;
+    double timeCapNodes = availableTime >= double.MaxValue
+      ? double.MaxValue
+      : 0.80 * availableTime * EXTRACT_NODES_PER_SEC;
+    int abortAbove = (int)Math.Min((double)int.MaxValue, Math.Min((double)maxRetainNodes, timeCapNodes));
+
+    Stopwatch sw = Stopwatch.StartNew();
+    GraphExtractor.ReachableSet reachable = GraphExtractor.EnumerateReachable(graph, searchRootNodeInfo.ChildNode.Index, abortAbove);
+    double reachabilitySeconds = sw.Elapsed.TotalSeconds;
+
+    string capacityDesc = $"store at maximum capacity ({nodesInGraph:N0} of {maxNodes:N0} nodes used, "
+                        + $"search needs ~{estSearchNodes:N0})";
+
+    if (!reachable.Aborted)
+    {
+      return new ReuseDecision(GraphReuseAction.Extract,
+        $"{capacityDesc}; {reachable.Count:N0} reachable ({(double)reachable.Count / Math.Max(1, nodesInGraph):P0}, "
+      + $"~{reachable.Count / EXTRACT_NODES_PER_SEC:F1}s)",
+        reachabilitySeconds, reachable.Count, reachable);
+    }
+
+    // Extraction would not free enough room, or could not be afforded in the time available.
+    // Reusing the graph yields a final subtree of about (searchRootN + the room which remains),
+    // whereas a search from scratch would yield about estSearchNodes.
+    long searchRootN = searchRootNodeInfo.ChildNode.N;
+    long minFreeNodesForReuse = Math.Min(MIN_FREE_NODES_FOR_REUSE_AT_CAPACITY, maxNodes / 4);
+    bool reuseIsWorthwhile = searchRootN + Math.Min(estSearchNodes, freeNodes) >= estSearchNodes;
+    if (freeNodes >= minFreeNodesForReuse && reuseIsWorthwhile)
+    {
+      if (!haveWarnedStoreAtMaxCapacity)
+      {
+        haveWarnedStoreAtMaxCapacity = true;
+        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+          $"Graph {capacityDesc} and cannot usefully be compacted (more than {abortAbove:N0} nodes reachable); "
+        + $"searches will be bounded by the node capacity stop (warning issued once).");
+      }
+      return new ReuseDecision(GraphReuseAction.Reuse, null, reachabilitySeconds, reachable.Count, reachable);
+    }
+
+    return new ReuseDecision(GraphReuseAction.Abandon,
+      $"{capacityDesc}; extraction not possible (more than {abortAbove:N0} nodes reachable) "
+    + $"and only {freeNodes:N0} nodes free",
+      reachabilitySeconds, reachable.Count, reachable);
   }
 
   #endregion

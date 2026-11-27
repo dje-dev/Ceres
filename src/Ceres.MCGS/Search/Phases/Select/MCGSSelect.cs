@@ -1149,6 +1149,72 @@ public class MCGSSelect
     // This allows the parent lock to be released before commencing recursive descent.
     ListBounded<DeferredSubPath> deferredSubPaths = null;
 
+    // Integrity checks, made before anything at this node is touched on behalf of this path:
+    //   - the node must be the node of the position by which the path arrived (free in the normal
+    //     case: one comparison against the position hash recorded when the path's leaf visit was
+    //     created; the position is rehashed only to confirm a mismatch),
+    //   - the side to move, piece count and count of unmoved pawns recorded on the node when it
+    //     was created must be those of that position (nodes are identified by a 64-bit position
+    //     hash alone, so this is what exposes two different positions sharing one hash), and
+    //   - every child move about to be visited must be a move which can be made in that position
+    //     (a piece stands on its origin square).
+    // If either fails the node and the path-derived position are inconsistent. Converting such a
+    // move would throw - on a select worker thread that terminates the engine (seen once in
+    // tournament play: "Illegal move ... in position ...") - or would silently build new nodes
+    // from a wrong position. Instead the path is not extended below this node: its visits are
+    // completed here using the value the node already has, exactly as for a visit which stops
+    // at a transposition having sufficient N. (Merely dropping the visits would leave the edge
+    // into this node with a visit count which never grows, so that it attracts an ever larger
+    // share of every later batch.)
+    bool nodeInconsistentWithPath = path.NumVisitsInPath > 0
+                                 && path.LeafVisitRef.ChildNodeHashStandalone64.Hash != parentNode.NodeRef.HashStandalone.Hash
+                                 && MGPositionHashing.Hash64(in parentPosMG).Hash != parentNode.NodeRef.HashStandalone.Hash;
+    if (!nodeInconsistentWithPath)
+    {
+      ref GNodeStruct parentNodeRef = ref parentNode.NodeRef;
+      nodeInconsistentWithPath = parentNodeRef.IsWhite == parentPosMG.BlackToMove
+                              || parentNodeRef.NumPieces != parentPosMG.PieceCount
+                              || parentNodeRef.NumRank2Pawns != parentPosMG.NumPawnsRank2;
+    }
+
+    int inconsistentChildIndex = -1;
+    if (!nodeInconsistentWithPath)
+    {
+      int numExpandedAtEntry = parentNode.NumEdgesExpanded;
+      int numChildrenToCheck = Math.Min(Math.Min(numChildrenToConsider, childVisitCounts.Length), parentNode.NumPolicyMoves);
+      for (int k = 0; k < numChildrenToCheck; k++)
+      {
+        if (childVisitCounts[k] > 0)
+        {
+          EncodedMove moveK = k < numExpandedAtEntry ? parentNode.ChildEdgeAtIndex(k).Move
+                                                     : parentNode.EdgeHeadersSpan[k].Move;
+          if (parentPosMG.PieceMoving(moveK) == PieceType.None)
+          {
+            inconsistentChildIndex = k;
+            break;
+          }
+        }
+      }
+    }
+
+    if (nodeInconsistentWithPath || inconsistentChildIndex >= 0)
+    {
+      ReportInconsistentNode(path, parentNode, in parentPosMG, inconsistentChildIndex, nodeInconsistentWithPath);
+
+      if (path.NumVisitsInPath > 0)
+      {
+        path.TerminationReason = MCGSPathTerminationReason.TranspositionLinkNodeSufficientN;
+        pathsSet.AddPath(path, numAttemptedVisits);
+      }
+      else
+      {
+        // At the search root there is no visit to complete (and nothing in flight to back out).
+        path.TerminationReason = MCGSPathTerminationReason.Abort;
+      }
+
+      return null;
+    }
+
     // Enforce in-order edge expansion. The edge store requires unexpanded children to be expanded
     // in strictly ascending index order (creating edge k derives its storage block from edge k-1).
     // Compact the unexpanded children into contiguous slots beginning at NumEdgesExpanded, swapping both edge headers.
@@ -1210,6 +1276,43 @@ public class MCGSSelect
 
       // Extract position, move and edge information needed below.
       (EncodedMove move, GEdge childEdge, GNode childNode) = GetChildMoveAndEdge(parentNode, childIndex, isExpanded);
+
+      // Backstop for the check made on entry (which already covered every child with visits):
+      // should a child move nevertheless not be applicable here, handle it like the
+      // expansion-blocked case further below rather than throwing: drop the affected visits
+      // for this batch (the ledger backout is deferred to the backup phase) and continue.
+      if (parentPosMG.PieceMoving(move) == PieceType.None)
+      {
+        ReportInconsistentNode(path, parentNode, in parentPosMG, childIndex, false);
+
+        int numDroppedInconsistent = numVisitsThisChild;
+        childVisitCounts[childIndex] = 0;
+        if (!isExpanded)
+        {
+          // Edges must be expanded in strictly ascending index order, so with this slot not
+          // expanded none of the later (all unexpanded) children can be expanded this round either.
+          for (int k = childIndex + 1; k < childVisitCounts.Length; k++)
+          {
+            if (childVisitCounts[k] > 0)
+            {
+              numDroppedInconsistent += childVisitCounts[k];
+              numVisitsRemaining -= childVisitCounts[k];
+              childVisitCounts[k] = 0;
+            }
+          }
+        }
+        pathsSet.RecordDroppedVisits(path, numDroppedInconsistent);
+
+        if (numVisitsRemaining == 0)
+        {
+          // Nothing remains to consume the path object (any already-processed children
+          // branched off their own paths); see the expansion-blocked case below.
+          path.TerminationReason = MCGSPathTerminationReason.Abort;
+        }
+
+        continue;
+      }
+
       ChildPositionInfo childPosInfo = ComputeChildPositionInfo(path, in parentPosMG, move, graphEnabled);
 
       if (isExpanded && childPosInfo.isDrawByRepetitionInCoalesceMode)
@@ -1307,6 +1410,126 @@ public class MCGSSelect
     finally
     {
       ReturnDeferredSubPathsList(deferredSubPaths);
+    }
+  }
+
+
+  /// <summary>
+  /// Number of times an inconsistent node has been reported (see ReportInconsistentNode).
+  /// </summary>
+  static int numInconsistentChildMoveReports;
+
+  /// <summary>
+  /// Reports (only the first few times) a node which is inconsistent with the position by which
+  /// the current path reached it, together with the information needed to tell where the
+  /// inconsistency lies:
+  ///   - if the hash recorded on the node equals the hash of the path position, the path arrived
+  ///     at the right node but a move stored on the node belongs to some other position;
+  ///   - otherwise the path arrived at a node which represents a different position.
+  /// </summary>
+  /// <param name="childIndex">index of the child whose move cannot be made (-1 if not applicable)</param>
+  /// <param name="nodeInconsistentWithPath">if the node is not the node of the path position</param>
+  [MethodImpl(MethodImplOptions.NoInlining)]
+  static void ReportInconsistentNode(MCGSPath path, GNode parentNode, in MGPosition parentPosMG,
+                                     int childIndex, bool nodeInconsistentWithPath)
+  {
+    // Whatever caused this may have left other damage which is not detected:
+    // make sure this graph is not carried over to the next search.
+    parentNode.Graph.InconsistencyDetected = true;
+
+    const int MAX_REPORTS = 3;
+    int reportNum = Interlocked.Increment(ref numInconsistentChildMoveReports);
+    if (reportNum > MAX_REPORTS)
+    {
+      return;
+    }
+
+    // N.B. The node may be in a corrupt state. This first part only reads memory which the caller
+    //      has already read successfully (the node itself and its edge headers); an edge is read
+    //      only if its header refers to an edge block which actually exists.
+    System.Text.StringBuilder sb = new();
+    try
+    {
+      sb.AppendLine(nodeInconsistentWithPath
+        ? $"Node reached is not the node of path position {parentPosMG.ToPosition.FEN}"
+        : $"The move of child index {childIndex} ({(childIndex < parentNode.NumEdgesExpanded ? "expanded" : "unexpanded")}) "
+        + $"cannot be made in path position {parentPosMG.ToPosition.FEN}");
+
+      ulong hashPathPosition = MGPositionHashing.Hash64(in parentPosMG).Hash;
+      ulong hashOnNode = parentNode.NodeRef.HashStandalone.Hash;
+      sb.AppendLine($"Node #{parentNode.Index.Index} N={parentNode.N} NumPolicyMoves={parentNode.NumPolicyMoves} "
+                  + $"NumEdgesExpanded={parentNode.NumEdgesExpanded} "
+                  + $"node: white={parentNode.NodeRef.IsWhite} pieces={parentNode.NodeRef.NumPieces} rank2pawns={parentNode.NodeRef.NumRank2Pawns}, "
+                  + $"path position: white={!parentPosMG.BlackToMove} pieces={parentPosMG.PieceCount} rank2pawns={parentPosMG.NumPawnsRank2}");
+      sb.AppendLine($"Hash of path position {(hashPathPosition == hashOnNode ? "EQUALS" : "DIFFERS FROM")} hash recorded on node "
+                  + $"(path 0x{hashPathPosition:X16}, node 0x{hashOnNode:X16})");
+
+      sb.Append("Moves on node:");
+      int numPolicyMoves = parentNode.NumPolicyMoves;
+      int numExpanded = parentNode.NumEdgesExpanded;
+      long numEdgeBlocks = parentNode.Graph.EdgesStore.NumAllocatedBlocks;
+      Span<GEdgeHeaderStruct> headers = parentNode.EdgeHeadersSpan;
+      for (int i = 0; i < numPolicyMoves; i++)
+      {
+        if (i >= numExpanded)
+        {
+          // The header of an unexpanded child must not look expanded (flagged with "!" if it does).
+          sb.Append(headers[i].IsExpanded ? " ?!" : $" {headers[i].Move}");
+        }
+        else if (headers[i].IsExpanded
+              && headers[i].EdgeStoreBlockIndex > 0
+              && headers[i].EdgeStoreBlockIndex < numEdgeBlocks)
+        {
+          sb.Append($" {parentNode.ChildEdgeAtIndex(i).Move}");
+        }
+        else
+        {
+          sb.Append(" ?(no edge)");
+        }
+      }
+      sb.AppendLine();
+
+      // The most recent entries of the path itself (leaf first). The node above was taken from
+      // the leaf entry's edge and the position from the same entry, so an entry whose two hashes
+      // differ, or whose edge does not lead to the node above, shows where the pairing went wrong.
+      // Only values held in the path entries are read (no node or edge is dereferenced).
+      int numSlots = path.numSlotsUsed;
+      sb.AppendLine($"Path: visits={path.NumVisitsInPath} own entries={numSlots} "
+                  + $"continues a parent path={(path.parent != null)} (from its entry {path.parentSlotIndexLastUsedThisSegment})");
+      for (int slotIndex = numSlots - 1; slotIndex >= Math.Max(0, numSlots - 3); slotIndex--)
+      {
+        ref MCGSPathVisit visit = ref path.slots[slotIndex];
+        GEdge visitEdge = visit.ParentChildEdge;
+        sb.AppendLine($"  entry {slotIndex}: parent node #{visitEdge.ParentNode.Index.Index} child index {visit.IndexOfChildInParent} "
+                    + $"-> node #{visitEdge.ChildNode.Index.Index}, hash recorded 0x{visit.ChildNodeHashStandalone64.Hash:X16}, "
+                    + $"hash of position 0x{MGPositionHashing.Hash64(in visit.ChildPosition).Hash:X16}, "
+                    + $"position {visit.ChildPosition.ToPosition.FEN}");
+      }
+    }
+    catch (Exception exc)
+    {
+      sb.AppendLine($"(exception while gathering details: {exc.Message})");
+    }
+
+    FatalErrorReporter.ReportRecovered("inconsistent node/position in select, path not extended", sb.ToString());
+
+    if (reportNum == 1)
+    {
+      // Second part, first occurrence only and reported separately (after the above has been
+      // written out): the position of the node as derived by following its tree parents up to
+      // the graph root, which requires following links stored on the (suspect) node.
+      string nodePositionText;
+      try
+      {
+        nodePositionText = parentNode.CalcPosition().ToPosition.FEN;
+      }
+      catch (Exception exc)
+      {
+        nodePositionText = $"(could not be computed: {exc.Message})";
+      }
+
+      FatalErrorReporter.ReportRecovered("inconsistent node/position in select, node position via tree parents",
+                                         $"Node #{parentNode.Index.Index}: {nodePositionText}");
     }
   }
 

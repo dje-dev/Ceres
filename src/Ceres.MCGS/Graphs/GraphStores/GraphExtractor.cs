@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
+using Ceres.Base.Misc;
 using Ceres.Chess.Positions;
 using Ceres.MCGS.Graphs.GEdgeHeaders;
 using Ceres.MCGS.Graphs.GEdges;
@@ -253,81 +254,105 @@ public static unsafe class GraphExtractor
       oldToNew[newToOld[k]] = k + 1;
     }
 
-    // We carry the prior graph's transposition dictionaries over to the new graph below (and Phase 6
-    // of FinalizeAfterCopy refills them in place), so the new graph's own constructor-built dictionaries
-    // are immediately discarded. Pass a minimal dictionarySizeHint (clamped up to the 16K floor in
-    // Graph.Initialize -> a ~128-bucket throwaway) rather than numReachable: the only use of the
-    // constructor dictionary is the root-node registration done during construction, which is never
-    // read before Phase 6 rebuilds the dictionaries from scratch.
-    Graph newGraph = new(maxNodes: maxNodesTargetStore > 0 ? maxNodesTargetStore : oldGraph.Store.MaxNodes,
-                         hasAction: oldGraph.Store.HasAction,
-                         hasState: oldGraph.Store.HasState,
-                         graphEnabled: oldGraph.Store.GraphEnabled,
-                         coalescedMode: oldGraph.Store.UsesPositionEquivalenceMode,
-                         tryEnableLargePages: MCGSParamsFixed.TryEnableLargePages,
-                         nodesWithOneVisitMayHaveDifferentQ: oldGraph.NodesWithOneVisitMayHaveDifferentQ,
-                         priorHistory: priorMoves,
-                         testFlag: oldGraph.TestFlag,
-                         maintainSiblingSets: oldGraph.MaintainSiblingSets,
-                         dictionarySizeHint: 1);
-
-    // Carry over the prior graph's transposition dictionary ALLOCATION. Extraction remaps every node
-    // index, so the entry VALUES (node indices / GNodeIndexSetIndex) cannot be reused -- but the
-    // allocation can: hand the prior (larger, already-grown) dictionaries to the new graph so Phase 6
-    // refills them in place with zero bucket splits and future-growth headroom, instead of allocating
-    // fresh. Safe to assign the stale-content dictionaries now: no rewrite phase before Phase 6 (nor
-    // the copy loop below) reads them, and Phase 6 clears each one before refilling. The old graph is
-    // disposed by the caller after we return; Dispose only nulls these (now-null) fields and frees the
-    // native store, so the managed dictionaries live on, owned by the new graph.
-    newGraph.transpositionsPosStandalone = oldGraph.transpositionsPosStandalone;
-    newGraph.transpositionPositionAndSequence = oldGraph.transpositionPositionAndSequence;
-    oldGraph.transpositionsPosStandalone = null;
-    oldGraph.transpositionPositionAndSequence = null;
-
-    // Commit node-store pages for indices [0..numReachable] before any direct write. The copy loop
-    // writes nodes directly (not via AllocateNext) so the node buffer never grows during the loop,
-    // keeping ref-to-node-slot stable and the loop free of node-store synchronization.
-    newGraph.NodesStore.MemoryBufferOSStore.InsureAllocated(numReachable + 1);
-
-    bool hasState = oldGraph.Store.HasState && oldGraph.Store.AllStateVectors != null;
-
-    bool useParallel = USE_PARALLEL_COPY && numReachable >= PARALLEL_COPY_MIN_NODES;
-    if (useParallel)
+    // Extraction is only an optimization (the alternative is to abandon the graph), so a failure
+    // anywhere in the copy or finalization must not terminate the engine: report it, release the
+    // partially built graph, and return a failed result (upon which the caller abandons the old graph).
+    // N.B. The old graph must not be reused after a failure, since its transposition dictionaries
+    //      may already have been handed over to the new graph.
+    Graph newGraph = null;
+    try
     {
-      // Each node writes disjoint memory (its own node slot + freshly-allocated header/edge blocks);
-      // block allocation is thread-safe; oldToNew and the source graph are read-only.
-      Parallel.For(0, numReachable, k => CopyNode(oldGraph, newGraph, newToOld[k], k + 1, oldToNew, hasState));
-    }
-    else
-    {
-      for (int k = 0; k < numReachable; k++)
+      // We carry the prior graph's transposition dictionaries over to the new graph below (and Phase 6
+      // of FinalizeAfterCopy refills them in place), so the new graph's own constructor-built dictionaries
+      // are immediately discarded. Pass a minimal dictionarySizeHint (clamped up to the 16K floor in
+      // Graph.Initialize -> a ~128-bucket throwaway) rather than numReachable: the only use of the
+      // constructor dictionary is the root-node registration done during construction, which is never
+      // read before Phase 6 rebuilds the dictionaries from scratch.
+      newGraph = new(maxNodes: maxNodesTargetStore > 0 ? maxNodesTargetStore : oldGraph.Store.MaxNodes,
+                           hasAction: oldGraph.Store.HasAction,
+                           hasState: oldGraph.Store.HasState,
+                           graphEnabled: oldGraph.Store.GraphEnabled,
+                           coalescedMode: oldGraph.Store.UsesPositionEquivalenceMode,
+                           tryEnableLargePages: MCGSParamsFixed.TryEnableLargePages,
+                           nodesWithOneVisitMayHaveDifferentQ: oldGraph.NodesWithOneVisitMayHaveDifferentQ,
+                           priorHistory: priorMoves,
+                           testFlag: oldGraph.TestFlag,
+                           maintainSiblingSets: oldGraph.MaintainSiblingSets,
+                           dictionarySizeHint: 1);
+
+      // Carry over the prior graph's transposition dictionary ALLOCATION. Extraction remaps every node
+      // index, so the entry VALUES (node indices / GNodeIndexSetIndex) cannot be reused -- but the
+      // allocation can: hand the prior (larger, already-grown) dictionaries to the new graph so Phase 6
+      // refills them in place with zero bucket splits and future-growth headroom, instead of allocating
+      // fresh. Safe to assign the stale-content dictionaries now: no rewrite phase before Phase 6 (nor
+      // the copy loop below) reads them, and Phase 6 clears each one before refilling. The old graph is
+      // disposed by the caller after we return; Dispose only nulls these (now-null) fields and frees the
+      // native store, so the managed dictionaries live on, owned by the new graph.
+      newGraph.transpositionsPosStandalone = oldGraph.transpositionsPosStandalone;
+      newGraph.transpositionPositionAndSequence = oldGraph.transpositionPositionAndSequence;
+      oldGraph.transpositionsPosStandalone = null;
+      oldGraph.transpositionPositionAndSequence = null;
+
+      // Commit node-store pages for indices [0..numReachable] before any direct write. The copy loop
+      // writes nodes directly (not via AllocateNext) so the node buffer never grows during the loop,
+      // keeping ref-to-node-slot stable and the loop free of node-store synchronization.
+      newGraph.NodesStore.MemoryBufferOSStore.InsureAllocated(numReachable + 1);
+
+      bool hasState = oldGraph.Store.HasState && oldGraph.Store.AllStateVectors != null;
+
+      bool useParallel = USE_PARALLEL_COPY && numReachable >= PARALLEL_COPY_MIN_NODES;
+      if (useParallel)
       {
-        CopyNode(oldGraph, newGraph, newToOld[k], k + 1, oldToNew, hasState);
+        // Each node writes disjoint memory (its own node slot + freshly-allocated header/edge blocks);
+        // block allocation is thread-safe; oldToNew and the source graph are read-only.
+        Parallel.For(0, numReachable, k => CopyNode(oldGraph, newGraph, newToOld[k], k + 1, oldToNew, hasState));
       }
-    }
+      else
+      {
+        for (int k = 0; k < numReachable; k++)
+        {
+          CopyNode(oldGraph, newGraph, newToOld[k], k + 1, oldToNew, hasState);
+        }
+      }
 
-    // Establish the used-node count for the new graph (null node 0 + nodes [1..numReachable]).
-    newGraph.NodesStore.nextFreeIndex.Value = numReachable + 1;
-    if (hasState)
+      // Establish the used-node count for the new graph (null node 0 + nodes [1..numReachable]).
+      newGraph.NodesStore.nextFreeIndex.Value = numReachable + 1;
+      if (hasState)
+      {
+        newGraph.NodesStore.AllStates = newGraph.Store.AllStateVectors;
+      }
+
+      double copySeconds = swPhase.Elapsed.TotalSeconds;
+
+      // ---- Phase E5: rebuild all derived state via the shared rewriter tail phases ----
+      swPhase.Restart();
+      GraphRewriter.FinalizePhaseTimings finalizeTimings = GraphRewriter.FinalizeAfterCopy(newGraph, numReachable, priorMoves);
+      double finalizeSeconds = swPhase.Elapsed.TotalSeconds;
+
+      // Carry over the cross-graph evaluation-reuse provider (opponent graph reuse). The MCGSSearch
+      // re-attach site only runs on the from-scratch branch, so we must propagate it here.
+      newGraph.ReuseGraphProvider = oldGraph.ReuseGraphProvider;
+
+      float retention = numUsedOld > 0 ? (float)numReachable / numUsedOld : 0f;
+      double elapsedSeconds = enumerateSeconds + copySeconds + finalizeSeconds;
+      return new ExtractResult(newGraph, numUsedOld, numReachable, elapsedSeconds, retention, true,
+                               enumerateSeconds, copySeconds, finalizeSeconds, finalizeTimings, useParallel);
+    }
+    catch (Exception exc)
     {
-      newGraph.NodesStore.AllStates = newGraph.Store.AllStateVectors;
+      FatalErrorReporter.ReportRecovered("graph extraction failed, graph will be abandoned", exc);
+
+      try
+      {
+        newGraph?.Dispose();
+      }
+      catch (Exception)
+      {
+      }
+
+      return new ExtractResult(null, numUsedOld, 0, enumerateSeconds, 0f, false,
+                               enumerateSeconds, 0, 0, null, false);
     }
-
-    double copySeconds = swPhase.Elapsed.TotalSeconds;
-
-    // ---- Phase E5: rebuild all derived state via the shared rewriter tail phases ----
-    swPhase.Restart();
-    GraphRewriter.FinalizePhaseTimings finalizeTimings = GraphRewriter.FinalizeAfterCopy(newGraph, numReachable, priorMoves);
-    double finalizeSeconds = swPhase.Elapsed.TotalSeconds;
-
-    // Carry over the cross-graph evaluation-reuse provider (opponent graph reuse). The MCGSSearch
-    // re-attach site only runs on the from-scratch branch, so we must propagate it here.
-    newGraph.ReuseGraphProvider = oldGraph.ReuseGraphProvider;
-
-    float retention = numUsedOld > 0 ? (float)numReachable / numUsedOld : 0f;
-    double elapsedSeconds = enumerateSeconds + copySeconds + finalizeSeconds;
-    return new ExtractResult(newGraph, numUsedOld, numReachable, elapsedSeconds, retention, true,
-                             enumerateSeconds, copySeconds, finalizeSeconds, finalizeTimings, useParallel);
   }
 
 

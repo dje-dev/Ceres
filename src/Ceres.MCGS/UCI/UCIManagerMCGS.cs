@@ -1595,6 +1595,10 @@ public partial class UCIManagerMCGS
         UCIWriteLine(exc.ToString());
         UCIWriteLine(exc.StackTrace);
 
+        // Also record on standard error and in the crash log file
+        // (standard output was already written just above).
+        FatalErrorReporter.Report("UCI search", exc, writeToStandardOutput: false);
+
         System.Environment.Exit(3);
         return null;
       }
