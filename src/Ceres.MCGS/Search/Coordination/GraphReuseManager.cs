@@ -412,7 +412,7 @@ public static class GraphReuseManager
   ///   - store too small for the upcoming search (minStoreNodesNeeded)      -> promote (copy into a
   ///         larger store), or reuse + capacity-stop when already at maximum size
   ///   - trivially small graph (node count &lt; TRIVIALLY_SMALL_NUM_NODES)    -> reuse
-  ///   - memory used &lt; 35%                                               -> reuse
+  ///   - memory used &lt; 60%                                               -> reuse
   ///   - memory used &gt; 70% (high): extract if it frees enough (reachableFraction &le;
   ///         HIGH_MEM_EXTRACT_MAX_RETENTION) AND fits time (timeToExtract &le; 80% avail);
   ///         else reuse, unless memory is critical (&gt; 90%) in which case abandon to free it
@@ -461,7 +461,7 @@ public static class GraphReuseManager
 
     // Plenty of memory free: reuse (no BFS). Memory is probed only past the trivially-small short-circuit.
     double memoryUsedFraction = CurrentMemoryUsedFraction(paramsSearch, out long memoryUsedBytes);
-    if (memoryUsedFraction < 0.35)
+    if (memoryUsedFraction < 0.60)
     {
       return new ReuseDecision(GraphReuseAction.Reuse, null, 0.0, -1, default);
     }
@@ -513,7 +513,7 @@ public static class GraphReuseManager
         : new ReuseDecision(GraphReuseAction.Reuse, null, reachabilitySeconds, reachableNodes, reachable);
     }
 
-    // Moderate memory (0.35 - 0.70): extract only when most of the graph is stale and extraction is cheap.
+    // Moderate memory (0.60 - 0.70): extract only when most of the graph is stale and extraction is cheap.
     if (reachableFraction < 0.30 && timeToExtract < 0.25 * availableTime)
     {
       return new ReuseDecision(GraphReuseAction.Extract,
