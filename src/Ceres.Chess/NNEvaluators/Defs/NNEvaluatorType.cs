@@ -74,6 +74,12 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// An Lc0 network compiled into an lc0ex neural executable (precompiled per-GPU kernels),
     /// with weights from the lc0ex builder's carrier .pb.gz (see NNEvaluatorLC0EX).
     /// </summary>
-    LC0EX
+    LC0EX,
+
+    /// <summary>
+    /// A Fry chess transformer exported to ONNX (70-token input, 1968-move policy, expected-score value),
+    /// run via ONNX Runtime with TensorRT or CUDA (see NNEvaluatorFry).
+    /// </summary>
+    Fry
   };
 }

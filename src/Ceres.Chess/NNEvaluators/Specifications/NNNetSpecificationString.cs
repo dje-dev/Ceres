@@ -173,6 +173,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         {
           return $"Network=LC0:{nets.First().Item1.NetworkID}";
         }
+        if (typeOfFirst == NNEvaluatorType.Fry)
+        {
+          string options = string.IsNullOrEmpty(optionsString) ? "" : "|" + optionsString;
+          return $"Network=FRY:{nets.First().Item1.NetworkID}{options}";
+        }
         if (typeOfFirst == NNEvaluatorType.LC0EX)
         {
           // The options are part of what identifies the network here: LC0EX=<file> names the executable.

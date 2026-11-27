@@ -222,7 +222,13 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Internal
         }
       }
 
-      if (netStrWithPrecision.ToUpper().StartsWith("LC0EX:"))
+      if (netStrWithPrecision.ToUpper().StartsWith("FRY:"))
+      {
+        // Net specification "FRY:<file.onnx>" (options TRT=false for the CUDA provider, VSHARP=<k> value sharpness).
+        thisNetID = netStrWithPrecision.Substring(4);
+        NN_EVAL_TYPE = NNEvaluatorType.Fry;
+      }
+      else if (netStrWithPrecision.ToUpper().StartsWith("LC0EX:"))
       {
         // Net specification "LC0EX:<carrier.pb.gz>" (artifact via option LC0EX=<file.lc0ex>,
         // otherwise found next to the carrier, see NNEvaluatorFactory).

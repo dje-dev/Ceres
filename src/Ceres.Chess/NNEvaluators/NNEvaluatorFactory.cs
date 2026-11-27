@@ -27,6 +27,7 @@ using Ceres.Chess.NNEvaluators.Ceres;
 using Ceres.Chess.NNEvaluators.Ceres.TPG;
 using Ceres.Chess.NNEvaluators.CUDA;
 using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.Chess.NNEvaluators.Fry;
 using Ceres.Chess.NNEvaluators.LC0EX;
 using Ceres.Chess.NNEvaluators.TensorRT;
 using Ceres.Chess.NNEvaluators.Remote;
@@ -594,8 +595,36 @@ namespace Ceres.Chess.NNEvaluators
             return evaluatorLC0EX;
           }
 
+        case NNEvaluatorType.Fry:
+          {
+            // The ONNX file, as given (with or without .onnx) or in the Ceres / LC0 networks directories.
+            string[] dirsFry = [CeresUserSettingsManager.Settings.DirCeresNetworks, CeresUserSettingsManager.Settings.DirLC0Networks];
+            string fryFN = new[] { "", ".onnx" }
+                             .SelectMany(ext => new[] { netDef.NetworkID + ext }
+                                                .Concat(dirsFry.Where(d => !string.IsNullOrEmpty(d))
+                                                               .Select(d => Path.Combine(d, netDef.NetworkID + ext))))
+                             .FirstOrDefault(File.Exists)
+                           ?? throw new Exception($"Fry ONNX file not found: {netDef.NetworkID} (also looked in {string.Join(", ", dirsFry)})");
+
+            NNEvaluatorOptions optionsFry = new NNEvaluatorOptions().OptionsWithOptionsDictApplied(optionsDict);
+            bool useTRTFry = !(optionsDict != null && optionsDict.TryGetValue("TRT", out string trtStr)
+                               && (trtStr == "0" || trtStr.Equals("false", StringComparison.OrdinalIgnoreCase)));
+            float? sharpnessFry = optionsDict != null && optionsDict.TryGetValue("VSHARP", out string sharpStr)
+                                ? float.Parse(sharpStr, System.Globalization.CultureInfo.InvariantCulture)
+                                : null;
+            int runBatchFry = optionsDict != null && optionsDict.TryGetValue("RUNBATCH", out string runBatchStr)
+                            ? int.Parse(runBatchStr)
+                            : NNEvaluatorFry.DEFAULT_RUN_BATCH_SIZE;
+
+            NNEvaluatorFry evaluatorFry = new(fryFN, deviceDef.DeviceIndex, CeresUserSettingsManager.Settings.MaxBatchSize,
+                                              useTRTFry, useFP16: netDef.Precision != NNEvaluatorPrecision.FP32,
+                                              sharpnessFry, optionsFry.OptimizationLevel, runBatchFry);
+            evaluatorFry.Options = optionsFry;
+            return evaluatorFry;
+          }
+
         case NNEvaluatorType.ComboPhased:
-          // TODO: 
+          // TODO:
           if (ComboPhasedFactory == null)
           {
             throw new Exception("NNEvaluatorFactory.ComboPhasedFactory static variable must be initialized.");
@@ -916,7 +945,8 @@ namespace Ceres.Chess.NNEvaluators
         {
           bool allTensorRTNative = def.Devices.All(d => d.Device.OverrideEngineType?.Contains("TensorRTNative", StringComparison.OrdinalIgnoreCase) == true);
 
-          bool allNetsMatch = def.Nets.Length == 1 || def.Nets.All(n => n.Net.Equals(def.Nets[0].Net));
+          bool allNetsMatch = (def.Nets.Length == 1 || def.Nets.All(n => n.Net.Equals(def.Nets[0].Net)))
+                           && def.Nets[0].Net.Type != NNEvaluatorType.Fry; // Fry nets have their own evaluator
 
           // Never take the native multi-GPU path for remote devices (it would silently build locally).
           bool anyRemote = def.Devices.Any(d => d.Device.RemoteHost != null);
