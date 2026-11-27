@@ -4,7 +4,7 @@
 		<OutputType>Exe</OutputType>
 		<TargetFramework>net10.0</TargetFramework>
 		<LangVersion>preview</LangVersion>
-		<GarbageCollectionAdaptationMode>0</GarbageCollectionAdaptationMode>
+		<GarbageCollectionAdaptationMode>1</GarbageCollectionAdaptationMode>
 		<GCLargePages>false</GCLargePages>
 		<ServerGarbageCollection>true</ServerGarbageCollection>
 		<GCLOHThreshold>100000</GCLOHThreshold>
